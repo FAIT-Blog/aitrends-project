@@ -1,0 +1,6 @@
+# Sub-repos are tracked in their own git repositories
+aitrends.ng/
+scout-agent/
+
+# OS files
+.DS_Store
