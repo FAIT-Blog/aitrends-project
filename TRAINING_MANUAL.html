@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vibe-Coding with Claude Code — Training Manual</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a0f;
+  --surface: #111827;
+  --surface2: #1a2235;
+  --border: #1f2937;
+  --blue: #2563eb;
+  --blue-light: #3b82f6;
+  --gold: #f59e0b;
+  --green: #10b981;
+  --red: #ef4444;
+  --purple: #8b5cf6;
+  --teal: #14b8a6;
+  --text: #e5e7eb;
+  --muted: #6b7280;
+  --code-bg: #0d1117;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  font-size: 15px;
+}
+.page { max-width: 1000px; margin: 0 auto; padding: 60px 24px 120px; }
+
+/* ── Cover ── */
+.cover {
+  text-align: center;
+  padding: 80px 0 60px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 60px;
+}
+.cover-tag {
+  display: inline-block;
+  background: var(--blue);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 14px;
+  border-radius: 4px;
+  margin-bottom: 24px;
+}
+.cover h1 {
+  font-size: 2.8rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.15;
+  margin-bottom: 16px;
+}
+.cover h1 span { color: var(--gold); }
+.cover-sub {
+  font-size: 1.05rem;
+  color: var(--muted);
+  max-width: 580px;
+  margin: 0 auto 32px;
+}
+.cover-meta {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.cover-meta-item { font-size: 0.82rem; color: var(--muted); }
+.cover-meta-item strong { color: var(--text); display: block; }
+
+/* ── TOC ── */
+.toc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 32px;
+  margin-bottom: 60px;
+}
+.toc h2 { color: var(--blue); font-size: 0.82rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc ol { padding-left: 20px; }
+.toc li { margin-bottom: 6px; }
+.toc a { color: var(--text); text-decoration: none; font-size: 0.9rem; }
+.toc a:hover { color: var(--blue); }
+.toc .sub { list-style: none; padding-left: 20px; margin-top: 4px; }
+.toc .sub li:before { content: "→ "; color: var(--muted); }
+.toc .sub a { color: var(--muted); font-size: 0.82rem; }
+
+/* ── Chapter heading ── */
+.chapter {
+  margin: 80px 0 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.chapter-num {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--blue);
+  margin-bottom: 8px;
+}
+.chapter h2 {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+}
+
+h3 { font-size: 1.2rem; font-weight: 700; color: #fff; margin: 36px 0 14px; }
+h4 { font-size: 0.95rem; font-weight: 700; color: var(--gold); margin: 28px 0 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+p { margin-bottom: 14px; color: var(--text); }
+
+/* ── Code ── */
+pre {
+  background: var(--code-bg);
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  padding: 20px;
+  overflow-x: auto;
+  margin: 16px 0 24px;
+  position: relative;
+}
+code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: #e6edf3;
+}
+p code, li code {
+  background: #161b22;
+  border: 1px solid #30363d;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.82em;
+  color: var(--blue-light);
+}
+.lang {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 0.65rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: sans-serif;
+}
+
+/* syntax colours */
+.kw { color: #ff7b72; }
+.fn { color: #d2a8ff; }
+.str { color: #a5d6ff; }
+.cmt { color: #8b949e; font-style: italic; }
+.num { color: #79c0ff; }
+.cls { color: #ffa657; }
+.var { color: #e6edf3; }
+
+/* ── Callouts ── */
+.callout {
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin: 20px 0;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.callout-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
+.callout-body { flex: 1; }
+.callout-body strong { display: block; margin-bottom: 4px; }
+.callout-body p { margin: 0; font-size: 0.88rem; }
+.callout.info { background: #0d1629; border: 1px solid #1e3a5f; }
+.callout.info .callout-body strong { color: var(--blue-light); }
+.callout.warn { background: #1a1200; border: 1px solid #4d3800; }
+.callout.warn .callout-body strong { color: var(--gold); }
+.callout.success { background: #052015; border: 1px solid #0d4a28; }
+.callout.success .callout-body strong { color: var(--green); }
+.callout.danger { background: #1a0505; border: 1px solid #4d1515; }
+.callout.danger .callout-body strong { color: var(--red); }
+
+/* ── Tables ── */
+table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.87rem; }
+th { background: #0f1629; color: var(--blue-light); text-align: left; padding: 10px 14px; border: 1px solid var(--border); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+td { padding: 9px 14px; border: 1px solid var(--border); color: #ccc; vertical-align: top; }
+tr:hover td { background: var(--surface); }
+
+/* ── Badges ── */
+.badge { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 4px; vertical-align: middle; }
+.badge-blue { background: #1e3a5f; color: var(--blue-light); }
+.badge-gold { background: #3d2800; color: var(--gold); }
+.badge-green { background: #052015; color: var(--green); }
+.badge-red { background: #1a0505; color: var(--red); }
+.badge-purple { background: #1e1040; color: var(--purple); }
+
+/* ── Steps ── */
+.steps { counter-reset: step; margin: 20px 0; }
+.step {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: flex-start;
+}
+.step-num {
+  counter-increment: step;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+.step-content { flex: 1; padding-top: 5px; }
+.step-content strong { color: #fff; }
+
+/* ── Diagram ── */
+.diagram {
+  background: var(--code-bg);
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  padding: 24px;
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: #8b949e;
+  margin: 16px 0 24px;
+  white-space: pre;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+.diagram .d-blue { color: var(--blue-light); }
+.diagram .d-gold { color: var(--gold); }
+.diagram .d-green { color: var(--green); }
+.diagram .d-purple { color: var(--purple); }
+
+/* ── Inline tip ── */
+.tip {
+  background: var(--surface);
+  border-left: 3px solid var(--blue);
+  padding: 12px 16px;
+  margin: 16px 0;
+  font-size: 0.87rem;
+  color: var(--muted);
+  border-radius: 0 6px 6px 0;
+}
+
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* ── Footer ── */
+.manual-footer {
+  margin-top: 100px;
+  padding-top: 40px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ═══════════════════ COVER ═══════════════════ -->
+<div class="cover">
+  <div class="cover-tag">Training Manual · June 2026</div>
+  <h1>Vibe-Coding with<br><span>Claude Code</span></h1>
+  <p class="cover-sub">
+    A hands-on training manual for building a fully autonomous AI news platform — from RSS feeds to
+    a live blog with AI-generated cover images, all controlled by natural language conversations with Claude.
+  </p>
+  <div class="cover-meta">
+    <div class="cover-meta-item"><strong>Project</strong>AITrends.ng</div>
+    <div class="cover-meta-item"><strong>Built by</strong>Felix Okon &amp; Claude Code</div>
+    <div class="cover-meta-item"><strong>Organisation</strong>FAIT · Lagos</div>
+    <div class="cover-meta-item"><strong>Stack</strong>Next.js · Node.js · Supabase · GitHub Actions</div>
+    <div class="cover-meta-item"><strong>Period</strong>May – June 2026</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ TOC ═══════════════════ -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ol>
+    <li><a href="#ch1">What is Vibe-Coding?</a></li>
+    <li><a href="#ch2">The Project — AITrends.ng</a>
+      <ul class="sub">
+        <li><a href="#ch2-mission">Mission &amp; Architecture</a></li>
+        <li><a href="#ch2-stack">Technology Stack</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch3">Building the Blog Frontend (aitrends.ng)</a>
+      <ul class="sub">
+        <li><a href="#ch3-supabase">Supabase Lazy Proxy Pattern</a></li>
+        <li><a href="#ch3-api">The Protected API Endpoint</a></li>
+        <li><a href="#ch3-images">Handling AI-Generated Images</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch4">The Scout Agent — Autonomous Publishing</a>
+      <ul class="sub">
+        <li><a href="#ch4-pipeline">The 13-Step Pipeline</a></li>
+        <li><a href="#ch4-feeds">RSS Feed Management</a></li>
+        <li><a href="#ch4-evergreen">Evergreen Scoring Algorithm</a></li>
+        <li><a href="#ch4-gemini">Africa-First Gemini Prompt Engineering</a></li>
+        <li><a href="#ch4-dedup">Deduplication with scout_memory</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch5">GitHub Actions — Automated Scheduling</a>
+      <ul class="sub">
+        <li><a href="#ch5-scout">Phase 1: Scout Workflow</a></li>
+        <li><a href="#ch5-complete">Phase 2: Complete Workflow</a></li>
+        <li><a href="#ch5-secrets">Secrets Management</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch6">The Image Pipeline — A Story of Evolution</a>
+      <ul class="sub">
+        <li><a href="#ch6-v1">V1: Pollinations Lazy URLs (broken)</a></li>
+        <li><a href="#ch6-diagnosis">Diagnosing the 402 Problem</a></li>
+        <li><a href="#ch6-twophase">The Two-Phase Async Architecture</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch7">Multi-Provider Image System</a>
+      <ul class="sub">
+        <li><a href="#ch7-hf">Hugging Face (Active — Free)</a></li>
+        <li><a href="#ch7-fal">Fal.ai (Upgrade Path)</a></li>
+        <li><a href="#ch7-horde">AI Horde (Free Fallback)</a></li>
+        <li><a href="#ch7-switch">Switching Providers</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch8">Supabase — Database &amp; Storage</a></li>
+    <li><a href="#ch9">Debugging War Stories</a>
+      <ul class="sub">
+        <li><a href="#ch9-node18">The Node.js 18 Supabase Crash</a></li>
+        <li><a href="#ch9-websocket">The Supabase WebSocket Hang</a></li>
+        <li><a href="#ch9-pollinations">The Pollinations x402 Discovery</a></li>
+        <li><a href="#ch9-token">The HF Token Scope Mystery</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch10">Patterns &amp; Best Practices</a></li>
+    <li><a href="#ch11">Session Logging &amp; Documentation</a></li>
+    <li><a href="#ch12">Project Structure Reference</a></li>
+  </ol>
+</div>
+
+<!-- ═══════════════════ CHAPTER 1 ═══════════════════ -->
+<div class="chapter" id="ch1">
+  <div class="chapter-num">Chapter 1</div>
+  <h2>What is Vibe-Coding?</h2>
+</div>
+
+<p>
+  Vibe-coding is a development methodology where a human collaborates with an AI coding assistant
+  (Claude Code) using natural language to build real software. The human describes intent, makes
+  decisions, and provides judgment. Claude Code reads files, writes code, runs commands, and
+  executes tasks.
+</p>
+
+<p>
+  This is not copy-pasting code snippets from ChatGPT. It is a genuine engineering partnership.
+  The human remains the product owner, architect, and quality gate. Claude Code is the engineer
+  who never sleeps, never gets tired, and can switch between debugging a YAML file and rewriting
+  a Gemini prompt without losing context.
+</p>
+
+<h3>The Human-AI Division of Work</h3>
+
+<table>
+  <tr><th>Human (Felix)</th><th>Claude Code</th></tr>
+  <tr><td>Decides WHAT to build and WHY</td><td>Decides HOW to implement it</td></tr>
+  <tr><td>Provides domain knowledge and taste</td><td>Provides technical knowledge and execution</td></tr>
+  <tr><td>Approves or rejects proposals</td><td>Proposes options with trade-offs</td></tr>
+  <tr><td>Provides credentials and access</td><td>Never stores or hardcodes secrets</td></tr>
+  <tr><td>Tests the final product visually</td><td>Tests programmatically (curl, node, build)</td></tr>
+  <tr><td>Decides when to ship</td><td>Ensures code is shippable before recommending</td></tr>
+</table>
+
+<div class="callout info">
+  <div class="callout-icon">💡</div>
+  <div class="callout-body">
+    <strong>The Golden Rule of Vibe-Coding</strong>
+    <p>The human never writes code. Claude Code never makes product decisions. When they stay in their lanes, progress is fast and quality is high. When they blur (Claude makes architectural decisions without asking, or the human starts editing files directly), things get confused.</p>
+  </div>
+</div>
+
+<h3>The Supervision Model Used in This Project</h3>
+
+<div class="steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-content"><strong>Read the spec.</strong> Every Claude Code session starts by reading <code>CLAUDE.md</code> — the master spec that tells Claude everything about the project, its rules, its architecture, and what must not be changed.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-content"><strong>Confirm before acting.</strong> For any significant change — architectural decisions, new workflows, touching production infrastructure — Claude Code confirms its plan with Felix before writing a single line of code.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-content"><strong>Read before writing.</strong> Claude Code reads every file it is about to modify before touching it. This is non-negotiable — editing a file you haven't read causes corruption.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-content"><strong>Test before committing.</strong> Every code change is verified (npm run build, node imports, curl tests) before a git commit. Never commit broken code.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-content"><strong>Log everything verbatim.</strong> Every session is recorded in <code>SESSION_LOG.html</code> with every command, every output, every decision, every error, and every fix — in full. No summaries.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ CHAPTER 2 ═══════════════════ -->
+<div class="chapter" id="ch2">
+  <div class="chapter-num">Chapter 2</div>
+  <h2>The Project — AITrends.ng</h2>
+</div>
+
+<h3 id="ch2-mission">Mission</h3>
+<p>
+  AITrends.ng is a <strong>fully autonomous AI news and blog platform</strong> that captures the
+  latest news, events, happenings, innovations, and trends in Artificial Intelligence — with a
+  primary focus on <strong>Africa, and Nigeria / West Africa in particular</strong>. No daily human
+  intervention. The system runs itself automatically.
+</p>
+
+<div class="callout warn">
+  <div class="callout-icon">🌍</div>
+  <div class="callout-body">
+    <strong>Africa-First Content Stance</strong>
+    <p>Every post must be written FROM an African perspective. Global AI news is relevant only when it has a specific, clear implication for African developers, founders, or Nigeria/West Africa's tech ecosystem. Posts must be written through an African lens — not global tech news with Africa mentioned at the end.</p>
+  </div>
+</div>
+
+<h3 id="ch2-stack">Architecture</h3>
+
+<div class="diagram"><span class="d-blue">Africa RSS (TechCabal, Techpoint, Disrupt Africa)</span>  ← PRIMARY
+<span class="d-gold">Global RSS (TechCrunch, VentureBeat, OpenAI, Google AI...)</span>
+         │
+         ▼
+  <span class="d-purple">scout-agent/</span>  ← Node.js on GitHub Actions (every 6 hours)
+    Phase 1: fetch → score → Gemini digest → submit image job → save to pending_posts
+    Phase 2: generate image (HF/Fal/AI Horde) → Supabase Storage → publish → Slack
+         │
+         ▼
+  <span class="d-blue">aitrends.ng/</span>  ← Next.js 16 on Vercel
+    /api/posts/create  ← protected endpoint (SCOUT_API_KEY)
+         │
+         ▼
+  <span class="d-green">Supabase PostgreSQL</span>  ← posts, scout_memory, evergreen_vocab, pending_posts
+         │
+         ▼
+  <span class="d-gold">Supabase Storage</span>  ← post-images bucket (permanent CDN URLs)
+         │
+         ▼
+  <span class="d-blue">aitrends-ng.vercel.app</span>  ← live site
+         │
+         ▼
+  <span class="d-purple">Slack #aitrends-feed</span>  ← success notification</div>
+
+<table>
+  <tr><th>Component</th><th>Technology</th><th>Purpose</th></tr>
+  <tr><td>Blog frontend</td><td>Next.js 16, React 18, TypeScript</td><td>Public-facing website</td></tr>
+  <tr><td>Scout pipeline</td><td>Node.js 24, ES Modules</td><td>Autonomous RSS → publish</td></tr>
+  <tr><td>Database</td><td>Supabase PostgreSQL</td><td>Posts, memory, vocabulary</td></tr>
+  <tr><td>Image storage</td><td>Supabase Storage</td><td>Permanent cover image CDN</td></tr>
+  <tr><td>AI digest</td><td>Google Gemini 3.5 Flash</td><td>800-word Africa-first digests</td></tr>
+  <tr><td>Image generation</td><td>HuggingFace FLUX.1-schnell</td><td>Cover images from prompts</td></tr>
+  <tr><td>Scheduling</td><td>GitHub Actions</td><td>Two-phase cron (6h + 5min)</td></tr>
+  <tr><td>Hosting</td><td>Vercel (free tier)</td><td>Blog deployment</td></tr>
+  <tr><td>Notifications</td><td>Slack webhooks</td><td>Publish alerts + editorial input</td></tr>
+</table>
+
+<!-- ═══════════════════ CHAPTER 3 ═══════════════════ -->
+<div class="chapter" id="ch3">
+  <div class="chapter-num">Chapter 3</div>
+  <h2>Building the Blog Frontend</h2>
+</div>
+
+<h3 id="ch3-supabase">The Supabase Lazy Proxy Pattern</h3>
+
+<p>
+  A critical lesson learned during the first build attempt: if you call
+  <code>createClient()</code> at module import time, Next.js will crash during
+  <code>next build</code> because environment variables are not available at build time.
+</p>
+
+<p>The naive (broken) approach:</p>
+<pre><code class="kw">import</code> { createClient } <code class="kw">from</code> <code class="str">'@supabase/supabase-js'</code>
+
+<code class="cmt">// ❌ This runs at module load — crashes during next build</code>
+<code class="kw">export const</code> supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+)</code></pre>
+
+<p>The correct approach — lazy initialisation using a Proxy:</p>
+
+<pre><code><span class="lang">lib/supabase.ts</span>
+<span class="kw">import</span> { createClient, SupabaseClient } <span class="kw">from</span> <span class="str">'@supabase/supabase-js'</span>
+
+<span class="kw">let</span> _client: SupabaseClient | <span class="kw">null</span> = <span class="kw">null</span>
+
+<span class="kw">function</span> <span class="fn">getClient</span>(): SupabaseClient {
+  <span class="kw">if</span> (!_client) {
+    <span class="kw">const</span> url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    <span class="kw">const</span> key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    <span class="kw">if</span> (!url || !key) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">'Missing Supabase env vars'</span>)
+    _client = <span class="fn">createClient</span>(url, key)
+  }
+  <span class="kw">return</span> _client
+}
+
+<span class="cmt">// The Proxy intercepts every method call and delegates to the real client</span>
+<span class="cmt">// The real client is only created on FIRST USE, not at import time</span>
+<span class="kw">export const</span> supabase = <span class="kw">new</span> <span class="cls">Proxy</span>({} <span class="kw">as</span> SupabaseClient, {
+  <span class="fn">get</span>(_target, prop) {
+    <span class="kw">const</span> client = <span class="fn">getClient</span>()
+    <span class="kw">const</span> value = (client <span class="kw">as any</span>)[prop]
+    <span class="kw">return</span> <span class="kw">typeof</span> value === <span class="str">'function'</span> ? value.<span class="fn">bind</span>(client) : value
+  },
+})</code></pre>
+
+<div class="callout success">
+  <div class="callout-icon">✅</div>
+  <div class="callout-body">
+    <strong>Why this works</strong>
+    <p>The Proxy object is created immediately at import time (no env vars needed). The real <code>createClient()</code> call is deferred until the first database operation, which only happens at request time — when env vars are available.</p>
+  </div>
+</div>
+
+<h3 id="ch3-api">The Protected API Endpoint</h3>
+
+<p>The Scout Agent publishes posts by calling a protected Next.js API route. This is how you secure an API route with an API key check:</p>
+
+<pre><code><span class="lang">app/api/posts/create/route.ts</span>
+<span class="kw">export async function</span> <span class="fn">POST</span>(req: Request) {
+  <span class="cmt">// 1. Check API key — reject immediately if missing or wrong</span>
+  <span class="kw">const</span> apiKey = req.headers.<span class="fn">get</span>(<span class="str">'x-api-key'</span>)
+  <span class="kw">if</span> (!apiKey || apiKey !== process.env.SCOUT_API_KEY) {
+    <span class="kw">return</span> <span class="cls">NextResponse</span>.<span class="fn">json</span>({ error: <span class="str">'Unauthorized'</span> }, { status: <span class="num">401</span> })
+  }
+
+  <span class="cmt">// 2. Parse body</span>
+  <span class="kw">const</span> body = <span class="kw">await</span> req.<span class="fn">json</span>()
+
+  <span class="cmt">// 3. Validate required fields</span>
+  <span class="kw">const</span> VALID_CATEGORIES = [<span class="str">'ai-models'</span>, <span class="str">'anthropic'</span>, <span class="str">'industry'</span>, <span class="str">'tools'</span>]
+  <span class="kw">if</span> (!body.title) <span class="kw">return</span> <span class="cls">NextResponse</span>.<span class="fn">json</span>({ error: <span class="str">'title required'</span> }, { status: <span class="num">400</span> })
+  <span class="kw">if</span> (!VALID_CATEGORIES.<span class="fn">includes</span>(body.category)) {
+    <span class="kw">return</span> <span class="cls">NextResponse</span>.<span class="fn">json</span>({ error: <span class="str">'invalid category'</span> }, { status: <span class="num">400</span> })
+  }
+
+  <span class="cmt">// 4. Create post in Supabase and return the URL</span>
+  <span class="kw">const</span> { post_id, slug } = <span class="kw">await</span> <span class="fn">createPost</span>(body, <span class="str">'published'</span>)
+  <span class="kw">return</span> <span class="cls">NextResponse</span>.<span class="fn">json</span>({ success: <span class="kw">true</span>, post_id, slug,
+    url: <span class="str">`https://aitrends.ng/post/</span><span class="kw">${</span>slug<span class="kw">}</span><span class="str">`</span>
+  })
+}</code></pre>
+
+<p>The Scout Agent sends the API key in a request header:</p>
+
+<pre><code><span class="lang">publisher.js (scout-agent)</span>
+<span class="kw">const</span> response = <span class="kw">await</span> <span class="fn">fetch</span>(process.env.BLOG_API_URL, {
+  method: <span class="str">'POST'</span>,
+  headers: {
+    <span class="str">'Content-Type'</span>: <span class="str">'application/json'</span>,
+    <span class="str">'x-api-key'</span>: process.env.SCOUT_API_KEY  <span class="cmt">// ← the shared secret</span>
+  },
+  body: <span class="cls">JSON</span>.<span class="fn">stringify</span>({ title, content, excerpt, category, ... })
+})</code></pre>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>SCOUT_API_KEY must be in sync in three places</strong>
+    <p>The key exists in: (1) <code>scout-agent/.env</code> locally, (2) GitHub Actions Secrets, and (3) Vercel environment variables. If any one of them is different, Scout's publishes will silently return 401 and nothing will be posted.</p>
+  </div>
+</div>
+
+<h3 id="ch3-images">Handling AI-Generated Images — What NOT to Do</h3>
+
+<p>
+  A key lesson: <strong>never use Next.js <code>&lt;Image&gt;</code> for Pollinations URLs</strong>.
+  The Next.js image optimizer fetches external images server-side on Vercel with a ~10 second
+  timeout. Pollinations generates images on first request (15–60 seconds). Result: timeout, broken image.
+</p>
+
+<p>The correct approach for Pollinations/external AI images — plain <code>&lt;img&gt;</code> with a fallback:</p>
+
+<pre><code><span class="lang">components/PostCard.tsx</span>
+<span class="cmt">// ✅ Correct: plain img tag, browser waits, gradient shows if it fails</span>
+&lt;div style={{ background: <span class="str">'linear-gradient(135deg, #0f172a, #1e3a5f)'</span>,
+               position: <span class="str">'relative'</span>, aspectRatio: <span class="str">'16/9'</span>, overflow: <span class="str">'hidden'</span> }}&gt;
+  {post.cover_image_url &amp;&amp; (
+    &lt;img
+      src={post.cover_image_url}
+      alt={post.title}
+      loading=<span class="str">"lazy"</span>
+      style={{ position: <span class="str">'absolute'</span>, inset: <span class="num">0</span>,
+               width: <span class="str">'100%'</span>, height: <span class="str">'100%'</span>, objectFit: <span class="str">'cover'</span> }}
+      onError={(e) =&gt; {
+        <span class="cmt">// Hide img silently — gradient placeholder shows through</span>
+        (e.currentTarget as HTMLImageElement).style.display = <span class="str">'none'</span>
+      }}
+    /&gt;
+  )}
+&lt;/div&gt;</code></pre>
+
+<!-- ═══════════════════ CHAPTER 4 ═══════════════════ -->
+<div class="chapter" id="ch4">
+  <div class="chapter-num">Chapter 4</div>
+  <h2>The Scout Agent — Autonomous Publishing</h2>
+</div>
+
+<h3 id="ch4-pipeline">The 13-Step Pipeline (Phase 1 Only)</h3>
+
+<p>Scout's Phase 1 runs every 6 hours. Its job is to queue work — not to publish. Publishing is Phase 2.</p>
+
+<pre><code><span class="lang">The Phase 1 pipeline</span>
+Step  0: Read #scout-editor Slack channel (Felix's editorial inputs, last 8h)
+Step  1: Load evergreen vocabulary from Supabase (40 baseline + learned terms)
+Step  2: Fetch all 17 RSS feeds (Africa-specific + global)
+Step  3: Deduplicate — skip articles already in scout_memory
+Step  4: Score each article by evergreen potential (vocab match count)
+Step  5: Group by category, sort by score, cap at MAX_ARTICLES = 5
+Step  6: Skip categories with fewer than MIN_ARTICLES = 2 fresh articles
+Step  7: Generate digest with Gemini 3.5 Flash (Africa-first, 800+ words)
+Step  8: Validate Gemini output (title + content ≥ 400 chars)
+Step  9: Submit image generation job to active provider (HF/Fal/AI Horde)
+Step 10: Save to pending_posts table (status: pending_image)
+Step 11: Save trending terms to evergreen_vocab in Supabase
+Step 12: Mark articles as seen in scout_memory (prevents re-processing)
+Step 13: EXIT. Nothing is published here.</code></pre>
+
+<h3 id="ch4-feeds">RSS Feed Management</h3>
+
+<p>Each feed entry in <code>feeds.js</code> has three fields: the URL, the category, and a human-readable source name:</p>
+
+<pre><code><span class="lang">feeds.js — sample entries</span>
+<span class="kw">const</span> feeds = [
+  <span class="cmt">// ── Africa feeds (PRIMARY — mission-critical) ──────────</span>
+  {
+    url: <span class="str">'https://techcabal.com/feed/'</span>,
+    category: <span class="str">'industry'</span>,
+    source: <span class="str">'TechCabal'</span>
+  },
+  {
+    url: <span class="str">'https://techpoint.africa/feed/'</span>,
+    category: <span class="str">'industry'</span>,
+    source: <span class="str">'Techpoint Africa'</span>
+  },
+
+  <span class="cmt">// ── AI Models ──────────────────────────────────────────</span>
+  {
+    url: <span class="str">'https://openai.com/news/rss.xml'</span>,
+    category: <span class="str">'ai-models'</span>,
+    source: <span class="str">'OpenAI'</span>
+  },
+  {
+    url: <span class="str">'https://huggingface.co/blog/feed.xml'</span>,
+    category: <span class="str">'ai-models'</span>,
+    source: <span class="str">'HuggingFace'</span>
+  },
+]
+<span class="kw">export default</span> feeds</code></pre>
+
+<div class="callout info">
+  <div class="callout-icon">📡</div>
+  <div class="callout-body">
+    <strong>Categories must match the blog API exactly</strong>
+    <p>The feed categories (<code>'anthropic'</code>, <code>'industry'</code>, <code>'ai-models'</code>, <code>'tools'</code>) must exactly match the <code>VALID_CATEGORIES</code> array in <code>app/api/posts/create/route.ts</code>. Adding a new category requires updating both files simultaneously.</p>
+  </div>
+</div>
+
+<h3 id="ch4-evergreen">Evergreen Scoring Algorithm</h3>
+
+<p>
+  Before sending articles to Gemini, Scout scores each one for long-term search value.
+  Articles mentioning evergreen entities (major AI companies, models, concepts) are ranked higher.
+  This ensures the highest-value stories always get into each digest.
+</p>
+
+<pre><code><span class="lang">scout.js — evergreenScore()</span>
+<span class="kw">const</span> EVERGREEN_ENTITIES = [
+  <span class="str">'anthropic'</span>, <span class="str">'claude'</span>, <span class="str">'openai'</span>, <span class="str">'chatgpt'</span>, <span class="str">'gpt-5'</span>,
+  <span class="str">'google deepmind'</span>, <span class="str">'gemini'</span>, <span class="str">'microsoft'</span>, <span class="str">'llama'</span>,
+  <span class="str">'llm'</span>, <span class="str">'large language model'</span>, <span class="str">'ai agent'</span>, <span class="str">'agentic'</span>,
+  <span class="str">'africa'</span>, <span class="str">'nigeria'</span>, <span class="str">'lagos'</span>, <span class="str">'techcabal'</span>, <span class="str">'flutterwave'</span>
+  <span class="cmt">// ... 40+ terms</span>
+]
+
+<span class="kw">function</span> <span class="fn">evergreenScore</span>(article, vocab = EVERGREEN_ENTITIES) {
+  <span class="kw">const</span> text = <span class="str">`</span><span class="kw">${</span>article.title<span class="kw">}</span> <span class="str"> </span><span class="kw">${</span>article.summary<span class="kw">}</span><span class="str">`</span>.<span class="fn">toLowerCase</span>()
+  <span class="kw">return</span> vocab.<span class="fn">filter</span>(term => text.<span class="fn">includes</span>(term)).<span class="var">length</span>
+}
+
+<span class="cmt">// Sort articles highest score first, then cap at 5</span>
+<span class="kw">const</span> sorted = [...articles].<span class="fn">sort</span>((a, b) =>
+  <span class="fn">evergreenScore</span>(b, allVocab) - <span class="fn">evergreenScore</span>(a, allVocab)
+)
+<span class="kw">const</span> capped = sorted.<span class="fn">slice</span>(<span class="num">0</span>, MAX_ARTICLES)</code></pre>
+
+<h3>Self-Updating Vocabulary</h3>
+
+<p>
+  After each successful digest, Gemini returns a list of <code>TRENDING_TERMS</code> — proper nouns
+  from the story that people will search for in two years. These are saved to a <code>evergreen_vocab</code>
+  Supabase table and merged with the baseline on the next run. The vocabulary grows itself.
+</p>
+
+<pre><code><span class="lang">memory.js — saveEvergreens()</span>
+<span class="kw">export async function</span> <span class="fn">saveEvergreens</span>(terms) {
+  <span class="kw">const</span> rows = terms
+    .<span class="fn">map</span>(t => t.<span class="fn">trim</span>().<span class="fn">toLowerCase</span>())
+    .<span class="fn">filter</span>(t => t.<span class="var">length</span> > <span class="num">2</span>)
+    .<span class="fn">map</span>(term => ({ term, source: <span class="str">'auto'</span> }))
+
+  <span class="kw">await</span> supabase
+    .<span class="fn">from</span>(<span class="str">'evergreen_vocab'</span>)
+    .<span class="fn">upsert</span>(rows, { onConflict: <span class="str">'term'</span>, ignoreDuplicates: <span class="kw">true</span> })
+}</code></pre>
+
+<h3 id="ch4-gemini">Africa-First Gemini Prompt Engineering</h3>
+
+<p>
+  The Gemini prompt is the heart of the editorial quality. The key upgrade from a generic digest
+  to an Africa-first publication was replacing a single closing sentence with a full editorial mandate.
+</p>
+
+<p>The old approach (wrong):</p>
+<pre><code><span class="cmt">// ❌ Africa as afterthought — one sentence at end of each section</span>
+<span class="str">"End each story section with one sentence on the specific
+implication for African developers and builders."</span></code></pre>
+
+<p>The new approach (correct):</p>
+<pre><code><span class="cmt">// ✅ Africa-first mandate woven through the entire prompt</span>
+<span class="str">AFRICA-FIRST MANDATE — THIS IS NON-NEGOTIABLE:
+- Every post must be written FROM an African perspective
+- If source articles are about global AI events, translate them
+  into African context: What does this mean for a developer in
+  Lagos building on this API? What is the opportunity or threat
+  for a startup in Accra?
+- Lead paragraphs must establish Africa/Nigeria/West Africa
+  relevance FIRST — not as an afterthought
+- Close with: &lt;p&gt;&lt;strong&gt;Bottom line for African builders:
+  &lt;/strong&gt; one sharp Africa-specific takeaway&lt;/p&gt;</span></code></pre>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>Content without Africa source material stays generic</strong>
+    <p>No amount of prompt engineering fixes the underlying problem that all 10 original RSS feeds were US/global sources. Adding TechCabal, Techpoint Africa, Disrupt Africa, and Ventureburn was the only real fix. You cannot prompt your way to Africa-first content if the source material has no Africa in it.</p>
+  </div>
+</div>
+
+<h3 id="ch4-dedup">Deduplication with scout_memory</h3>
+
+<p>
+  Without deduplication, Scout would re-publish the same articles every 6 hours.
+  The <code>scout_memory</code> table records every article processed, keyed by the feed URL
+  and the article's unique GUID.
+</p>
+
+<pre><code><span class="lang">memory.js — hasSeen() and markSeen()</span>
+<span class="cmt">// Called before processing an article — throws on DB error (intentional)</span>
+<span class="kw">export async function</span> <span class="fn">hasSeen</span>(feedUrl, itemGuid) {
+  <span class="kw">const</span> { data, error } = <span class="kw">await</span> supabase
+    .<span class="fn">from</span>(<span class="str">'scout_memory'</span>)
+    .<span class="fn">select</span>(<span class="str">'id'</span>)
+    .<span class="fn">eq</span>(<span class="str">'feed_url'</span>, feedUrl)
+    .<span class="fn">eq</span>(<span class="str">'item_guid'</span>, itemGuid)
+    .<span class="fn">maybeSingle</span>()
+
+  <span class="kw">if</span> (error) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">`hasSeen failed: </span><span class="kw">${</span>error.message<span class="kw">}</span><span class="str">`</span>)
+  <span class="kw">return</span> data !== <span class="kw">null</span>
+}
+
+<span class="cmt">// Called after saving to pending_posts — retries once on failure</span>
+<span class="kw">export async function</span> <span class="fn">markSeen</span>(feedUrl, guid, title, postId = <span class="kw">null</span>) {
+  <span class="kw">const</span> row = { feed_url: feedUrl, item_guid: guid, item_title: title, post_id: postId }
+
+  <span class="kw">for</span> (<span class="kw">let</span> attempt = <span class="num">1</span>; attempt <= <span class="num">2</span>; attempt++) {
+    <span class="kw">const</span> { error } = <span class="kw">await</span> supabase.<span class="fn">from</span>(<span class="str">'scout_memory'</span>).<span class="fn">insert</span>(row)
+    <span class="kw">if</span> (!error) <span class="kw">return</span>
+    <span class="kw">if</span> (attempt < <span class="num">2</span>) {
+      console.<span class="fn">error</span>(<span class="str">`markSeen attempt </span><span class="kw">${</span>attempt<span class="kw">}</span><span class="str">: retrying...`</span>)
+      <span class="kw">await new</span> <span class="cls">Promise</span>(r => <span class="fn">setTimeout</span>(r, <span class="num">2000</span>))
+    }
+  }
+}</code></pre>
+
+<div class="callout danger">
+  <div class="callout-icon">🔴</div>
+  <div class="callout-body">
+    <strong>hasSeen() must throw — never silently return false</strong>
+    <p>If Supabase is down and <code>hasSeen()</code> returns <code>false</code> (treating all articles as new), Scout will re-publish every article it has ever seen as duplicate posts. Throwing on error halts the run immediately — a much safer failure mode.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════ CHAPTER 5 ═══════════════════ -->
+<div class="chapter" id="ch5">
+  <div class="chapter-num">Chapter 5</div>
+  <h2>GitHub Actions — Automated Scheduling</h2>
+</div>
+
+<h3 id="ch5-scout">Phase 1: Scout Workflow (scout.yml)</h3>
+
+<pre><code><span class="lang">.github/workflows/scout.yml</span>
+name: Scout Agent
+
+on:
+  schedule:
+    - cron: <span class="str">'0 */6 * * *'</span>    <span class="cmt"># every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC</span>
+  workflow_dispatch:        <span class="cmt"># also allow manual trigger from GitHub UI</span>
+
+jobs:
+  run-scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  <span class="cmt"># silence Node 20 warnings</span>
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: <span class="str">'24'</span>
+      - run: npm install
+
+      - name: Run Scout (Phase 1 — queue posts)
+        env:
+          SUPABASE_URL:        <span class="kw">${{ secrets.SUPABASE_URL }}</span>
+          SUPABASE_SECRET_KEY: <span class="kw">${{ secrets.SUPABASE_SECRET_KEY }}</span>
+          GEMINI_API_KEY:      <span class="kw">${{ secrets.GEMINI_API_KEY }}</span>
+          IMAGE_PROVIDER:      <span class="kw">${{ secrets.IMAGE_PROVIDER }}</span>
+          HF_API_TOKEN:        <span class="kw">${{ secrets.HF_API_TOKEN }}</span>
+          SLACK_BOT_TOKEN:     <span class="kw">${{ secrets.SLACK_BOT_TOKEN }}</span>
+          <span class="cmt"># ... more secrets</span>
+        run: |
+          node -e "import('./scout.js').then(m => m.runScout())
+            .then(() => process.exit(0))
+            .catch(e => { console.error(e); process.exit(1) })"
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -s -X POST "$SLACK_WEBHOOK_URL"             -H 'Content-Type: application/json'             -d '{"text":"❌ Scout Agent failed"}'</code></pre>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>process.exit(0) is mandatory</strong>
+    <p>Supabase realtime keeps a WebSocket open after all queries complete. Without <code>process.exit(0)</code>, the Node.js process hangs indefinitely until the GHA timeout kills it. This was discovered when a run took 502 seconds instead of 78 — the 430-second gap was the WebSocket hanging.</p>
+  </div>
+</div>
+
+<h3 id="ch5-complete">Phase 2: Complete Workflow (complete.yml)</h3>
+
+<pre><code><span class="lang">.github/workflows/complete.yml</span>
+name: Complete Posts (Phase 2)
+
+on:
+  schedule:
+    - cron: <span class="str">'*/5 * * * *'</span>   <span class="cmt"># every 5 minutes — checks for pending posts</span>
+  workflow_dispatch:
+
+jobs:
+  complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: <span class="str">'24'</span>
+      - run: npm install
+
+      - name: Run Phase 2 — Complete pending posts
+        env:
+          IMAGE_PROVIDER: <span class="kw">${{ secrets.IMAGE_PROVIDER }}</span>
+          HF_API_TOKEN:   <span class="kw">${{ secrets.HF_API_TOKEN }}</span>
+          FAL_API_KEY:    <span class="kw">${{ secrets.FAL_API_KEY }}</span>
+          <span class="cmt"># ... other secrets</span>
+        run: |
+          node -e "import('./complete.js').then(m => m.runComplete())
+            .then(() => process.exit(0))
+            .catch(e => { console.error(e); process.exit(1) })"</code></pre>
+
+<p>
+  The two-workflow design means Phase 1 and Phase 2 are <strong>completely decoupled</strong>.
+  Phase 1 can fail without affecting posts that are already pending. Phase 2 handles
+  retries gracefully. They share only the Supabase database.
+</p>
+
+<h3 id="ch5-secrets">GitHub Actions Secrets Management</h3>
+
+<table>
+  <tr><th>Secret Name</th><th>What It Is</th><th>Who Uses It</th></tr>
+  <tr><td><code>SUPABASE_URL</code></td><td>Supabase project URL</td><td>Both phases</td></tr>
+  <tr><td><code>SUPABASE_SECRET_KEY</code></td><td>Service role key (bypasses RLS)</td><td>Both phases</td></tr>
+  <tr><td><code>GEMINI_API_KEY</code></td><td>Google Gemini API key</td><td>Phase 1</td></tr>
+  <tr><td><code>BLOG_API_URL</code></td><td>aitrends.ng /api/posts/create URL</td><td>Phase 2</td></tr>
+  <tr><td><code>SCOUT_API_KEY</code></td><td>Shared secret between Scout and blog API</td><td>Phase 2</td></tr>
+  <tr><td><code>IMAGE_PROVIDER</code></td><td><code>huggingface</code> | <code>fal</code> | <code>aihorde</code></td><td>Both phases</td></tr>
+  <tr><td><code>HF_API_TOKEN</code></td><td>Hugging Face write token</td><td>Phase 2</td></tr>
+  <tr><td><code>FAL_API_KEY</code></td><td>Fal.ai API key (when upgrading)</td><td>Phase 2</td></tr>
+  <tr><td><code>SLACK_WEBHOOK_URL</code></td><td>Outgoing webhook to #aitrends-feed</td><td>Phase 2</td></tr>
+  <tr><td><code>SLACK_BOT_TOKEN</code></td><td>Bot token to read #scout-editor</td><td>Phase 1</td></tr>
+</table>
+
+<p>To add or update a secret via the GitHub CLI:</p>
+<pre><code><span class="kw">echo</span> "your-secret-value" | gh secret set SECRET_NAME --repo FAIT-Blog/scout-agent</code></pre>
+
+<!-- ═══════════════════ CHAPTER 6 ═══════════════════ -->
+<div class="chapter" id="ch6">
+  <div class="chapter-num">Chapter 6</div>
+  <h2>The Image Pipeline — A Story of Evolution</h2>
+</div>
+
+<h3 id="ch6-v1">V1: Pollinations Lazy URLs (broken)</h3>
+
+<p>
+  The original approach was elegant in its simplicity: build a URL encoding the image prompt,
+  store the URL, and Pollinations would generate the image on first load.
+</p>
+
+<pre><code><span class="lang">image.js — the original approach</span>
+<span class="kw">export function</span> <span class="fn">buildImageUrl</span>(prompt) {
+  <span class="kw">const</span> encoded = <span class="fn">encodeURIComponent</span>(prompt)
+  <span class="kw">const</span> seed = <span class="cls">Date</span>.<span class="fn">now</span>()
+  <span class="kw">return</span> <span class="str">`https://image.pollinations.ai/prompt/</span><span class="kw">${</span>encoded<span class="kw">}</span><span class="str">?seed=</span><span class="kw">${</span>seed<span class="kw">}</span><span class="str">&width=1200&height=630&nologo=true`</span>
+}</code></pre>
+
+<p>Three problems with this approach, discovered in sequence:</p>
+<ol>
+  <li><strong>Problem 1</strong> — <code>model=flux</code> was added thinking it was the free fast model. It is not free. Returns HTTP 402 Payment Required immediately.</li>
+  <li><strong>Problem 2</strong> — <code>unoptimized</code> on Next.js Image caused browser to fire 9 concurrent requests to Pollinations. Free tier allows 1 concurrent per IP. 8 of 9 images fail with 402.</li>
+  <li><strong>Problem 3 (final)</strong> — Pollinations adopted the <strong>x402 standard</strong> — a crypto micro-payment protocol. ALL requests now return 402 regardless of IP, model, or rate limit status. Pollinations is effectively no longer free.</li>
+</ol>
+
+<div class="callout danger">
+  <div class="callout-icon">🔴</div>
+  <div class="callout-body">
+    <strong>The x402 error response — what it looks like</strong>
+    <p>When Pollinations returns 402 now, the body is a JSON object describing how to pay in USDC cryptocurrency on the Base blockchain. This is not a rate limit — it is a hard paywall.</p>
+  </div>
+</div>
+
+<pre><code><span class="cmt">// What Pollinations returns for every request now:</span>
+{
+  "x402Version": 1,
+  "error": "Queue full for IP: x.x.x.x: 1 requests already queued (max: 1)",
+  "accepts": [{
+    "scheme": "exact",
+    "network": "base",
+    "maxAmountRequired": "1000",
+    "description": "Pollinations legacy image — pay to bypass rate limit",
+    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"  <span class="cmt">// USDC on Base</span>
+  }]
+}</code></pre>
+
+<h3 id="ch6-twophase">The Two-Phase Async Architecture</h3>
+
+<p>
+  The root insight that fixed everything: <strong>decouple discovery from publishing</strong>.
+  The 6-hour cron is a trigger, not a deadline. A post should go live only when
+  its image is permanently stored — not before.
+</p>
+
+<div class="diagram"><span class="d-blue">PHASE 1</span> — Every 6 hours (scout.yml)
+┌─────────────────────────────────────────────────┐
+│ RSS Fetch → Score → Gemini → Submit image job    │
+│ Save to pending_posts (status: pending_image)    │
+│ Mark articles seen in scout_memory               │
+│ EXIT — nothing published                         │
+└─────────────────────────────────────────────────┘
+                        │ Supabase pending_posts table
+                        ▼
+<span class="d-gold">PHASE 2</span> — Every 5 minutes (complete.yml)
+┌─────────────────────────────────────────────────┐
+│ Query: SELECT * WHERE status = 'pending_image'  │
+│ For each post:                                   │
+│   Set status = 'generating' (prevents duplicates)│
+│   Call image provider → get image buffer         │
+│   → If not ready: reset to pending_image, skip   │
+│   → If ready:                                    │
+│       Upload to Supabase Storage                 │
+│       Call /api/posts/create → post goes live    │
+│       Set status = 'published'                   │
+│       Notify Slack #aitrends-feed                │
+└─────────────────────────────────────────────────┘</div>
+
+<p>The <code>pending_posts</code> table schema:</p>
+
+<pre><code><span class="lang">Supabase SQL — create pending_posts table</span>
+create table pending_posts (
+  id           bigint generated always as identity primary key,
+  title        text not null,
+  content      text not null,        -- full HTML digest from Gemini
+  excerpt      text not null,        -- 2-sentence card preview
+  category     text not null,        -- anthropic | industry | ai-models | tools
+  tags         text[] not null default '{}'::text[],
+  source_urls  text[] not null default '{}'::text[],
+  image_prompt text not null,        -- the Gemini-generated image description
+  image_job_id text,                 -- Fal.ai/AI Horde job ID (null for HF)
+  image_url    text,                 -- Supabase Storage URL (set when complete)
+  provider     text not null default 'huggingface',
+  status       text not null default 'pending_image',
+  attempts     int not null default 0,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  published_at timestamptz,
+  post_id      text
+);
+
+create index pending_posts_status_idx on pending_posts (status, created_at);</code></pre>
+
+<h3>The Stuck-Post Guard</h3>
+
+<p>
+  A subtle but critical safety mechanism: if a GHA runner is killed mid-Phase-2
+  (timeout, network failure, etc.), a post can get stuck in <code>'generating'</code>
+  status forever. The guard detects and recovers these posts automatically.
+</p>
+
+<pre><code><span class="lang">memory.js — getPendingPosts() with stuck-guard</span>
+<span class="kw">export async function</span> <span class="fn">getPendingPosts</span>() {
+  <span class="cmt">// Reset posts stuck in 'generating' for more than 15 minutes</span>
+  <span class="cmt">// (handles GHA runner crashes mid-process)</span>
+  <span class="kw">const</span> stuckCutoff = <span class="kw">new</span> <span class="cls">Date</span>(<span class="cls">Date</span>.<span class="fn">now</span>() - <span class="num">15</span> * <span class="num">60</span> * <span class="num">1000</span>).<span class="fn">toISOString</span>()
+  <span class="kw">await</span> supabase
+    .<span class="fn">from</span>(<span class="str">'pending_posts'</span>)
+    .<span class="fn">update</span>({ status: <span class="str">'pending_image'</span>, updated_at: <span class="kw">new</span> <span class="cls">Date</span>().<span class="fn">toISOString</span>() })
+    .<span class="fn">eq</span>(<span class="str">'status'</span>, <span class="str">'generating'</span>)
+    .<span class="fn">lt</span>(<span class="str">'updated_at'</span>, stuckCutoff)
+
+  <span class="cmt">// Now fetch all posts ready for processing</span>
+  <span class="kw">const</span> { data, error } = <span class="kw">await</span> supabase
+    .<span class="fn">from</span>(<span class="str">'pending_posts'</span>)
+    .<span class="fn">select</span>(<span class="str">'*'</span>)
+    .<span class="fn">eq</span>(<span class="str">'status'</span>, <span class="str">'pending_image'</span>)
+    .<span class="fn">order</span>(<span class="str">'created_at'</span>, { ascending: <span class="kw">true</span> })
+
+  <span class="kw">if</span> (error) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">`getPendingPosts failed: </span><span class="kw">${</span>error.message<span class="kw">}</span><span class="str">`</span>)
+  <span class="kw">return</span> data || []
+}</code></pre>
+
+<!-- ═══════════════════ CHAPTER 7 ═══════════════════ -->
+<div class="chapter" id="ch7">
+  <div class="chapter-num">Chapter 7</div>
+  <h2>Multi-Provider Image System</h2>
+</div>
+
+<p>
+  The provider abstraction is one of the cleanest design decisions in the project.
+  Three completely different image services are hidden behind a single interface.
+  Switching between them requires changing exactly one GitHub Secret.
+</p>
+
+<h3 id="ch7-hf">Hugging Face — Active Provider</h3>
+
+<span class="badge badge-green">FREE</span> <span class="badge badge-blue">$0.10/month renewing</span>
+
+<p>
+  HF gives every free account $0.10 in credits that restore on the 1st of every month.
+  At ~$0.001 per FLUX Schnell image, this covers roughly 100 images per month free.
+  HF is <strong>synchronous</strong> — Phase 2 calls it directly and waits up to 90 seconds.
+</p>
+
+<pre><code><span class="lang">image-providers/huggingface.js — key parts</span>
+<span class="kw">const</span> MODEL_URL = <span class="str">'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell'</span>
+
+<span class="cmt">// Phase 1: HF is synchronous, nothing to submit</span>
+<span class="kw">export async function</span> <span class="fn">submitJob</span>(_prompt) {
+  <span class="kw">return</span> { jobId: <span class="kw">null</span> }  <span class="cmt">// Phase 2 does the actual work</span>
+}
+
+<span class="cmt">// Phase 2: generate the image now, wait up to 90 seconds</span>
+<span class="kw">export async function</span> <span class="fn">processJob</span>(_jobId, prompt) {
+  <span class="kw">const</span> response = <span class="kw">await</span> <span class="fn">fetch</span>(MODEL_URL, {
+    method: <span class="str">'POST'</span>,
+    headers: {
+      <span class="str">'Authorization'</span>: <span class="str">`Bearer </span><span class="kw">${</span>process.env.HF_API_TOKEN<span class="kw">}</span><span class="str">`</span>,
+      <span class="str">'X-Wait-For-Model'</span>: <span class="str">'true'</span>,  <span class="cmt">// wait if model is loading</span>
+    },
+    body: <span class="cls">JSON</span>.<span class="fn">stringify</span>({
+      inputs: prompt,
+      parameters: { width: <span class="num">1024</span>, height: <span class="num">576</span>, num_inference_steps: <span class="num">4</span> }
+    }),
+  })
+
+  <span class="kw">if</span> (response.status === <span class="num">503</span>) <span class="kw">return</span> { done: <span class="kw">false</span> }  <span class="cmt">// model loading, retry next cycle</span>
+  <span class="kw">if</span> (!response.ok) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">`HF error </span><span class="kw">${</span>response.status<span class="kw">}</span><span class="str">`</span>)
+
+  <span class="kw">const</span> buffer = <span class="cls">Buffer</span>.<span class="fn">from</span>(<span class="kw">await</span> response.<span class="fn">arrayBuffer</span>())
+  <span class="kw">return</span> { done: <span class="kw">true</span>, imageBuffer: buffer, contentType: <span class="str">'image/jpeg'</span> }
+}
+
+<span class="cmt">// Getting the token right — this was a debugging journey:</span>
+<span class="cmt">// ❌ Fine-grained token with repo.content.read → HTTP 403</span>
+<span class="cmt">// ✅ Write role token → HTTP 200</span>
+<span class="cmt">// Also required: accept FLUX.1-schnell model terms on huggingface.co</span></code></pre>
+
+<h3 id="ch7-fal">Fal.ai — Upgrade Path</h3>
+
+<span class="badge badge-gold">$0.003/image</span> <span class="badge badge-purple">NATIVE ASYNC</span>
+
+<p>
+  Fal.ai has a native async queue — the architecture Felix asked for.
+  Phase 1 submits a job and gets a <code>request_id</code> in milliseconds.
+  Phase 2 polls the status and retrieves the completed image.
+</p>
+
+<pre><code><span class="lang">image-providers/fal.js — key parts</span>
+<span class="cmt">// Phase 1: submit job, returns immediately with request_id</span>
+<span class="kw">export async function</span> <span class="fn">submitJob</span>(prompt) {
+  <span class="kw">const</span> response = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">'https://queue.fal.run/fal-ai/flux/schnell'</span>, {
+    method: <span class="str">'POST'</span>,
+    headers: { <span class="str">'Authorization'</span>: <span class="str">`Key </span><span class="kw">${</span>process.env.FAL_API_KEY<span class="kw">}</span><span class="str">`</span> },
+    body: <span class="cls">JSON</span>.<span class="fn">stringify</span>({
+      input: { prompt, image_size: <span class="str">'landscape_16_9'</span>, num_inference_steps: <span class="num">4</span> }
+    }),
+  })
+  <span class="kw">const</span> { request_id } = <span class="kw">await</span> response.<span class="fn">json</span>()
+  <span class="kw">return</span> { jobId: request_id }  <span class="cmt">// stored in pending_posts.image_job_id</span>
+}
+
+<span class="cmt">// Phase 2: check status → COMPLETED → download</span>
+<span class="kw">export async function</span> <span class="fn">processJob</span>(jobId) {
+  <span class="kw">const</span> { status } = <span class="kw">await</span> <span class="fn">checkStatus</span>(jobId)
+
+  <span class="kw">if</span> (status === <span class="str">'IN_QUEUE'</span> || status === <span class="str">'IN_PROGRESS'</span>) <span class="kw">return</span> { done: <span class="kw">false</span> }
+  <span class="kw">if</span> (status === <span class="str">'FAILED'</span>) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">'Fal job failed'</span>)
+
+  <span class="cmt">// Job is COMPLETED — get the image URL</span>
+  <span class="kw">const</span> result = <span class="kw">await</span> <span class="fn">getResult</span>(jobId)
+  <span class="kw">const</span> imageUrl = result.images[<span class="num">0</span>].url
+
+  <span class="cmt">// Download the generated image</span>
+  <span class="kw">const</span> imgRes = <span class="kw">await</span> <span class="fn">fetch</span>(imageUrl)
+  <span class="kw">const</span> buffer = <span class="cls">Buffer</span>.<span class="fn">from</span>(<span class="kw">await</span> imgRes.<span class="fn">arrayBuffer</span>())
+  <span class="kw">return</span> { done: <span class="kw">true</span>, imageBuffer: buffer }
+}</code></pre>
+
+<h3 id="ch7-horde">AI Horde — Free Fallback</h3>
+
+<span class="badge badge-green">TRULY FREE</span> <span class="badge badge-gold">SDXL QUALITY</span>
+
+<p>
+  AI Horde is a crowdsourced GPU network where volunteers donate compute.
+  All image generation is free. It has a native async queue (same pattern as Fal.ai).
+  Wait times vary from 30 seconds to 20+ minutes depending on volunteer availability.
+  Uses SDXL models — quality is good but not FLUX level.
+</p>
+
+<pre><code><span class="lang">Activating AI Horde</span>
+<span class="cmt"># Set IMAGE_PROVIDER secret to aihorde</span>
+<span class="cmt"># No API key required — anonymous access works</span>
+<span class="cmt"># Or register at aihorde.net and set AIHORDE_API_KEY for better queue priority</span>
+
+echo "aihorde" | gh secret set IMAGE_PROVIDER --repo FAIT-Blog/scout-agent</code></pre>
+
+<h3 id="ch7-switch">Switching Providers — One Secret, Zero Code Changes</h3>
+
+<pre><code><span class="lang">image-providers/index.js — the unified interface</span>
+<span class="kw">import</span> * <span class="kw">as</span> hf    <span class="kw">from</span> <span class="str">'./huggingface.js'</span>
+<span class="kw">import</span> * <span class="kw">as</span> fal   <span class="kw">from</span> <span class="str">'./fal.js'</span>
+<span class="kw">import</span> * <span class="kw">as</span> horde <span class="kw">from</span> <span class="str">'./aihorde.js'</span>
+
+<span class="kw">export const</span> PROVIDER = process.env.IMAGE_PROVIDER || <span class="str">'huggingface'</span>
+
+<span class="kw">const</span> PROVIDERS = { huggingface: hf, fal, aihorde: horde }
+
+<span class="cmt">// Phase 1: submit image job via active provider</span>
+<span class="kw">export async function</span> <span class="fn">submitImageJob</span>(prompt) {
+  <span class="kw">return</span> PROVIDERS[PROVIDER].<span class="fn">submitJob</span>(prompt)
+}
+
+<span class="cmt">// Phase 2: process image — uses provider STORED in pending_post</span>
+<span class="cmt">// (not the current IMAGE_PROVIDER — allows switching mid-flight)</span>
+<span class="kw">export async function</span> <span class="fn">processImageJob</span>(jobId, prompt, provider = PROVIDER) {
+  <span class="kw">return</span> PROVIDERS[provider].<span class="fn">processJob</span>(jobId, prompt)
+}</code></pre>
+
+<table>
+  <tr><th>To use this provider</th><th>Set IMAGE_PROVIDER secret to</th><th>Also add</th></tr>
+  <tr><td>Hugging Face (default)</td><td><code>huggingface</code></td><td><code>HF_API_TOKEN</code> (write role)</td></tr>
+  <tr><td>Fal.ai</td><td><code>fal</code></td><td><code>FAL_API_KEY</code></td></tr>
+  <tr><td>AI Horde</td><td><code>aihorde</code></td><td><em>nothing required</em></td></tr>
+</table>
+
+<!-- ═══════════════════ CHAPTER 8 ═══════════════════ -->
+<div class="chapter" id="ch8">
+  <div class="chapter-num">Chapter 8</div>
+  <h2>Supabase — Database &amp; Storage</h2>
+</div>
+
+<h3>Four Tables</h3>
+
+<table>
+  <tr><th>Table</th><th>Purpose</th><th>Key Columns</th></tr>
+  <tr><td><code>posts</code></td><td>Published blog posts</td><td>id, slug, title, content, category, cover_image_url, status</td></tr>
+  <tr><td><code>scout_memory</code></td><td>Deduplication — prevents re-publishing seen articles</td><td>feed_url, item_guid, item_title, post_id</td></tr>
+  <tr><td><code>evergreen_vocab</code></td><td>Self-updating scoring vocabulary</td><td>term, source ('auto' or 'manual')</td></tr>
+  <tr><td><code>pending_posts</code></td><td>Async image pipeline queue</td><td>title, content, image_prompt, image_job_id, provider, status, attempts</td></tr>
+</table>
+
+<h3>Supabase Storage</h3>
+
+<p>
+  The <code>post-images</code> bucket stores all cover images permanently.
+  Images are uploaded as JPEG/WebP and served via Supabase's CDN.
+  Compared to Pollinations lazy URLs, Supabase Storage URLs:
+</p>
+<ul>
+  <li>Load instantly on first request (no generation wait)</li>
+  <li>Never expire or rate-limit</li>
+  <li>Are not affected by third-party service changes</li>
+  <li>Load consistently for all users worldwide via CDN</li>
+</ul>
+
+<pre><code><span class="lang">Uploading an image to Supabase Storage</span>
+<span class="kw">const</span> filename = <span class="str">`covers/</span><span class="kw">${</span>post.id<span class="kw">}</span><span class="str">.jpg`</span>
+
+<span class="kw">const</span> { error } = <span class="kw">await</span> supabase.storage
+  .<span class="fn">from</span>(<span class="str">'post-images'</span>)
+  .<span class="fn">upload</span>(filename, imageBuffer, {
+    contentType: <span class="str">'image/jpeg'</span>,
+    upsert: <span class="kw">true</span>,  <span class="cmt">// overwrite if exists (safe for retries)</span>
+  })
+
+<span class="kw">if</span> (error) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">`Storage upload failed: </span><span class="kw">${</span>error.message<span class="kw">}</span><span class="str">`</span>)
+
+<span class="cmt">// Get the permanent public URL</span>
+<span class="kw">const</span> { data: { publicUrl } } = supabase.storage
+  .<span class="fn">from</span>(<span class="str">'post-images'</span>)
+  .<span class="fn">getPublicUrl</span>(filename)
+
+<span class="cmt">// publicUrl looks like:</span>
+<span class="cmt">// https://tixagzz...supabase.co/storage/v1/object/public/post-images/covers/1.jpg</span></code></pre>
+
+<!-- ═══════════════════ CHAPTER 9 ═══════════════════ -->
+<div class="chapter" id="ch9">
+  <div class="chapter-num">Chapter 9</div>
+  <h2>Debugging War Stories</h2>
+</div>
+
+<p>
+  The most valuable lessons come from things that break. Here are the four most instructive
+  debugging episodes from this project.
+</p>
+
+<h3 id="ch9-node18">War Story 1: The Node.js 18 Crash That Hid Itself</h3>
+
+<p>
+  For the first week of the Scout Agent, every GHA run showed green ✅. But no posts
+  were being published. The pipeline appeared to work perfectly.
+</p>
+
+<p>
+  The reveal: GitHub was running the workflow on <strong>Node.js 18</strong>, which is deprecated
+  by Supabase. The <code>@supabase/supabase-js</code> package throws immediately on startup if
+  it detects Node 18 — before Scout even fetches a single RSS article. The original workflow used
+  <code>|| true</code> to suppress all errors, so even a total crash showed as green.
+</p>
+
+<pre><code><span class="cmt">// The broken workflow — silent failure pattern</span>
+run: |
+  timeout 110 node index.js || true  <span class="cmt">← always exits 0, hides all errors</span>
+
+<span class="cmt">// Proof of the crash: every "successful" run took exactly 16 seconds</span>
+<span class="cmt">// 16 seconds = startup time + crash. Real runs take 78–120 seconds.</span></code></pre>
+
+<p>The fix was two changes:</p>
+<ol>
+  <li>Upgrade to <code>node-version: '24'</code> in the workflow</li>
+  <li>Remove <code>|| true</code> — let the workflow fail loudly when Scout fails</li>
+  <li>Add a Slack failure alert so you know immediately when runs fail</li>
+</ol>
+
+<h3 id="ch9-websocket">War Story 2: The Supabase WebSocket That Hung Everything</h3>
+
+<p>
+  After the Node 18 fix, Scout ran successfully — but GHA runs took 502 seconds.
+  The run log showed posts were published after ~70 seconds, then... nothing.
+  430 seconds of silence before the timeout killed the process.
+</p>
+
+<p>
+  Root cause: Supabase's JavaScript client opens a realtime WebSocket to listen for
+  database changes. It keeps this socket alive indefinitely. When <code>runScout()</code>
+  finishes, Node.js doesn't exit because the WebSocket is still open.
+</p>
+
+<pre><code><span class="cmt">// Before: process hangs for 430 seconds until GHA timeout</span>
+run: node -e "import('./scout.js').then(m => m.runScout())"
+
+<span class="cmt">// After: explicitly exit when done — WebSocket is destroyed</span>
+run: node -e "import('./scout.js')
+  .then(m => m.runScout())
+  .then(() => process.exit(0))      <span class="cmt">← this is the fix</span>
+  .catch(e => { console.error(e); process.exit(1) })"
+
+<span class="cmt">// Result: runs went from 502 seconds to 78 seconds</span></code></pre>
+
+<h3 id="ch9-pollinations">War Story 3: The Pollinations x402 Discovery</h3>
+
+<p>
+  Images stopped loading on the site. The browser DevTools showed all Pollinations
+  image requests returning HTTP 402. Assumed to be rate limiting.
+</p>
+
+<p>
+  The migration script was run from GitHub Actions (a fresh IP, not rate-limited).
+  Result: 26 posts, 26 failures. Not a rate limit — same 402 from a clean IP.
+</p>
+
+<p>Reading the 402 response body revealed the truth:</p>
+
+<pre><code><span class="cmt">// The 402 response — this is a payment wall, not a rate limit</span>
+{
+  "x402Version": 1,
+  "accepts": [{
+    "scheme": "exact",
+    "network": "base",          <span class="cmt">// Base blockchain</span>
+    "asset": "0x833589f...",   <span class="cmt">// USDC token contract</span>
+    "maxAmountRequired": "1000" <span class="cmt">// $0.001 in USDC</span>
+  }]
+}</code></pre>
+
+<p>
+  Pollinations adopted the <strong>x402 standard</strong> — HTTP 402 as a machine-readable
+  payment protocol for API monetisation. The "free" tier no longer exists in any practical sense.
+</p>
+
+<p>
+  <strong>Lesson:</strong> Free third-party services can change pricing at any time.
+  Any system that depends on a free external API must have a storage layer that decouples
+  the generated asset from the generation service. If we had uploaded images to Supabase Storage
+  at publish time from day one, the Pollinations change would have been irrelevant.
+</p>
+
+<h3 id="ch9-token">War Story 4: The HuggingFace Token Scope Mystery</h3>
+
+<p>
+  A HuggingFace access token was created, added to secrets, and tested. The result:
+</p>
+
+<pre><code>curl → whoami: HTTP 200  (token is valid, user: faitokon)
+curl → HF Inference API: HTTP 403  (token is invalid for inference)</code></pre>
+
+<p>
+  The token was <strong>fine-grained</strong> with only <code>repo.content.read</code> scope.
+  This scope allows downloading model files but not calling the Inference API.
+  HuggingFace tokens cannot be edited after creation — you must delete and recreate.
+</p>
+
+<p>The diagnostic process:</p>
+<pre><code><span class="cmt">// Step 1: Verify the token authenticates correctly</span>
+curl -H "Authorization: Bearer hf_..." huggingface.co/api/whoami-v2
+<span class="cmt">// → HTTP 200, role: "fineGrained", permissions: ["repo.content.read"]</span>
+<span class="cmt">// ↑ This is the clue — "fineGrained" with limited scope</span>
+
+<span class="cmt">// Step 2: Test inference endpoint directly</span>
+curl -H "Authorization: Bearer hf_..." router.huggingface.co/hf-inference/models/...
+<span class="cmt">// → HTTP 403</span>
+
+<span class="cmt">// Step 3: Create new token — Write role (not Fine-grained)</span>
+curl -H "Authorization: Bearer hf_NEW..." whoami-v2
+<span class="cmt">// → HTTP 200, role: "write"</span>
+
+curl -H "Authorization: Bearer hf_NEW..." HF Inference API
+<span class="cmt">// → HTTP 200 ✅</span></code></pre>
+
+<p>
+  <strong>Lesson:</strong> HuggingFace has two token types: <code>write</code> (full access including inference)
+  and <code>fineGrained</code> (custom permissions). For inference API access, always use <code>write</code>.
+  Also: you must accept the gated model terms on huggingface.co for FLUX.1-schnell before
+  any token will work with that model.
+</p>
+
+<!-- ═══════════════════ CHAPTER 10 ═══════════════════ -->
+<div class="chapter" id="ch10">
+  <div class="chapter-num">Chapter 10</div>
+  <h2>Patterns &amp; Best Practices</h2>
+</div>
+
+<h3>Pattern 1: Retry Logic with Exponential Backoff</h3>
+
+<pre><code><span class="cmt">// For operations that can fail transiently (DB writes, API calls)</span>
+<span class="kw">for</span> (<span class="kw">let</span> attempt = <span class="num">1</span>; attempt <= MAX_ATTEMPTS; attempt++) {
+  <span class="kw">const</span> { error } = <span class="kw">await</span> supabase.<span class="fn">from</span>(<span class="str">'table'</span>).<span class="fn">insert</span>(row)
+  <span class="kw">if</span> (!error) <span class="kw">return</span>  <span class="cmt">// success</span>
+  <span class="kw">if</span> (attempt < MAX_ATTEMPTS) {
+    console.<span class="fn">error</span>(<span class="str">`Attempt </span><span class="kw">${</span>attempt<span class="kw">}</span><span class="str"> failed, retrying...`</span>)
+    <span class="kw">await new</span> <span class="cls">Promise</span>(r => <span class="fn">setTimeout</span>(r, <span class="num">2000</span> * attempt))  <span class="cmt">// 2s, 4s, 6s...</span>
+  }
+}</code></pre>
+
+<h3>Pattern 2: Graceful Degradation</h3>
+
+<pre><code><span class="cmt">// Operations that should fail silently (non-critical)</span>
+<span class="kw">try</span> {
+  <span class="kw">await</span> <span class="fn">notifySlack</span>(...)
+} <span class="kw">catch</span> (err) {
+  console.<span class="fn">error</span>(<span class="str">'Slack notification failed:'</span>, err.message)
+  <span class="cmt">// Don't throw — the post is published, Slack is optional</span>
+}
+
+<span class="cmt">// Operations that must fail loudly (critical path)</span>
+<span class="kw">if</span> (error) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">`hasSeen failed: </span><span class="kw">${</span>error.message<span class="kw">}</span><span class="str">`</span>)
+<span class="cmt">// Throw — a DB failure here would cause duplicate posts</span></code></pre>
+
+<h3>Pattern 3: Read Before Write</h3>
+
+<div class="callout info">
+  <div class="callout-icon">📖</div>
+  <div class="callout-body">
+    <strong>Never edit a file without reading it first</strong>
+    <p>This applies to both Claude Code (as a rule enforced in the spec) and to your own coding practice. Editing blind causes corruption, introduces merge conflicts, and creates subtle bugs. Always read, then edit, then verify the diff.</p>
+  </div>
+</div>
+
+<h3>Pattern 4: Lock-and-Release for Concurrent Workers</h3>
+
+<pre><code><span class="cmt">// complete.js — prevents two Phase 2 runs from processing the same post</span>
+<span class="kw">for</span> (<span class="kw">const</span> post <span class="kw">of</span> pending) {
+  <span class="cmt">// Lock immediately — no other concurrent run can pick this up</span>
+  <span class="kw">await</span> <span class="fn">updatePendingPost</span>(post.id, { status: <span class="str">'generating'</span> })
+
+  <span class="kw">try</span> {
+    <span class="kw">const</span> result = <span class="kw">await</span> <span class="fn">processImageJob</span>(...)
+    <span class="kw">if</span> (!result.done) {
+      <span class="kw">await</span> <span class="fn">updatePendingPost</span>(post.id, { status: <span class="str">'pending_image'</span> })  <span class="cmt">// Release lock</span>
+      <span class="kw">continue</span>
+    }
+    <span class="cmt">// ... complete the post</span>
+    <span class="kw">await</span> <span class="fn">updatePendingPost</span>(post.id, { status: <span class="str">'published'</span> })
+  } <span class="kw">catch</span> (err) {
+    <span class="kw">await</span> <span class="fn">updatePendingPost</span>(post.id, { status: <span class="str">'pending_image'</span> })  <span class="cmt">// Always release on error</span>
+  }
+}</code></pre>
+
+<h3>Pattern 5: Provider Abstraction</h3>
+
+<p>
+  When a feature has multiple implementation options (different payment tiers, different
+  speed/cost trade-offs), isolate each behind a common interface. The calling code never
+  needs to know which provider is active.
+</p>
+
+<pre><code><span class="cmt">// Each provider exports the same function signatures:</span>
+<span class="fn">submitJob</span>(prompt)  →  { jobId }
+<span class="fn">processJob</span>(jobId, prompt)  →  { done, imageBuffer?, contentType? }
+
+<span class="cmt">// The index.js delegates based on IMAGE_PROVIDER env var</span>
+<span class="cmt">// Switching from HF to Fal.ai = changing one secret</span>
+<span class="cmt">// Zero code changes anywhere else</span></code></pre>
+
+<!-- ═══════════════════ CHAPTER 11 ═══════════════════ -->
+<div class="chapter" id="ch11">
+  <div class="chapter-num">Chapter 11</div>
+  <h2>Session Logging &amp; Documentation</h2>
+</div>
+
+<p>
+  A critical part of this project that is as important as the code itself: the session log.
+  Felix's explicit requirement: "We need it to teach and encourage people/students to
+  embrace Vibe-coding and to promote how efficient Claude Code can be and is."
+</p>
+
+<h3>Why Verbatim Matters</h3>
+
+<p>
+  A session log that summarises what happened is a history document. A session log that shows
+  every command, every output, every error, and every fix is a <strong>tutorial</strong>.
+  Anyone reading a verbatim log should be able to reproduce exactly what was done and understand
+  why each decision was made.
+</p>
+
+<h3>What Goes in the Log</h3>
+
+<table>
+  <tr><th>What happened</th><th>What to log</th></tr>
+  <tr><td>Felix sends a message</td><td>His exact words, unparaphrased</td></tr>
+  <tr><td>Claude Code reads a file</td><td>The file path + the relevant content read</td></tr>
+  <tr><td>A bash command is run</td><td>The full command + the complete terminal output</td></tr>
+  <tr><td>A file is edited</td><td>The before AND after, in full</td></tr>
+  <tr><td>An error occurs</td><td>The exact error message + the root cause diagnosis</td></tr>
+  <tr><td>A fix is applied</td><td>Exactly what changed and why</td></tr>
+  <tr><td>A commit is made</td><td>The full commit message + the git push output</td></tr>
+  <tr><td>A secret appears</td><td><code>[REDACTED]</code> — never the real value</td></tr>
+</table>
+
+<h3>The Project Documentation Hierarchy</h3>
+
+<pre><code>aitrends-project/
+  CLAUDE.md          ← Master spec. Read at start of EVERY session.
+  SESSION_LOG.html   ← Master log. Append at end of EVERY session.
+
+  aitrends.ng/
+    AITRENDS_NG_SPEC.md      ← Frontend-specific reference
+    SESSION_LOG_AITRENDS.html ← Archived aitrends-only sessions
+
+  scout-agent/
+    SCOUT_AGENT_SPEC.md    ← Scout-specific reference
+    SESSION_LOG_SCOUT.html ← Archived scout-only sessions</code></pre>
+
+<!-- ═══════════════════ CHAPTER 12 ═══════════════════ -->
+<div class="chapter" id="ch12">
+  <div class="chapter-num">Chapter 12</div>
+  <h2>Project Structure Reference</h2>
+</div>
+
+<h3>scout-agent/</h3>
+<pre><code>scout-agent/
+  scout.js              ← Phase 1: queue posts (runs every 6h)
+  complete.js           ← Phase 2: complete images + publish (runs every 5min)
+
+  image-providers/
+    index.js            ← Unified interface — read IMAGE_PROVIDER, delegate
+    huggingface.js      ← HF FLUX.1-schnell (free $0.10/month, synchronous)
+    fal.js              ← Fal.ai FLUX Schnell ($0.003/image, async queue)
+    aihorde.js          ← AI Horde SDXL (free forever, async queue)
+
+  feeds.js              ← 17 RSS feeds (4 Africa-specific + 13 global)
+  gemini.js             ← Gemini 3.5 Flash API (Africa-first prompt, retry logic)
+  memory.js             ← Supabase ops: hasSeen, markSeen, pending_posts CRUD
+  publisher.js          ← POST to /api/posts/create
+  slack.js              ← Success notifications to #aitrends-feed
+  felix.js              ← Reads #scout-editor (Felix's editorial inputs)
+  fetcher.js            ← URL content extraction (YouTube transcripts, articles)
+  image.js              ← buildImageUrl() fallback (legacy Pollinations URL builder)
+  migrate-images.js     ← One-time script: retroactively store images in Supabase
+
+  .github/workflows/
+    scout.yml           ← Phase 1 GHA (cron 0 */6 * * *)
+    complete.yml        ← Phase 2 GHA (cron */5 * * * *)</code></pre>
+
+<h3>aitrends.ng/</h3>
+<pre><code>aitrends.ng/
+  app/
+    page.tsx                  ← Homepage (force-dynamic, Supabase)
+    layout.tsx                ← Root layout + global metadata
+    about/page.tsx            ← About page
+    post/[slug]/page.tsx      ← Individual post (force-dynamic)
+    category/[slug]/page.tsx  ← Category feed (force-dynamic)
+    sitemap.ts                ← Dynamic sitemap.xml
+    feed.xml/route.ts         ← RSS 2.0 feed
+    robots.ts                 ← robots.txt
+    api/
+      posts/create/route.ts   ← Protected endpoint (SCOUT_API_KEY check)
+      posts/draft/route.ts    ← Draft endpoint
+      health/route.ts         ← GET → {status: "ok"}
+
+  components/
+    PostCard.tsx              ← Grid card (plain img, onError fallback)
+    HeroPost.tsx              ← Featured post (plain img, onError fallback)
+    PostGrid.tsx              ← Responsive grid + Load More
+    Sidebar.tsx               ← About blurb + category counts + recent posts
+    NavBar.tsx                ← Site navigation
+    Footer.tsx                ← FAIT attribution + "Today and the next AI trends"
+    CategoryBadge.tsx         ← Coloured category pill
+
+  lib/
+    supabase.ts               ← Lazy Proxy client (safe at build time)
+    createPost.ts             ← Unique slug generation + Supabase insert
+    slugify.ts                ← URL-safe slug from title
+    types.ts                  ← Post TypeScript interface
+
+  next.config.ts              ← Allows *.supabase.co images</code></pre>
+
+<h3>The Supabase Database</h3>
+<pre><code>Tables:
+  posts           ← published blog posts
+  scout_memory    ← deduplication (feed_url + item_guid)
+  evergreen_vocab ← self-updating scoring vocabulary
+  pending_posts   ← async image pipeline queue
+
+Storage Buckets:
+  post-images     ← permanent cover images (public, CDN-served)</code></pre>
+
+<h3>Key Environment Variables</h3>
+<table>
+  <tr><th>Variable</th><th>Where set</th><th>Purpose</th></tr>
+  <tr><td><code>SUPABASE_URL</code></td><td>Both</td><td>Supabase project URL</td></tr>
+  <tr><td><code>SUPABASE_SECRET_KEY</code></td><td>Both</td><td>Service role key (bypasses RLS)</td></tr>
+  <tr><td><code>GEMINI_API_KEY</code></td><td>Scout</td><td>Google Gemini API access</td></tr>
+  <tr><td><code>SCOUT_API_KEY</code></td><td>Both</td><td>Shared secret between Scout and blog API</td></tr>
+  <tr><td><code>IMAGE_PROVIDER</code></td><td>Scout</td><td><code>huggingface</code> | <code>fal</code> | <code>aihorde</code></td></tr>
+  <tr><td><code>HF_API_TOKEN</code></td><td>Scout</td><td>HuggingFace write role token</td></tr>
+  <tr><td><code>FAL_API_KEY</code></td><td>Scout</td><td>Fal.ai key (when upgrading)</td></tr>
+  <tr><td><code>SLACK_WEBHOOK_URL</code></td><td>Scout</td><td>Outgoing posts to #aitrends-feed</td></tr>
+  <tr><td><code>SLACK_BOT_TOKEN</code></td><td>Scout</td><td>Reads #scout-editor channel</td></tr>
+  <tr><td><code>BLOG_API_URL</code></td><td>Scout</td><td>aitrends.ng /api/posts/create</td></tr>
+</table>
+
+<!-- ═══════════════════ FOOTER ═══════════════════ -->
+<div class="manual-footer">
+  <p><strong style="color:#fff">AITrends.ng — Vibe-Coding Training Manual</strong></p>
+  <p>Built by Felix Okon &amp; Claude Code (Sonnet 4.6) · FAIT · Lagos · June 2026</p>
+  <p style="margin-top:12px; font-size:0.75rem">
+    This document is a living training manual. Every session adds new lessons.
+    The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
+  </p>
+</div>
+
+</div>
+</body>
+</html>
