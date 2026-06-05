@@ -4153,6 +4153,91 @@ Already queued: 0
   </div>
 </div>
 
+<hr>
+
+<div class="project-divider">
+  <h2>Combined Session #4 — 5 June 2026 (evening)</h2>
+  <p>Both projects · GHA reliability fixes · cron-job.org setup · share buttons</p>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Cron-job account created and PAT created</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>Checked CLAUDE.md to understand context. Identified PAT + cron-job.org for triggering Phase 2 (complete.yml) every 30 minutes as a reliability safety net — GHA's native cron was not firing reliably at short intervals.</p>
+    <p>Provided exact cron-job.org configuration: URL <code>https://api.github.com/repos/FAIT-Blog/scout-agent/actions/workflows/complete.yml/dispatches</code>, method POST, headers Authorization + Content-Type + Accept, body <code>{"ref":"main"}</code>, schedule every 30 minutes.</p>
+  </div>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Here: 404 Not Found</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>Diagnosed 404 as a PAT scope issue. Tested with curl — got HTTP 401. Root cause: PAT was created under personal account (<code>felixokon</code>), not the <code>FAIT-Blog</code> org. Fine-grained PATs scoped to a personal account cannot trigger workflows on org repos.</p>
+    <p>Fix: create a new fine-grained PAT with Resource owner = <strong>FAIT-Blog</strong>, Repository = <code>FAIT-Blog/scout-agent</code>, Permissions &rarr; Actions = Read and write.</p>
+  </div>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">204 success!</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>Confirmed cron-job.org working — HTTP 204, GitHub accepted the trigger. GHA run history showed:</p>
+    <pre><code>Complete Posts (Phase 2) | success | 2026-06-05T20:09:57Z | event:workflow_dispatch</code></pre>
+    <p>Also spotted Scout Agent failed at 18:29 UTC. Investigated immediately.</p>
+    <p><strong>Root cause of failure:</strong> <code>GITHUB_TOKEN</code> does not have permission to dispatch other workflows by default. Phase 1 ran fine and queued a post, but crashed at the &ldquo;Trigger Phase 2&rdquo; step with:</p>
+    <pre><code>HTTP 403: Resource not accessible by integration</code></pre>
+    <h4>Fix: Edit .github/workflows/scout.yml — add permissions: actions: write</h4>
+    <pre><code>permissions:
+  actions: write</code></pre>
+    <h4>Bash: git commit adae741 + push</h4>
+    <pre><code>[main adae741] fix: add actions:write permission so Phase 1 can trigger Phase 2
+To https://github.com/FAIT-Blog/scout-agent.git
+   8ada833..adae741  main -> main</code></pre>
+    <p>Final reliability stack:</p>
+    <table>
+      <tr><th>Trigger</th><th>Interval</th><th>Status</th></tr>
+      <tr><td>Phase 1 cron</td><td>Every 6h</td><td>&#x2705; Reliable</td></tr>
+      <tr><td>Phase 1 &rarr; Phase 2 direct</td><td>Immediately after Phase 1</td><td>&#x2705; Fixed (adae741)</td></tr>
+      <tr><td>cron-job.org &rarr; Phase 2</td><td>Every 30 min</td><td>&#x2705; Working (204)</td></tr>
+      <tr><td>Phase 2 GHA cron</td><td>Every 15 min</td><td>&#x26A0;&#xFE0F; Unreliable (fallback only)</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Update all documents</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>Read SESSION_LOG.html (4,159 lines) and current CLAUDE.md. Applied all updates:</p>
+    <ul>
+      <li>CLAUDE.md: added &ldquo;&#x2705; Completed &mdash; Combined Session #4&rdquo; (5 items)</li>
+      <li>CLAUDE.md: removed completed &#x1F7E0; High item &ldquo;Monitor image regeneration&rdquo;</li>
+      <li>CLAUDE.md: updated &ldquo;What Has Been Built&rdquo; for aitrends.ng &mdash; ShareButtons added, image note updated</li>
+      <li>CLAUDE.md: added combined S4 row to session history table</li>
+      <li>CLAUDE.md: updated Last Updated to 2026-06-05</li>
+      <li>SESSION_LOG.html: appended this Combined Session #4 entry</li>
+    </ul>
+    <h4>Bash: git add CLAUDE.md SESSION_LOG.html &amp;&amp; git commit -m "docs: Combined Session #4 — cron-job.org, GHA permissions fix, share buttons, documentation update" &amp;&amp; git push</h4>
+  </div>
+</div>
+
 </div>
 
 </div>

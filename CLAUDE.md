@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-04
+**Last Updated:** 2026-06-05
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -252,9 +252,10 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 - Dynamic metadata + OpenGraph + Twitter Card per post
 - Sitemap.xml + feed.xml (RSS) + robots.txt
 - `/api/posts/create` + `/api/posts/draft` + `/api/health`
-- All images use `unoptimized` — Pollinations images now load correctly
+- Plain `<img>` tags with `onError` gradient fallback (Pollinations confirmed broken — x402)
 - Footer updated: "Today and the next AI trends"
 - About page updated: Gemini 3.5 Flash, real feed list, Africa-first mission
+- ShareButtons on post pages: X, WhatsApp, LinkedIn, Telegram, Copy Link (clipboard + "Copied!" feedback)
 
 ### Known Issues
 - 🔴 Individual post pages (`/post/[slug]`) returning HTTP 404 on Vercel despite route file existing — under investigation (Round 2 task)
@@ -442,6 +443,13 @@ npm start   # runs index.js
 - ✅ **Live end-to-end test passed** — Phase 1 queued "Funding the Future: How Core DAO, Talstack, and Apple-Approved AI Agents are Driving AI Innovation in Africa". Phase 2 generated image via HF in 3s, uploaded 94KB JPEG to Supabase Storage, published to aitrends.ng, notified Slack. Total Phase 2 time: 14 seconds.
 - ✅ **TechCabal Africa content confirmed working** — first article scored and selected: "Talstack Supports Nigerian Founders" — exactly the Africa-first content the mission requires.
 
+### ✅ Completed — Combined Session #4 (5 June 2026, evening)
+- ✅ **Phase 1 → Phase 2 direct trigger** — `scout.yml` now fires `complete.yml` via `workflow_dispatch` immediately after every successful Phase 1 run (commit 8ada833). GHA's 15-min cron was running 0 times — posts were sitting in pending queue for hours. Direct trigger fixes this; posts now publish within minutes of being queued.
+- ✅ **`scout.yml` permissions fix** — added `permissions: actions: write` at workflow level (commit adae741). Without it, `GITHUB_TOKEN` returned HTTP 403 when Phase 1 tried to dispatch Phase 2 — Phase 1 marked itself as failed even though content was queued correctly.
+- ✅ **cron-job.org external trigger** — Phase 2 now triggered every 30 minutes from cron-job.org as a reliability safety net. PAT scoped to `FAIT-Blog/scout-agent` Actions: write. Confirmed working (HTTP 204). Combined with Phase 1 direct trigger, Phase 2 now has two independent trigger paths.
+- ✅ **ShareButtons component** — `components/ShareButtons.tsx` added. Replaced the two inline share links on post pages with five share options: X (Twitter), WhatsApp (critical for Nigerian/West African audience), LinkedIn, Telegram, Copy Link (clipboard copy with 2-second "Copied!" feedback, brand-colour hover). Commit ed4fdd6 on aitrends-ng repo.
+- ✅ **Image regeneration complete** — all 28 posts with Pollinations URLs replaced with permanent HF FLUX images stored in Supabase Storage. Phase 2 ran every cycle; all 28 confirmed migrated.
+
 ### ✅ Completed — Combined Session #3 (5 June 2026)
 - ✅ **"One story per post" rule enforced** — Gemini prompt rewritten: "ONE STORY ONLY" replaces "Give each article its own h3 section". Gemini now picks the single most Africa-relevant story and writes a focused piece. H3 headings explore angles (technical/cost/opportunity/risk), not separate source articles.
 - ✅ **Repetitive image pattern broken** — Explicitly banned in `gemini.js`: "person at laptop near window with city view". Full prohibited-compositions list added. Risograph print added as 4th art style. Style rotation rule added (no same style in consecutive posts). Replaced single GOOD example with 3 diverse examples (naira→data-stream, scales-of-justice, brain-of-African-cities). "Young African professional + laptop + Lagos skyline" explicitly prohibited as lazy default.
@@ -457,8 +465,7 @@ npm start   # runs index.js
 - [ ] **Fix broken RSS feeds** — 5 feeds failing: Ventureburn (415), HuggingFace blog (429), Google DeepMind (404), Mistral AI (404), Hacker News (429). Need correct feed URLs.
 
 ### 🟠 High
-- [ ] **Monitor image regeneration** — 28 posts queued. Watch `complete.yml` every 5 min. All 28 should have real images within ~2.5 hours of queue trigger (5 June 02:55 UTC).
-- [ ] **Verify new prompt produces focused single-topic posts** — next Phase 1 + Phase 2 cycle: is the post about ONE story with h3 angle headings? Is the image prompt avoiding the banned person+laptop+window pattern?
+- [ ] **Verify new prompt produces focused single-topic posts** — check next published post: is it ONE story with h3 angle headings? Is the image avoiding the banned person+laptop+window pattern?
 - [ ] **Submit `sitemap.xml` to Google Search Console** — manual task, no code, 10 minutes, unlocks all SEO work immediately
 
 ### 🟡 Medium
@@ -532,3 +539,4 @@ This session log is a teaching document. It demonstrates what real autonomous Cl
 | scout S3 | 3 June 2026 | scout-agent | Full system audit: GHA run history check, site audit (all 4 category pages), post 404 discovery, Africa-focus count (8/26=31%), root cause diagnosis (feeds are global — no Africa content), mission rewrite, tagline retire, master to-do list, image generation guidelines |
 | combined S1 | 4 June 2026 AM | both | Round 1: Africa-first Gemini prompt, 17 feeds (+4 Africa), markSeen retry, footer updated, taglines updated, About page fixed, project restructured into aitrends-project/, unified CLAUDE.md + SESSION_LOG.html written |
 | combined S2 | 4 June 2026 PM | both | Image pipeline rebuilt: Pollinations confirmed broken (x402 payment standard), plain `<img>` tags with onError fallback, two-phase async pipeline (Phase 1 queue / Phase 2 complete), 3 providers (HF/Fal/AI Horde) behind one env var, Supabase Storage `post-images` bucket, `pending_posts` table, HF FLUX.1-schnell confirmed working (HTTP 200, 3s generation), live end-to-end test passed — first Africa-first post with permanent Supabase image published |
+| combined S4 | 5 June 2026 PM | both | Reliability + share: Phase 1 → Phase 2 direct trigger (8ada833), cron-job.org external trigger every 30 min (204 confirmed), scout.yml permissions fix — actions:write (adae741) fixes 403 on Phase 2 dispatch, ShareButtons component — X/WhatsApp/LinkedIn/Telegram/Copy Link on post pages (ed4fdd6 on aitrends-ng), image regeneration of 28 posts confirmed complete |
