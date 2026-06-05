@@ -16,7 +16,7 @@ WEBSITE_AI_Generated_Xai/
   └── aitrends-project/
         ├── CLAUDE.md                     ← THIS FILE — master spec for the whole project
         ├── SESSION_LOG.html              ← Master session log (all sessions, both projects)
-        ├── TRAINING_MANUAL.html          ← Vibe-Coding training manual (12 chapters, 77KB)
+        ├── TRAINING_MANUAL.html          ← Vibe-Coding training manual (12 chapters, 1,867 lines)
         ├── aitrends.ng/                  ← Blog frontend (Next.js · Vercel)
         │     ├── AITRENDS_NG_SPEC.md    ← Detailed frontend spec (reference, not primary)
         │     └── SESSION_LOG_AITRENDS.html ← Archived aitrends.ng-only sessions
@@ -139,7 +139,7 @@ Rotate all three together if you ever rotate the key.
 | excerpt | text | 2-sentence summary for cards |
 | category | text | `ai-models` · `anthropic` · `industry` · `tools` |
 | tags | text[] | array e.g. `["claude", "anthropic", "llm"]` |
-| cover_image_url | text | Pollinations.ai generated URL |
+| cover_image_url | text | Supabase Storage URL (HF FLUX.1-schnell generated image) |
 | cover_image_prompt | text | the prompt used to generate the image |
 | source_urls | text[] | original RSS article URLs (attribution) |
 | status | text | `published` · `draft` |
@@ -294,8 +294,8 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 7. Generate Africa-first 800-word digest via Gemini 3.5 Flash
    (fallback: gemini-2.5-flash on 503; retry up to 3 times, 12s delay)
 8. Validate output: title + content >= 400 chars before proceeding
-9. Build cover image URL via Pollinations.ai Flux model (fast generation ~2s)
-10. Publish to aitrends.ng /api/posts/create
+9. Submit image job to active provider (HF FLUX.1-schnell / Fal.ai / AI Horde) — returns jobId or null for HF
+10. Save to pending_posts table (status: pending_image) — Phase 2 handles publish
 11. Save TRENDING_TERMS to evergreen_vocab in Supabase
 12. Mark articles as seen in scout_memory (2-attempt retry on failure)
 13. Notify Slack #aitrends-feed on success
@@ -403,7 +403,7 @@ npm start   # runs index.js
 - YouTube transcript auto-fetch (fallback: manual paste)
 - Article body text extraction via node-html-parser
 - Africa-first Gemini prompt (rewritten Round 1)
-- Story-first cover images via Pollinations.ai Flux model
+- Story-first cover images via HF FLUX.1-schnell → permanently stored in Supabase Storage
 - Gemini retry: 3 attempts, 12s delay, primary→fallback
 - process.exit(0) — clean 78–122s runs
 - markSeen() 2-attempt retry on Supabase failure
@@ -457,7 +457,7 @@ npm start   # runs index.js
 - ✅ **`regenerate-images.js` built** — queue-based: inserts all posts with Pollinations URLs into `pending_posts`. Phase 2 generates HF FLUX images one per 5-min cycle (~140 min total for 28 posts). First attempt used direct HF calls → 429 rate limit → rewritten to queue approach.
 - ✅ **`complete.js` updated for image updates** — when `post_id` is already set in `pending_posts`, updates the existing post's `cover_image_url` directly in Supabase instead of creating a new post via `/api/posts/create`.
 - ✅ **28 posts queued for image regeneration** — triggered 5 June 02:55 UTC. Phase 2 generating real HF FLUX images every 5 minutes and storing in Supabase Storage permanently.
-- ✅ **Training manual created** — `TRAINING_MANUAL.html` (77KB, 1,617 lines, 12 chapters). See documentation section.
+- ✅ **Training manual created** — `TRAINING_MANUAL.html` (12 chapters, now 1,867 lines after Session #4 additions). See documentation section.
 - ✅ **`FAIT-Blog/aitrends-project` GitHub repo created** — hosts `CLAUDE.md`, `SESSION_LOG.html`, `TRAINING_MANUAL.html`.
 
 ### 🔴 Critical

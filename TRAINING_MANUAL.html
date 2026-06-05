@@ -1365,7 +1365,7 @@ echo "aihorde" | gh secret set IMAGE_PROVIDER --repo FAIT-Blog/scout-agent</code
 </div>
 
 <p>
-  The most valuable lessons come from things that break. Here are the four most instructive
+  The most valuable lessons come from things that break. Here are the seven most instructive
   debugging episodes from this project.
 </p>
 
@@ -1793,7 +1793,7 @@ Permissions → Actions: Read and write</code></pre>
 
   .github/workflows/
     scout.yml           ← Phase 1 GHA (cron 0 */6 * * *)
-    complete.yml        ← Phase 2 GHA (cron */5 * * * *)</code></pre>
+    complete.yml        ← Phase 2 GHA (cron */15 * * * * — GHA fallback only)</code></pre>
 
 <h3>aitrends.ng/</h3>
 <pre><code>aitrends.ng/
@@ -1819,6 +1819,7 @@ Permissions → Actions: Read and write</code></pre>
     NavBar.tsx                ← Site navigation
     Footer.tsx                ← FAIT attribution + "Today and the next AI trends"
     CategoryBadge.tsx         ← Coloured category pill
+    ShareButtons.tsx          ← Post share buttons (X, WhatsApp, LinkedIn, Telegram, Copy Link)
 
   lib/
     supabase.ts               ← Lazy Proxy client (safe at build time)
