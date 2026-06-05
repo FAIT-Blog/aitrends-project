@@ -4238,6 +4238,110 @@ To https://github.com/FAIT-Blog/scout-agent.git
   </div>
 </div>
 
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">It is written on CLAUDE.md that &ldquo;TRAINING_MANUAL&rdquo; be updated as well along other &ldquo;document&rdquo;. So when I say update all documents</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>Acknowledged. Read current TRAINING_MANUAL.html structure (1,616 lines, 12 chapters). Identified Chapter 5 (GitHub Actions) as needing a new reliability section, and Chapter 9 (War Stories) as needing 3 new entries from Session #4.</p>
+    <h4>Python3: inject Chapter 5 reliability section into TRAINING_MANUAL.html</h4>
+    <p>Inserted before <code>&lt;!-- CHAPTER 6 --&gt;</code> marker. New section: "GHA Cron Reliability — And the Three-Layer Fix" covering:</p>
+    <ul>
+      <li>Why GHA cron is unreliable at short intervals (*/5 ran 2× in 13h; */15 ran 0×)</li>
+      <li>Three-layer fix table (Phase 1 direct trigger / cron-job.org / GHA fallback)</li>
+      <li>Layer 1: <code>permissions: actions: write</code> + <code>gh workflow run</code> code block</li>
+      <li>Layer 2: cron-job.org full configuration + HTTP response code table (204/401/403/404/422)</li>
+      <li>Warning callout: PAT must use org as resource owner, not personal account</li>
+    </ul>
+    <h4>Python3: inject 3 new War Stories into TRAINING_MANUAL.html (before Chapter 10 marker)</h4>
+    <ul>
+      <li>War Story 5: The Phase 2 That Never Fired (GHA cron unreliability, 6.5h gap)</li>
+      <li>War Story 6: HTTP 403 — Token That Couldn&rsquo;t Trigger Its Own Sibling (GITHUB_TOKEN default permissions)</li>
+      <li>War Story 7: The PAT That Got a 404 on a Repo That Exists (org vs personal PAT resource owner)</li>
+    </ul>
+    <h4>Edit: TRAINING_MANUAL.html TOC — added ch5-reliability entry and 3 new War Story links</h4>
+    <h4>Bash: git commit 761aa41 + push</h4>
+    <pre><code>[main 761aa41] docs: update Training Manual — GHA reliability chapter + 3 new war stories
+ 1 file changed, 251 insertions(+)
+To https://github.com/FAIT-Blog/aitrends-project.git
+   9320159..761aa41  main -> main</code></pre>
+    <p>TRAINING_MANUAL.html: 1,616 → 1,867 lines. Now has 7 War Stories total.</p>
+  </div>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Read this and later read the CLAUDE.md in full. This is part of the chat from Claude to guide you: [Claude chat message explaining Training Manual philosophy — append, never rewrite; each session adds new chapters; SESSION_LOG is verbatim record, TRAINING_MANUAL is synthesised guide; both grow together]</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>Read TRAINING_MANUAL.html in full (1,867 lines) and CLAUDE.md in full. Identified 7 stale/incorrect items across both documents. Reported findings to Felix.</p>
+    <p><strong>TRAINING_MANUAL.html — 3 inaccuracies found:</strong></p>
+    <table>
+      <tr><th>Location</th><th>Wrong</th><th>Correct</th></tr>
+      <tr><td>Chapter 9 intro</td><td>"four most instructive debugging episodes"</td><td>seven (War Stories 1–7)</td></tr>
+      <tr><td>Chapter 12 complete.yml</td><td><code>cron */5 * * * *</code></td><td><code>*/15</code> (updated last session)</td></tr>
+      <tr><td>Chapter 12 aitrends.ng components</td><td>ShareButtons.tsx missing</td><td>Should be listed</td></tr>
+    </table>
+    <p><strong>CLAUDE.md — 4 stale items found:</strong></p>
+    <table>
+      <tr><th>Location</th><th>Wrong</th><th>Correct</th></tr>
+      <tr><td>Section 2 pipeline step 9</td><td>"Build cover image URL via Pollinations.ai"</td><td>Submit image job to HF/Fal/AI Horde</td></tr>
+      <tr><td>Section 4 posts table</td><td>cover_image_url: "Pollinations.ai generated URL"</td><td>Supabase Storage URL</td></tr>
+      <tr><td>Section 6 scout What Has Been Built</td><td>"Pollinations.ai Flux model"</td><td>HF FLUX.1-schnell → Supabase Storage</td></tr>
+      <tr><td>Session #3 completed items</td><td>TRAINING_MANUAL 1,617 lines, 77KB</td><td>1,867 lines</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Go ahead, fix all 7 items now</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h4>Edit: CLAUDE.md — 4 fixes applied (+ 1 bonus: Project Root Structure line count)</h4>
+    <ul>
+      <li>Section 2 pipeline step 9: Pollinations → HF/Fal/AI Horde job submission</li>
+      <li>Section 4 <code>posts.cover_image_url</code>: "Pollinations.ai generated URL" → "Supabase Storage URL (HF FLUX.1-schnell generated image)"</li>
+      <li>Section 6 scout What Has Been Built: Pollinations Flux → HF FLUX.1-schnell + Supabase Storage</li>
+      <li>Session #3 manual entry: 1,617 lines, 77KB → 1,867 lines</li>
+      <li>Project Root Structure: 77KB → 1,867 lines</li>
+    </ul>
+    <h4>Python3: TRAINING_MANUAL.html — 3 fixes applied</h4>
+    <ul>
+      <li>Chapter 9 intro: "four" → "seven most instructive debugging episodes"</li>
+      <li>Chapter 12 <code>complete.yml</code>: <code>cron */5 * * * *</code> → <code>*/15 * * * * — GHA fallback only</code></li>
+      <li>Chapter 12 aitrends.ng components: <code>ShareButtons.tsx ← Post share buttons (X, WhatsApp, LinkedIn, Telegram, Copy Link)</code> added</li>
+    </ul>
+    <h4>Bash: git commit 14e7426 + push</h4>
+    <pre><code>[main 14e7426] fix: correct 7 stale items across CLAUDE.md and TRAINING_MANUAL.html
+ 2 files changed, 9 insertions(+), 8 deletions(-)
+To https://github.com/FAIT-Blog/aitrends-project.git
+   761aa41..14e7426  main -> main</code></pre>
+  </div>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Update all document</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>Appended all remaining turns from this session to SESSION_LOG.html. Updated CLAUDE.md session history row for combined S4 to include documentation work.</p>
+    <h4>Bash: git add CLAUDE.md SESSION_LOG.html &amp;&amp; git commit + push</h4>
+  </div>
+</div>
+
 </div>
 
 </div>
