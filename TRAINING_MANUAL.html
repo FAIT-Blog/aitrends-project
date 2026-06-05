@@ -315,6 +315,7 @@ li { margin-bottom: 6px; }
       <ul class="sub">
         <li><a href="#ch5-scout">Phase 1: Scout Workflow</a></li>
         <li><a href="#ch5-complete">Phase 2: Complete Workflow</a></li>
+        <li><a href="#ch5-reliability">GHA Cron Reliability &amp; The Three-Layer Fix</a></li>
         <li><a href="#ch5-secrets">Secrets Management</a></li>
       </ul>
     </li>
@@ -340,6 +341,9 @@ li { margin-bottom: 6px; }
         <li><a href="#ch9-websocket">The Supabase WebSocket Hang</a></li>
         <li><a href="#ch9-pollinations">The Pollinations x402 Discovery</a></li>
         <li><a href="#ch9-token">The HF Token Scope Mystery</a></li>
+        <li><a href="#ch9-gha-cron">The Phase 2 That Never Fired</a></li>
+        <li><a href="#ch9-github-token-403">HTTP 403 — Token That Couldn't Trigger Its Sibling</a></li>
+        <li><a href="#ch9-pat-scope">The PAT That Got a 404 on a Repo That Exists</a></li>
       </ul>
     </li>
     <li><a href="#ch10">Patterns &amp; Best Practices</a></li>
@@ -918,6 +922,114 @@ jobs:
 <p>To add or update a secret via the GitHub CLI:</p>
 <pre><code><span class="kw">echo</span> "your-secret-value" | gh secret set SECRET_NAME --repo FAIT-Blog/scout-agent</code></pre>
 
+
+<h3 id="ch5-reliability">GHA Cron Reliability — And the Three-Layer Fix</h3>
+
+<p>
+  GitHub Actions scheduled crons are <strong>not reliable at short intervals</strong>.
+  This was discovered the hard way: <code>*/5 * * * *</code> ran only 2 times in
+  13 hours. <code>*/15 * * * *</code> ran 0 times after deployment. Posts sat in the
+  pending queue for 6+ hours waiting for Phase 2 to fire.
+</p>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>GHA cron is best-effort, not guaranteed</strong>
+    <p>GitHub does not guarantee scheduled workflows fire at the exact time, or at all.
+    Under load, GHA deprioritises or skips short-interval schedules entirely.
+    Never design a production pipeline that depends on GHA cron firing reliably
+    at intervals shorter than 1 hour.</p>
+  </div>
+</div>
+
+<p>The fix is <strong>three independent trigger layers</strong>:</p>
+
+<table>
+  <tr><th>Layer</th><th>Mechanism</th><th>Interval</th><th>Reliability</th></tr>
+  <tr><td>1 (primary)</td><td>Phase 1 directly dispatches Phase 2 after queuing work</td><td>Immediately after Phase 1</td><td>✅ Guaranteed — same run</td></tr>
+  <tr><td>2 (backup)</td><td>cron-job.org external HTTP trigger</td><td>Every 30 min</td><td>✅ Reliable — dedicated server</td></tr>
+  <tr><td>3 (fallback)</td><td>GHA <code>schedule</code> cron</td><td>Every 15 min</td><td>⚠️ Unreliable</td></tr>
+</table>
+
+<h4>Layer 1 — Phase 1 Triggers Phase 2 Directly</h4>
+
+<p>At the end of <code>scout.yml</code>, after Phase 1 finishes, a step dispatches <code>complete.yml</code>
+immediately. The key requirement: the workflow needs <code>permissions: actions: write</code>
+or <code>GITHUB_TOKEN</code> returns HTTP 403.</p>
+
+<pre><code><span class="lang">scout.yml (relevant sections)</span>
+<span class="cmt"># At the workflow level — required for GITHUB_TOKEN to dispatch other workflows</span>
+permissions:
+  actions: write
+
+jobs:
+  run-scout:
+    steps:
+      <span class="cmt"># ... Phase 1 steps ...</span>
+
+      - name: Trigger Phase 2 immediately after Phase 1 queues work
+        if: <span class="kw">${{ success() && github.event.inputs.migrate_images != 'true' }}</span>
+        env:
+          GH_TOKEN: <span class="kw">${{ secrets.GITHUB_TOKEN }}</span>
+        run: |
+          gh workflow run complete.yml --repo <span class="kw">${{ github.repository }}</span></code></pre>
+
+<div class="callout">
+  <div class="callout-icon">💡</div>
+  <div class="callout-body">
+    <strong>permissions: actions: write is not optional</strong>
+    <p>By default, <code>GITHUB_TOKEN</code> in a GHA workflow cannot dispatch other workflows.
+    The <code>gh workflow run</code> call silently returns HTTP 403 and the step fails.
+    Add <code>permissions: actions: write</code> at the top-level <code>jobs:</code>
+    block — not inside the step itself.</p>
+  </div>
+</div>
+
+<h4>Layer 2 — cron-job.org External Trigger</h4>
+
+<p>
+  <a href="https://cron-job.org" target="_blank">cron-job.org</a> is a free external
+  cron service that runs from dedicated servers — no GHA queue, no rate limiting.
+  Configure it to call GitHub's workflow dispatch API on a real 30-minute schedule:
+</p>
+
+<pre><code><span class="cmt"># cron-job.org configuration</span>
+URL:    https://api.github.com/repos/FAIT-Blog/scout-agent/actions/workflows/complete.yml/dispatches
+Method: POST
+Headers:
+  Authorization: Bearer &lt;github-PAT&gt;
+  Content-Type:  application/json
+  Accept:        application/vnd.github+json
+Body:   {"ref":"main"}
+Schedule: every 30 minutes</code></pre>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>PAT must be scoped to the organisation, not your personal account</strong>
+    <p>If the repo belongs to an organisation (<code>FAIT-Blog</code>), the fine-grained PAT
+    <strong>Resource Owner</strong> must be set to that organisation — not your personal
+    GitHub account. A personal-account PAT returns HTTP 404 (not 401) because the
+    org repo appears not to exist from the token's perspective.</p>
+    <p>Settings: GitHub → Developer Settings → Fine-grained tokens → New token →
+    Resource owner: <strong>FAIT-Blog</strong> → Repository: scout-agent →
+    Permissions → Actions: Read and write.</p>
+  </div>
+</div>
+
+<p>A successful trigger returns <strong>HTTP 204</strong> (No Content). Any other code
+means the request was rejected:</p>
+
+<table>
+  <tr><th>HTTP Code</th><th>Meaning</th><th>Fix</th></tr>
+  <tr><td><code>204</code></td><td>✅ Accepted — workflow queued</td><td>—</td></tr>
+  <tr><td><code>401</code></td><td>Token invalid or revoked</td><td>Generate a new PAT</td></tr>
+  <tr><td><code>403</code></td><td>Token valid but lacks Actions:write permission</td><td>Recreate PAT with correct scope</td></tr>
+  <tr><td><code>404</code></td><td>Repo not found — PAT scoped to wrong owner</td><td>Set resource owner to the org</td></tr>
+  <tr><td><code>422</code></td><td>Workflow doesn't have workflow_dispatch trigger</td><td>Add <code>workflow_dispatch:</code> to the workflow</td></tr>
+</table>
+
 <!-- ═══════════════════ CHAPTER 6 ═══════════════════ -->
 <div class="chapter" id="ch6">
   <div class="chapter-num">Chapter 6</div>
@@ -1384,6 +1496,145 @@ curl -H "Authorization: Bearer hf_NEW..." HF Inference API
   and <code>fineGrained</code> (custom permissions). For inference API access, always use <code>write</code>.
   Also: you must accept the gated model terms on huggingface.co for FLUX.1-schnell before
   any token will work with that model.
+</p>
+
+
+<h3 id="ch9-gha-cron">War Story 5: The Phase 2 That Never Fired</h3>
+
+<p>
+  Phase 1 ran on schedule at 11:50 UTC. It found 18 fresh articles, picked the
+  best one, generated a digest, and saved it to <code>pending_posts</code>.
+  Then it exited cleanly. The Slack notification said: "Phase 2 will publish when
+  images are ready." Six hours later — nothing published.
+</p>
+
+<p>
+  <strong>Investigation:</strong> Checked GHA run history for <code>complete.yml</code>.
+  The last run was at 05:16 UTC — a gap of 6.5 hours despite a <code>*/15 * * * *</code>
+  schedule. Phase 2 had simply never fired.
+</p>
+
+<pre><code><span class="cmt"># The GHA run history told the full story:</span>
+Complete Posts (Phase 2) | success | 05:16 UTC | event:schedule
+<span class="cmt"># ... nothing for 6.5 hours ...</span>
+Scout Agent              | success | 11:50 UTC | event:schedule   ← Phase 1 ran
+<span class="cmt"># Phase 2 never triggered despite */15 cron</span></code></pre>
+
+<p>
+  <strong>Root cause:</strong> GitHub Actions does not guarantee short-interval cron
+  schedules fire on time — or at all. Under queue pressure, GHA skips or heavily
+  delays schedules of <code>*/5</code> and <code>*/15</code>. The GHA docs note this
+  but don't quantify how bad it can get.
+</p>
+
+<p>
+  <strong>Fix (three layers):</strong>
+</p>
+<ol>
+  <li>Phase 1 now dispatches Phase 2 directly after every run (posts go live within minutes)</li>
+  <li>cron-job.org triggers Phase 2 every 30 minutes from an external server (confirmed HTTP 204)</li>
+  <li>GHA cron kept as last-resort fallback only</li>
+</ol>
+
+<p>
+  <strong>Lesson:</strong> Never build a production publishing pipeline on GHA cron
+  alone for intervals under 1 hour. Pair it with a direct trigger or an external
+  cron service. The external trigger only needs a PAT and one HTTP call to be
+  dramatically more reliable than GHA's native scheduler.
+</p>
+
+<h3 id="ch9-github-token-403">War Story 6: HTTP 403 — The Token That Couldn't Trigger Its Own Sibling</h3>
+
+<p>
+  After adding the Phase 1 → Phase 2 direct trigger to <code>scout.yml</code>,
+  the next Phase 1 run immediately failed. The run log showed Phase 1 had run
+  perfectly — found articles, queued a post — but crashed on the last step:
+</p>
+
+<pre><code>Triggering Phase 2 (complete.yml)...
+HTTP 403: Resource not accessible by integration
+(https://api.github.com/repos/FAIT-Blog/scout-agent/actions/workflows/complete.yml)
+Process completed with exit code 1.</code></pre>
+
+<p>
+  The command was <code>gh workflow run complete.yml --repo FAIT-Blog/scout-agent</code>,
+  using <code>GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}</code>. The token was valid.
+  The repo existed. The workflow existed. And yet: 403.
+</p>
+
+<p>
+  <strong>Root cause:</strong> <code>GITHUB_TOKEN</code> in GHA workflows has
+  <strong>read-only access to Actions by default</strong>. To dispatch another
+  workflow, the workflow must explicitly request write access with a
+  <code>permissions</code> block. Without it, any call to the Actions API returns 403.
+</p>
+
+<pre><code><span class="lang">scout.yml — the one-line fix</span>
+<span class="cmt"># Add this ABOVE the jobs: block</span>
+permissions:
+  actions: write    <span class="cmt"># allows GITHUB_TOKEN to dispatch workflow_dispatch events</span>
+
+jobs:
+  run-scout:
+    <span class="cmt"># ...</span></code></pre>
+
+<p>
+  <strong>Lesson:</strong> <code>GITHUB_TOKEN</code> permissions are <em>additive</em>
+  — you must explicitly grant what you need. The default token can read code and
+  write to the repo, but cannot control Actions. Always add <code>permissions:
+  actions: write</code> to any workflow that needs to trigger another workflow.
+  This is a one-line fix but takes real debugging to find.
+</p>
+
+<h3 id="ch9-pat-scope">War Story 7: The PAT That Got a 404 on a Repo That Exists</h3>
+
+<p>
+  Setting up cron-job.org to trigger Phase 2 externally. Created a GitHub
+  fine-grained Personal Access Token (PAT), pasted it into cron-job.org,
+  clicked "Run now". Result: <strong>404 Not Found</strong>.
+</p>
+
+<p>
+  The repo definitely exists. The URL was correct. Direct curl test:
+</p>
+
+<pre><code>curl -s -o /dev/null -w "%{http_code}"   -X POST   -H "Authorization: Bearer github_pat_..."   -H "Content-Type: application/json"   -d '{"ref":"main"}'   "https://api.github.com/repos/FAIT-Blog/scout-agent/actions/workflows/complete.yml/dispatches"
+
+→ 401</code></pre>
+
+<p>
+  404 from cron-job.org, 401 from curl. Different codes for the same bad token —
+  different clients handle GitHub's error responses differently.
+</p>
+
+<p>
+  <strong>Root cause:</strong> The PAT was created in the GitHub personal account
+  settings (<code>felixokon</code>), with <code>FAIT-Blog/scout-agent</code> selected
+  as the repository. But for an <strong>organisation</strong> repo, the fine-grained
+  PAT <strong>Resource Owner</strong> must be set to the <em>organisation</em>
+  (<code>FAIT-Blog</code>), not the personal account.
+</p>
+
+<p>
+  A personal-account token sees only repos owned by <code>felixokon</code>. When
+  it tries to reach <code>FAIT-Blog/scout-agent</code>, GitHub responds as if the
+  repo doesn't exist — hence 404/401.
+</p>
+
+<pre><code><span class="cmt"># Wrong: personal account as resource owner</span>
+GitHub → Settings → Developer Settings → Fine-grained tokens
+Resource owner: felixokon   ← ❌ cannot reach FAIT-Blog repos
+
+<span class="cmt"># Correct: organisation as resource owner</span>
+Resource owner: FAIT-Blog   ← ✅
+Repository: scout-agent
+Permissions → Actions: Read and write</code></pre>
+
+<p>
+  <strong>Lesson:</strong> When using fine-grained PATs for organisation repos,
+  always set the <strong>Resource Owner to the organisation</strong>, not your
+  personal account. The error codes (404 vs 401) are misleading — the repo
+  isn't missing, the token just can't see it. This trips up everyone the first time.
 </p>
 
 <!-- ═══════════════════ CHAPTER 10 ═══════════════════ -->
