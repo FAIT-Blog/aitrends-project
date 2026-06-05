@@ -16,6 +16,7 @@ WEBSITE_AI_Generated_Xai/
   └── aitrends-project/
         ├── CLAUDE.md                     ← THIS FILE — master spec for the whole project
         ├── SESSION_LOG.html              ← Master session log (all sessions, both projects)
+        ├── TRAINING_MANUAL.html          ← Vibe-Coding training manual (12 chapters, 77KB)
         ├── aitrends.ng/                  ← Blog frontend (Next.js · Vercel)
         │     ├── AITRENDS_NG_SPEC.md    ← Detailed frontend spec (reference, not primary)
         │     └── SESSION_LOG_AITRENDS.html ← Archived aitrends.ng-only sessions
@@ -68,12 +69,13 @@ Global RSS Feeds (TechCrunch, VentureBeat, OpenAI, Google AI, HuggingFace, etc.)
     4. Deduplicates against Supabase scout_memory table
     5. Scores articles by evergreen potential
     6. Groups by category, caps at MAX_ARTICLES=5
-    7. Generates 800-word Africa-first digest via Gemini 3.5 Flash
-    8. Builds cover image URL via Pollinations.ai (Flux model)
-    9. Publishes to aitrends.ng /api/posts/create (SCOUT_API_KEY protected)
+    7. Generates 800-word Africa-first digest via Gemini 3.5 Flash (ONE STORY ONLY)
+    8. Submits image job to image provider (HF: returns null jobId; Fal/AI Horde: returns request_id)
+    9. Saves to pending_posts table (status: pending_image) — nothing published yet
    10. Saves trending terms to evergreen_vocab in Supabase
    11. Marks articles as seen in scout_memory
-   12. Sends Slack notification to #aitrends-feed
+   12. EXITS — Phase 2 (complete.yml, every 5 min) picks up pending posts:
+       → Calls image provider → uploads to Supabase Storage → publishes → notifies Slack
         │
         ▼
   aitrends.ng/                         ← Next.js 16 on Vercel (auto-deploys from main)
@@ -111,15 +113,15 @@ Rotate all three together if you ever rotate the key.
 - Border radius: 8px standard, 12px cards
 - Card style: Dark surface (`#111827`), 1px border (`#1f2937`), subtle hover lift
 
-**Cover Image Style (Pollinations.ai + Flux model):**
-- Africa-first: images must depict the story (places, people, technologies from the article)
-- Art styles rotate per post: watercolour painting, vector flat illustration, editorial ink sketch
-- Contextual lighting — NOT forced dark background
-- Logos/CEO likenesses allowed sparingly when they clarify who is involved
+**Cover Image Style (HuggingFace FLUX.1-schnell → Supabase Storage):**
+- Images generated via HF FLUX.1-schnell and permanently stored in Supabase Storage (not lazy URLs)
+- Africa-first: images must depict the specific story — not a generic "tech in Africa" scene
+- Art styles rotate per post: watercolour painting, vector flat illustration, editorial ink sketch, bold risograph print
+- BANNED compositions: person-at-laptop-near-window-with-city-view — explicitly prohibited in Gemini prompt
+- Scene variety encouraged: financial flows, product shots, event scenes, maps, infrastructure, abstract concepts
 - Every prompt ends with: "No text, no logos, cinematic composition."
-- URL format: `https://image.pollinations.ai/prompt/{encoded}?seed={ts}&width=1200&height=630&nologo=true&model=flux`
-- All Next.js `<Image>` components rendering Pollinations URLs MUST use `unoptimized` prop —
-  Pollinations generates on-demand (2–60s); Vercel's image optimizer times out without this.
+- Images served from: `https://tixagzzcaeqdohuyrngl.supabase.co/storage/v1/object/public/post-images/covers/{id}.jpg`
+- Use plain `<img>` tags for these images — never `<Image>` from next/image (no optimization proxy)
 
 ---
 
@@ -409,7 +411,7 @@ npm start   # runs index.js
 ---
 
 ## 7. MASTER TO-DO LIST
-*Updated: 2026-06-04*
+*Updated: 2026-06-05*
 *Status key: 🔴 Critical | 🟠 High | 🟡 Medium | 🔵 Low / Later*
 
 ### ✅ Completed — Round 1 (4 June 2026, morning)
@@ -440,12 +442,23 @@ npm start   # runs index.js
 - ✅ **Live end-to-end test passed** — Phase 1 queued "Funding the Future: How Core DAO, Talstack, and Apple-Approved AI Agents are Driving AI Innovation in Africa". Phase 2 generated image via HF in 3s, uploaded 94KB JPEG to Supabase Storage, published to aitrends.ng, notified Slack. Total Phase 2 time: 14 seconds.
 - ✅ **TechCabal Africa content confirmed working** — first article scored and selected: "Talstack Supports Nigerian Founders" — exactly the Africa-first content the mission requires.
 
+### ✅ Completed — Combined Session #3 (5 June 2026)
+- ✅ **"One story per post" rule enforced** — Gemini prompt rewritten: "ONE STORY ONLY" replaces "Give each article its own h3 section". Gemini now picks the single most Africa-relevant story and writes a focused piece. H3 headings explore angles (technical/cost/opportunity/risk), not separate source articles.
+- ✅ **Repetitive image pattern broken** — Explicitly banned in `gemini.js`: "person at laptop near window with city view". Full prohibited-compositions list added. Risograph print added as 4th art style. Style rotation rule added (no same style in consecutive posts). Replaced single GOOD example with 3 diverse examples (naira→data-stream, scales-of-justice, brain-of-African-cities). "Young African professional + laptop + Lagos skyline" explicitly prohibited as lazy default.
+- ✅ **Multi-topic post unpublished** — "Funding the Future: How Core DAO, Talstack, and Apple-Approved AI Agents..." set to `draft`. Hidden from site. Had 8 H3 sections covering 3 unrelated topics.
+- ✅ **`regenerate-images.js` built** — queue-based: inserts all posts with Pollinations URLs into `pending_posts`. Phase 2 generates HF FLUX images one per 5-min cycle (~140 min total for 28 posts). First attempt used direct HF calls → 429 rate limit → rewritten to queue approach.
+- ✅ **`complete.js` updated for image updates** — when `post_id` is already set in `pending_posts`, updates the existing post's `cover_image_url` directly in Supabase instead of creating a new post via `/api/posts/create`.
+- ✅ **28 posts queued for image regeneration** — triggered 5 June 02:55 UTC. Phase 2 generating real HF FLUX images every 5 minutes and storing in Supabase Storage permanently.
+- ✅ **Training manual created** — `TRAINING_MANUAL.html` (77KB, 1,617 lines, 12 chapters). See documentation section.
+- ✅ **`FAIT-Blog/aitrends-project` GitHub repo created** — hosts `CLAUDE.md`, `SESSION_LOG.html`, `TRAINING_MANUAL.html`.
+
 ### 🔴 Critical
-- [ ] **Fix individual post page 404s** — every Slack "Read Post →" link is broken. Route file `app/post/[slug]/page.tsx` exists and code is correct; Vercel not serving it. Investigate: check Vercel function logs, check if slug in URL matches slug stored in Supabase, check `force-dynamic` export.
-- [ ] **Fix broken RSS feeds** — 5 feeds failing on GHA runs: Ventureburn (415), HuggingFace (429), Google DeepMind (404), Mistral AI (404), Hacker News (429). Need correct feed URLs or replacements.
+- [ ] **Fix individual post page 404s** — every Slack "Read Post →" link is broken. Route file `app/post/[slug]/page.tsx` exists and code is correct; Vercel not serving it. Investigate: check Vercel function logs, check slug format stored vs URL expected.
+- [ ] **Fix broken RSS feeds** — 5 feeds failing: Ventureburn (415), HuggingFace blog (429), Google DeepMind (404), Mistral AI (404), Hacker News (429). Need correct feed URLs.
 
 ### 🟠 High
-- [ ] **Verify Africa-first prompt quality in new posts** — check posts published via new pipeline are written from African perspective throughout (not just closing sentence)
+- [ ] **Monitor image regeneration** — 28 posts queued. Watch `complete.yml` every 5 min. All 28 should have real images within ~2.5 hours of queue trigger (5 June 02:55 UTC).
+- [ ] **Verify new prompt produces focused single-topic posts** — next Phase 1 + Phase 2 cycle: is the post about ONE story with h3 angle headings? Is the image prompt avoiding the banned person+laptop+window pattern?
 - [ ] **Submit `sitemap.xml` to Google Search Console** — manual task, no code, 10 minutes, unlocks all SEO work immediately
 
 ### 🟡 Medium

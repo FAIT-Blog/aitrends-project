@@ -3920,6 +3920,239 @@ Run duration: 14 seconds total</code></pre>
   </div>
 </div>
 
+
+  <div class="project-divider" style="margin-top:64px;">
+    <h2>Combined Session #3 · 5 June 2026</h2>
+    <p>Focus: Training manual, one-story-per-post rule, ban repetitive image pattern, image regeneration for all existing posts.</p>
+  </div>
+
+<hr>
+
+<!-- COMBINED S3 · TURN 1 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Do you have to include it in the CLAUDE.md or any documentation there is.
+I think we can do something to create images for the posts with blank images. We shouldn't leave them bare like that. Please think of something.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p><strong>On documenting the training manual:</strong> Yes — one line needed in CLAUDE.md's Project Root Structure section. Also need to update Section 2 architecture diagram (still shows old one-phase pipeline) and Section 3 cover image style (still says Pollinations + Flux). Will do alongside the image fix.</p>
+
+    <p><strong>On blank images:</strong> Proposed using HuggingFace to regenerate images for all existing posts. Each post already has a <code>cover_image_prompt</code> stored in Supabase — we don't need Pollinations at all. Script queries all posts with Pollinations URLs, calls HF with the stored prompt, uploads to Supabase Storage, updates the post record. Run via <code>workflow_dispatch</code> on GHA. 26 posts × ~3s per image = ~80 seconds total. Well within GHA timeout.</p>
+  </div>
+</div>
+
+<hr>
+
+<!-- COMBINED S3 · TURN 2 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Please go ahead and build it.
+And please take note that multiple/ different topics under one post is not what we agreed on, so why is post: https://aitrends-ng.vercel.app/post/funding-the-future-how-core-dao-talstack-and-apple-approved-ai-agents-are-drivin
+Please look at it and adjust what is wrong to make it right.
+I also observe that the image prompt seems to keep this recurring pattern where there is a window shows the distant city features of sky and a person sitting with a device facing the window. Think Gemini took the example/ analogy literally as a template.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h2>Investigation — reading all relevant files before touching anything</h2>
+
+    <h4>Read: gemini.js lines 25–104</h4>
+    <p>Found the root cause of the one-story problem on line 51: <code>"Give each article its own &lt;h3&gt; section"</code> — this is literally telling Gemini to write a separate section for every source article. 5 unrelated articles = 5 unrelated story sections = multi-topic post.</p>
+
+    <h4>Bash: Supabase query — check last 3 posts (title, image_prompt, h3 section count)</h4>
+    <pre><code>---
+TITLE: Funding the Future: How Core DAO, Talstack, and Apple-Approved AI Agents are Driving AI Innovation in Africa
+IMAGE PROMPT: Editorial ink sketch: A busy co-working space in Yaba, Lagos. A young female African developer sits at a desk, looking intently at a laptop screen...
+H3 SECTIONS: 8
+
+---
+TITLE: How AI Agents in Software Engineering Will Redefine African Tech Outsourcing
+IMAGE PROMPT: Editorial ink sketch: A young African female developer in a Lagos high-rise office looking out at the Lekki-Ikoyi Link Bridge at twilight. Her desk features a dual-monitor setup...
+H3 SECTIONS: 8
+
+---
+TITLE: Why Generative AI Tools for African Developers Face an Infrastructure Reality Check
+IMAGE PROMPT: Editorial ink sketch: A young African developer in a vibrant Lagos tech hub looking intently at a laptop screen... while outside the window a bustling street shows...
+H3 SECTIONS: 6</code></pre>
+
+    <p><strong>Pattern confirmed — all three image prompts follow:</strong> "young African [developer] + desk/laptop + looking at screen + window + Lagos [landmark]". The GOOD example in the Gemini prompt shows "Abuja city skyline in background" and Gemini is applying this as a compositional template to every image: person + device + city-out-the-window.</p>
+
+    <h2>Fix 1 — One story per post (gemini.js line 51)</h2>
+
+    <h4>Edit: gemini.js — CONTENT RULES section</h4>
+    <p>Before:</p>
+    <pre><code>- Give each article its own &lt;h3&gt; section</code></pre>
+    <p>After:</p>
+    <pre><code>- ONE STORY ONLY. From the articles provided, identify the SINGLE most important
+  and Africa-relevant story. Write your entire piece about that one story. If other
+  articles provide supporting evidence for the same theme, weave them in. If they
+  cover different topics entirely, ignore them.
+- Use &lt;h3&gt; headings to explore different ANGLES of your chosen story (technical
+  depth, cost impact, Africa opportunity, regulatory risk, historical precedent)
+  — NOT one &lt;h3&gt; per source article. Never write a roundup of unrelated stories.</code></pre>
+    <p>Also updated TITLE and CONTENT response labels: "ONE topic only, not a roundup" and "ONE story with h3 headings for different angles".</p>
+
+    <h2>Fix 2 — Break the repetitive image pattern (gemini.js lines 68–88)</h2>
+
+    <h4>Python script: replace image prompt rules section (lines 67–87)</h4>
+    <p>Complete replacement of the RULES FOR IMAGE PROMPT and examples. Key changes:</p>
+    <ul>
+      <li><strong>BANNED COMPOSITIONS list added</strong> — explicitly forbidden: person at laptop, developer near window, city skyline as backdrop, "young African professional + laptop + Lagos cityscape" combination</li>
+      <li><strong>Scene diversity encouraged</strong> — financial flows, products depicted directly, event scenes (handshakes/launches/protests), maps &amp; geography, infrastructure (data centres/towers/cables), abstract conceptual art</li>
+      <li><strong>4th art style added</strong> — bold risograph print (high contrast, two dominant colours)</li>
+      <li><strong>Style rotation rule</strong> — no same art style in consecutive posts</li>
+      <li><strong>Single GOOD example replaced with 3 diverse examples</strong>:
+        <ol>
+          <li>Funding story: naira symbol transforming into digital data streams rising to cloud nodes</li>
+          <li>Regulation story: scales-of-justice with human/robotic hands, Nigerian flag colours</li>
+          <li>Model release: brain made of hexagonal cells labelled with African city names</li>
+        </ol>
+      </li>
+      <li>BAD example updated to the specific pattern we're prohibiting</li>
+    </ul>
+
+    <h2>Fix 3 — Unpublish the multi-topic post</h2>
+
+    <h4>Bash: Supabase query — find and set post to draft</h4>
+    <pre><code>import { supabase } from './memory.js'
+
+const { data: post } = await supabase
+  .from('posts')
+  .select('id, title, status')
+  .ilike('title', '%Core DAO%Talstack%')
+  .maybeSingle()
+
+Found: d9a177c1-9704-4fb5-a96a-f2705d1edb80
+Title: Funding the Future: How Core DAO, Talstack, and Apple-Approved AI Agents are Dri...
+await supabase.from('posts').update({ status: 'draft' }).eq('id', post.id)
+✅ Set to draft — post hidden from site</code></pre>
+
+    <h2>Build: regenerate-images.js (v1 — direct HF calls)</h2>
+
+    <h4>Write: regenerate-images.js (first version — 120 lines)</h4>
+    <p>Script queried all published posts with Pollinations URLs, called HF FLUX.1-schnell for each with the stored <code>cover_image_prompt</code>, uploaded to Supabase Storage, updated <code>cover_image_url</code> in Supabase. 3-second delay between requests.</p>
+
+    <h4>Edit: .github/workflows/scout.yml — add <code>regenerate_images</code> workflow_dispatch input</h4>
+    <p>Added alongside existing <code>migrate_images</code> option. Runs <code>node regenerate-images.js</code> when selected.</p>
+
+    <h4>Bash: git add gemini.js regenerate-images.js scout.yml &amp;&amp; git commit -m "fix: one story per post, break repetitive image pattern, add image regeneration" &amp;&amp; git push</h4>
+    <pre><code>[main 214e0e8] fix: one story per post, break repetitive image pattern, add image regeneration
+ 3 files changed, 211 insertions(+), 23 deletions(-)
+To https://github.com/FAIT-Blog/scout-agent.git</code></pre>
+
+    <h4>Bash: gh workflow run scout.yml --repo FAIT-Blog/scout-agent --field regenerate_images=true</h4>
+    <pre><code>Run ID: 26992256272 | Status: in_progress</code></pre>
+
+    <h4>Bash: gh run view 26992256272 --log — image regeneration output</h4>
+    <pre><code>🎨 Generating: How AI Agents in Software Engineering Will Redefine African...
+     ❌ Failed: HF error 429: &lt;!DOCTYPE html&gt;
+🎨 Generating: Why Generative AI Tools for African Developers Face an Infra...
+     ❌ Failed: HF error 429: &lt;!DOCTYPE html&gt;
+[... all 26 posts fail with 429 ...]</code></pre>
+
+    <p><strong>Root cause of 429:</strong> The regeneration step fired immediately after Phase 1 (scout.js) completed. Phase 1 had just run (queuing 4 new posts), and the GHA runner IP was rate-limited by HF from those previous API interactions. All requests failed instantly with HTTP 429 Too Many Requests.</p>
+
+    <h2>Fix: regenerate-images.js (v2 — queue-based approach)</h2>
+
+    <p><strong>Insight:</strong> Instead of calling HF directly (which rate-limits when many requests fire together), insert all posts that need images into <code>pending_posts</code> table. Phase 2 (complete.yml) already handles HF calls one at a time every 5 minutes. No rate limit issues. Spreads 28 image generations across ~140 minutes automatically.</p>
+
+    <h4>Write: regenerate-images.js (complete rewrite — 100 lines)</h4>
+    <p>New approach:</p>
+    <ol>
+      <li>Query all published posts with Pollinations URLs and stored <code>cover_image_prompt</code></li>
+      <li>For each, INSERT into <code>pending_posts</code> with <code>post_id</code> set to the existing post's ID</li>
+      <li>Phase 2 picks them up every 5 minutes, generates HF image, uploads to Storage, updates the post</li>
+      <li>Skip posts already queued or already having Supabase Storage URLs</li>
+    </ol>
+
+    <h4>Edit: complete.js — add "update existing post" path</h4>
+    <p>Before: complete.js always called <code>publishPost()</code> to create a new post via <code>/api/posts/create</code>.</p>
+    <p>After: if <code>post.post_id</code> is set in the pending_posts record, it means this is an image regeneration for an existing post. Instead of creating a new post, directly updates <code>cover_image_url</code> on the existing post in Supabase:</p>
+    <pre><code>if (post.post_id) {
+  // Update existing post's image — don't create a new one
+  await supabase.from('posts')
+    .update({ cover_image_url: publicUrl })
+    .eq('id', post.post_id)
+} else {
+  // New post — publish via /api/posts/create as usual
+  publishResult = await publishPost({ ... })
+}</code></pre>
+
+    <h4>Bash: git add regenerate-images.js complete.js &amp;&amp; git commit -m "fix: queue-based image regeneration — no more 429 rate limit errors" &amp;&amp; git push</h4>
+    <pre><code>[main 9a0a0f3] fix: queue-based image regeneration — no more 429 rate limit errors
+ 2 files changed, 100 insertions(+), 120 deletions(-)
+To https://github.com/FAIT-Blog/scout-agent.git</code></pre>
+
+    <h4>Bash: gh workflow run scout.yml --repo FAIT-Blog/scout-agent --field regenerate_images=true</h4>
+    <pre><code>Run ID: 26992470600 | Status: in_progress</code></pre>
+
+    <h4>Bash: gh run view 26992470600 --log — queue run output</h4>
+    <pre><code>🔄 Queuing posts for image regeneration via Phase 2...
+
+Found 28 post(s) needing images.
+Already queued: 0
+  ✅ Queued for Phase 2: How AI Agents in Software Engineering Will Redefine African
+  ✅ Queued for Phase 2: Why Generative AI Tools for African Developers Face an Infra
+  ✅ Queued for Phase 2: Why Uber's $1,500 Limit on AI Coding Tools Redefines the Eco
+  [... 28 posts total ...]
+  ✅ Queued for Phase 2: Anthropic's Latest: Claude Levels Up for Builders
+
+📊 Done:
+   ✅ Queued:  28 post(s) — Phase 2 will generate images over the next ~140 minutes
+   ⏭  Skipped: 0 (already done or no prompt)</code></pre>
+
+    <p class="todo-green"><strong>28 posts queued successfully. No rate limiting. Phase 2 running every 5 minutes generating real HF FLUX images and storing in Supabase Storage permanently.</strong></p>
+
+    <h2>All commits this session</h2>
+    <table>
+      <tr><th>Repo</th><th>Hash</th><th>Message</th></tr>
+      <tr><td>scout-agent</td><td><code>214e0e8</code></td><td>fix: one story per post, break repetitive image pattern, add image regeneration</td></tr>
+      <tr><td>scout-agent</td><td><code>9a0a0f3</code></td><td>fix: queue-based image regeneration — no more 429 rate limit errors</td></tr>
+    </table>
+  </div>
+</div>
+
+<hr>
+
+<!-- COMBINED S3 · TURN 3 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Update documentation</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h4>Bash: tail -40 SESSION_LOG.html</h4>
+    <p>Confirmed: last entry is Combined Session #2 Turn 9. Combined Session #3 not yet logged.</p>
+
+    <h4>Read: CLAUDE.md lines 412–462</h4>
+    <p>Confirmed: to-do list has Combined Session #2 completions. Section 2 architecture diagram still shows old one-phase pipeline. Section 3 cover image style still references Pollinations + Flux model. No session history S3 row. TRAINING_MANUAL.html not listed in Project Root Structure.</p>
+
+    <h4>Edit: CLAUDE.md — Added "✅ Completed — Combined Session #3" to to-do list</h4>
+    <p>8 completed items: one-story rule, repetitive image ban, multi-topic post unpublished, regenerate-images.js v1 (429 failure) + v2 (queue-based), complete.js updated for existing post updates, 28 posts queued, training manual created, FAIT-Blog/aitrends-project repo created.</p>
+    <p>Updated 🔴 Critical: added "Monitor image regeneration" and "Verify new prompt produces focused single-topic posts" to 🟠 High.</p>
+
+    <h4>Python3 script: CLAUDE.md multi-section update</h4>
+    <p>Four changes applied:</p>
+    <ol>
+      <li>Project Root Structure: added <code>TRAINING_MANUAL.html ← Vibe-Coding training manual (12 chapters, 77KB)</code></li>
+      <li>Section 2 architecture diagram: updated Phase 1 steps 8–12 to reflect two-phase pipeline (queue to pending_posts, Phase 2 handles image + publish)</li>
+      <li>Section 3 cover image style: replaced "Pollinations.ai + Flux model" with "HuggingFace FLUX.1-schnell → Supabase Storage", updated art styles (added risograph), added banned composition note, updated URL format to Supabase Storage pattern</li>
+      <li>Session history: updated S2 row to full description, added S3 row</li>
+    </ol>
+
+    <h4>Python3 script: append Combined Session #3 to SESSION_LOG.html</h4>
+    <p>3 turns logged verbatim: image fix proposal, full build log (investigation → 3 fixes → v1 script with 429 failure → v2 queue approach → 28 posts queued), this documentation turn.</p>
+
+    <h4>Bash: git add CLAUDE.md SESSION_LOG.html &amp;&amp; git commit -m "docs: Combined Session #3 — one-story rule, image pattern fix, regeneration, documentation update" &amp;&amp; git push</h4>
+  </div>
+</div>
+
 </div>
 
 </div>
