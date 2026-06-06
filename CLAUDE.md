@@ -477,6 +477,7 @@ npm start   # runs index.js
 ### 🔴 Critical
 - [ ] **Add second Anthropic feed source** — anthropic category now has only 1 feed (official GitHub-hosted RSS). With `MIN_ARTICLES=2`, anthropic posts are being skipped every run. Need a second reliable source for that category to resume anthropic coverage.
 - [ ] **Nigerian feeds are general news — may produce non-AI Nigerian posts** — Premium Times/BusinessDay/Eagle Online cover all topics. When their recent articles have no AI angle, Gemini correctly SKIPs. But when they do discuss fintech/business tech (Glovo, Paystack, etc.), Gemini publishes it as this is Nigeria-relevant. Monitor whether published industry posts are sufficiently AI-focused or too general business. May need to find Nigeria-specific AI/tech RSS feeds (e.g. Techpoint Africa tech section).
+- [ ] **Awaiting Felix's editorial specification template** — fundamental post structure and image approach cannot be fixed until Felix returns the filled template (5 sections: news sources, post structure, image approach, example post, rejection list). Do NOT touch gemini.js, scout.js, or image pipeline until template is returned and reviewed.
 
 ### 🟠 High
 - [ ] **Verify new prompt produces focused single-topic posts** — check next published post: is it ONE story with h3 angle headings? Is the image avoiding the banned person+laptop+window pattern?

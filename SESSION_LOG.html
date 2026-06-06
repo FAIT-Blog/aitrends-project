@@ -4629,6 +4629,52 @@ ai-models (2 articles):
   </div>
 </div>
 
+
+<!-- COMBINED S5 · TURN 5 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">The news about AI and DeepFake and fake news in Nigeria were examples of how a news is supposed to be written. A news carries a headline, and all the body... all the content of that story is talking about the headline. It stays with the headline. And when the person was done exhausting his points, she ends the conversation there. But our own news — every single post carries a heading and then starts carrying subheadings of different subject matters or different news entirely. So it becomes like five to six news under one heading inside one page, and carries an image that does not correlate with all the news that are in that single page.
+
+I have two issues about the way our posts show up. The example I gave about the AI deepfakes — the minister that spoke, the face of that minister is shown. And so it makes it look: okay, this is the minister that is speaking and showing his concern about AI and lying. While I said that, I said I also want you to take note that the image agrees with the message. The message is telling us who says it, and the picture of the person is showing to indicate that that's the person that is saying it. In our own case, the pictures or the images do not correlate with the message, and the image looks funny.
+
+So don't rush to alter things and assure me that all will be well. That has been the case for days now — no automated posting, error here and there, and every time Claude Code jumps in and changes things and makes a BIG promise and yet the foundational problem remains.
+
+I want to train you and in turn train scout-agent/gemini on what a good image that goes well with a good news headline and what an editorial that speaks on the topic and the image looks like.
+
+I can see that you easily take an illustration as an example and context literally.
+
+In addition, I will provide my choice of news source websites.
+
+So guide me / give a template that I can feed you with so you can code/build what I want.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Honest assessment — no code touched</h3>
+
+    <p><strong>Problem 1 — Multi-topic posts:</strong> The prompt says "ONE STORY ONLY" but Gemini receives 5 articles from 5 different sources about 5 different things and writes one heading with 4–5 &lt;h3&gt; sections each covering a different article. The instruction exists but the input defeats it. You cannot write one coherent story when the raw material is 5 unrelated stories.</p>
+
+    <p><strong>Problem 2 — Wrong images:</strong> Real news images are photographs — the minister's face, the building, the product, the event. We are generating abstract AI art through HuggingFace FLUX. No AI image generator can produce a photograph of a real Nigerian minister. The gap between what real journalism looks like and what our system produces is fundamental, not a prompt wording issue.</p>
+
+    <p>These two problems require different thinking, not just prompt edits. No code was touched.</p>
+
+    <h3>Template provided for Felix to fill in</h3>
+    <p>A structured specification template was given covering 5 sections:</p>
+    <ul>
+      <li><strong>Section 1 — News Sources:</strong> Felix lists specific websites with (NIGERIA)/(AFRICA)/(GLOBAL) tags</li>
+      <li><strong>Section 2 — Post Structure:</strong> Number of topics, structure format (news-style vs feature), direct quotes, word count, tone</li>
+      <li><strong>Section 3 — Images:</strong> Source article photo vs AI illustration, fallback behaviour, Felix's own description of what a good news image looks like</li>
+      <li><strong>Section 4 — One Example Post:</strong> Felix writes or pastes one perfect post (headline + body + image description) — the most valuable input possible</li>
+      <li><strong>Section 5 — What to Reject:</strong> Story types that must never appear on AITrends.ng</li>
+    </ul>
+    <p>Instruction to Felix: fill in all sections and return. No code will be written until the template is returned and any clarifying questions are resolved.</p>
+
+    <h4>Key insight noted</h4>
+    <p>Felix observed: "I can see that you easily take an illustration as an example and context literally." This is accurate. When the Gemini prompt contained example image descriptions (e.g. "For a funding story: Watercolour painting of naira flowing upward…"), Gemini followed the example type literally on every post rather than understanding the underlying principle. Examples in AI prompts are treated as patterns to repeat, not principles to understand. The solution is not better examples — it is a different approach to images entirely (fetching from source vs generating).</p>
+  </div>
+</div>
+
 </div>
 
 </div>

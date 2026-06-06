@@ -2027,6 +2027,53 @@ FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre
   </div>
 </div>
 
+<h3>The Template-First Rule — Do Not Code What You Have Not Specified</h3>
+
+<p>
+  A recurring failure pattern in this project: a problem is identified, Claude Code makes
+  a change, tests it, and announces the fix. Two sessions later the same class of problem
+  recurs because the fix addressed a symptom, not the root cause, and was never validated
+  against what Felix actually wanted.
+</p>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>When the user says the output is wrong — stop coding and ask for a specification</strong>
+    <p>If Felix reports that posts have the wrong structure, images are wrong, or content
+    is off-brand: do NOT rewrite prompts. Do NOT add more rules. Do NOT make promises
+    that the next run will be better.</p>
+    <p>Instead: give Felix a template to fill in. Collect the answers. Only then write
+    code that implements exactly what was specified.</p>
+    <p>Prompt engineering by trial-and-error wastes sessions and erodes trust. A filled
+    template takes 10 minutes and produces a specification that can be coded correctly
+    in one pass.</p>
+  </div>
+</div>
+
+<h4>The Editorial Specification Template</h4>
+
+<p>When post quality is in question, ask Felix to fill in these five sections:</p>
+
+<table>
+  <tr><th>Section</th><th>What it captures</th><th>Why it matters</th></tr>
+  <tr><td>1. News Sources</td><td>Specific URLs Felix trusts, tagged NIGERIA/AFRICA/GLOBAL</td><td>Wrong sources = wrong content, no prompt fix will help</td></tr>
+  <tr><td>2. Post Structure</td><td>One topic vs multiple, news-style vs feature, word count, tone</td><td>Defines what Gemini is actually asked to produce</td></tr>
+  <tr><td>3. Images</td><td>Source photo vs AI illustration, fallback, Felix's own words on what looks right</td><td>AI illustration cannot replace editorial photography — this is a pipeline decision, not a prompt decision</td></tr>
+  <tr><td>4. Example Post</td><td>One perfect post Felix writes himself</td><td>Worth more than 100 prompt rules — Gemini can be shown rather than told</td></tr>
+  <tr><td>5. Rejection List</td><td>Story types that must never appear</td><td>Prevents the same class of fabricated content from recurring</td></tr>
+</table>
+
+<p>
+  <strong>Key insight from Session #5:</strong> Felix observed that Claude Code "easily takes an
+  illustration as an example and context literally." This is accurate of all LLMs. When the
+  Gemini prompt contained example image descriptions (e.g. "For a funding story: Watercolour
+  painting of naira flowing upward…"), Gemini treated those examples as patterns to repeat
+  on every subsequent post — not as principles to understand. The lesson: examples in prompts
+  are templates, not illustrations of intent. Give fewer examples, and make the underlying
+  principle explicit instead.
+</p>
+
 <!-- ═══════════════════ CHAPTER 12 ═══════════════════ -->
 <div class="chapter" id="ch12">
   <div class="chapter-num">Chapter 12</div>
