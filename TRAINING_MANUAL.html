@@ -737,7 +737,7 @@ Step 13: EXIT. Nothing is published here.</code></pre>
     <p><strong>Feeds removed in Session #5 (6 June 2026):</strong></p>
     <ul>
       <li><strong>Mistral AI</strong> (<code>mistral.ai/feed.xml</code>) — removed. No RSS feed exists at any path. All common feed URL patterns return 404. Mistral discontinued their blog RSS.</li>
-      <li><strong>HN Anthropic filter</strong> (<code>hnrss.org/frontpage?q=anthropic+OR+claude</code>) — removed in Session #5. hnrss.org returning 502 Bad Gateway consistently at that time. <em>Updated Session #6:</em> A new HN Anthropic filter was re-added (<code>hnrss.org/newest?q=Anthropic&amp;points=10</code>) — this endpoint (search-based, not frontpage filter) confirmed HTTP 200, 20 items, working. Anthropic category now has 2 feeds. ★★ in table below.</li>
+      <li><strong>HN Anthropic filter</strong> (<code>hnrss.org/frontpage?q=anthropic+OR+claude</code>) — removed in Session #5. hnrss.org returning 502 Bad Gateway consistently at that time. <em>Updated Session #6:</em> A new HN Anthropic filter was re-added (<code>hnrss.org/newest?q=Anthropic&amp;points=10</code>) — this endpoint (search-based, not frontpage filter) confirmed HTTP 200, 20 items. Anthropic category now has 2 feeds. ★★ in table below. <strong>⚠️ Still intermittent:</strong> returned 502 at the 17:00 UTC Phase 1 run on 6 June (but 200 at 15:59). hnrss.org is unreliable. When it fails Phase 1 emits a warning and continues — no crash. But anthropic category may still occasionally drop to 1 feed on bad runs. Monitor; if persistent, replace with a more stable second source.</li>
       <li><strong>HN Tools filter</strong> (<code>hnrss.org/frontpage?q=llm+OR+AI+…</code>) — replaced with <code>news.ycombinator.com/rss</code> (native HN RSS). hnrss.org was down; native RSS returns valid XML on GET requests. The <code>evergreenScore()</code> function filters for AI relevance.</li>
     </ul>
     <p><strong>Feed URL fixed in Session #5:</strong></p>
@@ -2771,6 +2771,37 @@ pending_posts      ← The Phase 1 → Phase 2 queue
 Storage Bucket: post-images
   covers/{post_id}.jpg (or .webp)  ← Every cover image, permanent, public CDN</code></pre>
 
+<h3>Automation Status — First Live Observation (6 June 2026, 21:08 UTC)</h3>
+
+<p>
+  The first end-of-day status check of the fully autonomous pipeline confirmed everything running
+  without human intervention. This is what "it runs itself" actually looks like in practice.
+</p>
+
+<table>
+  <tr><th>Time (UTC)</th><th>Post published</th><th>Image source</th><th>How triggered</th></tr>
+  <tr><td>09:30</td><td>The Banking AI Blueprint: Why South Africa's Financial Giants are Winning the Continental AI Race</td><td>Source photo (274KB)</td><td>Phase 2 automatic</td></tr>
+  <tr><td>11:30</td><td>Why InnovateAI Lagos 2024 is the Blueprint for Localized AI in Africa</td><td>Source photo</td><td>Phase 2 automatic</td></tr>
+  <tr><td>12:00</td><td>The WhatsApp Meta Business Agent Threat: Why African Startups Must Pivot Immediately</td><td>Source photo</td><td>Phase 2 automatic</td></tr>
+  <tr><td>17:30</td><td>Inside MTN's "Data on Trial": What the Battle Over MTN Data Depletion Nigeria Means for Every Mobile User</td><td>Source photo (118KB)</td><td>Phase 2 automatic</td></tr>
+</table>
+
+<p>
+  All 4 posts used real editorial photographs fetched from the source article's <code>og:image</code>.
+  No AI illustration needed. The Africa Relevance GATE correctly rejected categories with no genuine
+  Nigerian/African content (Anthropic IPO news was SKIP'd at 15:59; tools were SKIP'd at 15:59).
+  Phase 2 queue was empty by 21:00. No failed deployments. Vercel HTTP 200 throughout.
+</p>
+
+<p>
+  <strong>The hnrss.org intermittency pattern persists:</strong> The HN Anthropic feed (added in Session #6)
+  returned 200 at 15:59 and 502 at 17:00 — within 62 minutes. This is consistent with hnrss.org's
+  historical pattern: it works until it doesn't, with no predictability. It is a convenience source,
+  not a reliable one. Any system architecture that depends on it for a hard MIN_ARTICLES threshold
+  will be periodically disappointed. Design accordingly: treat hnrss.org feeds as bonuses,
+  not load-bearing.
+</p>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 <div class="manual-footer">
   <p><strong style="color:#fff">AITrends.ng — Vibe-Coding Training Manual</strong></p>
@@ -2778,7 +2809,7 @@ Storage Bucket: post-images
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 6 June 2026 — Session #6.
+    Last updated: 6 June 2026 — Session #6 (evening).
   </p>
 </div>
 
