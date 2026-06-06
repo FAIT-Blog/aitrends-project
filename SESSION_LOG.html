@@ -4875,6 +4875,66 @@ aitrends-ng: [main 0ed408f] feat: People Also Ask — internal related post link
   </div>
 </div>
 
+
+<!-- COMBINED S5 · TURN 9 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Am beginning to think that the Gemini model just makes things up and ignores instructions. Some of the supporting links don't relate to the topic discussed as a whole. The body of the message embellishes some unrelated story or points and makes the narrative sound abstract. And it is not just one post, several of them but I chose to overlook such trivial issue because I was more focused on seeing the automation trigger by itself and work uninterrupted and unsupervised for 48 hours before addressing the minors. Now, I think you should look into this matter, investigate it and research for a more reliable AI model that has access to internet real-time to verify any topic and headlines, do research to enrich any topic to be written.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Investigation — confirmed root cause</h3>
+
+    <h4>Explore agent: read gemini.js lines 19-21, fetcher.js, scout.js data flow</h4>
+    <p><strong>What Gemini currently receives per article:</strong></p>
+    <pre><code>TITLE: AI Deepfakes Threaten Nigeria's Security, Group Warns
+SOURCE: Premium Times Nigeria
+SUMMARY: The Grassroots Mobilisation Initiative warned... [100-300 chars]</code></pre>
+
+    <p>That's all. 100-300 characters of RSS summary. Then the prompt demands 800+ words with named people, direct quotes, specific African facts, and four detailed sections. Gemini has no real content to draw from, so it fabricates to fill the gap. This is not misbehaviour — it is a predictable response to impossible constraints given no source material.</p>
+
+    <p><strong>What already exists but was never used for RSS articles:</strong> fetcher.js has fetchContent() — extracts up to 4,000 characters of real article body from any URL, with HTML stripping, semantic container detection, 10-second timeout, error handling. It is only called for Felix's manual #scout-editor inputs. It has never been called for regular RSS articles.</p>
+
+    <h3>Model switching decision</h3>
+    <p>Asked Felix: keep Gemini (with fixes) OR switch to Perplexity Sonar Pro (real-time internet search) OR fix source material first.</p>
+    <p>Felix chose: <strong>Part 1 only for now — fix source material, assess quality before deciding on model switch.</strong></p>
+
+    <h3>Fix implemented (commit 3fd9671)</h3>
+
+    <h4>Edit: scout.js</h4>
+    <ul>
+      <li>Added <code>import { fetchContent } from './fetcher.js'</code></li>
+      <li>Before calling generateDigest(), loop over capped articles and call fetchContent(article.link)</li>
+      <li>Attach result as article.fullText</li>
+      <li>Log character count per article</li>
+    </ul>
+
+    <h4>Edit: gemini.js</h4>
+    <ul>
+      <li>Expanded articleList to include FULL TEXT field (4000 chars) alongside TITLE, SOURCE, URL, SUMMARY</li>
+      <li>Added SOURCE RULES block: write only from provided FULL TEXT; no invented facts; no fabricated quotes; attribute with "according to [Source]"; if source is thin, write conservatively not inventively</li>
+    </ul>
+
+    <h3>Phase 1 test — run 27061669340</h3>
+    <pre><code>Fetching full article text...
+  ✓ Africa AI News: 4019 chars
+  ✓ iAfrica: 3766 chars
+  ✓ Premium Times Nigeria: 4019 chars
+  ✓ Innovation Village: 4019 chars
+  ✓ AIBase Nigeria: 51 chars (minimal site — falls back to summary)
+Generating digest with Gemini...
+✅ Queued: "The WhatsApp Meta Business Agent Threat: Why African Startup..."
+
+tools: ⏭️  Skipping — Gemini: no genuine Africa relevance</code></pre>
+
+    <p>Gemini now receives ~15,000 characters of real source material instead of ~500 characters. Fabrication should be dramatically reduced. Phase 2 will publish the post within 30 minutes for quality assessment.</p>
+
+    <p>Note: Model switch to Perplexity Sonar Pro (real-time internet search) is deferred. Felix will assess the quality improvement from full article text before deciding on a model change.</p>
+  </div>
+</div>
+
 </div>
 
 </div>

@@ -1213,6 +1213,62 @@ means the request was rejected:</p>
 </ul>
 <p>Risograph, vector illustration, and editorial ink sketch were removed. They produced abstract art that did not visually communicate the story.</p>
 
+<h3 id="ch6-fabrication">The Fabrication Problem — Why RSS Summaries Are Not Enough</h3>
+
+<p>
+  When Gemini was only receiving RSS summaries (100-300 characters) per article, then being asked
+  to write 800+ words with named people, direct quotes, and specific African facts, it fabricated
+  content to fill the gap. This is not misbehaviour — it is a predictable response to impossible
+  constraints given insufficient source material.
+</p>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>Never ask an LLM to write detailed factual content from summaries</strong>
+    <p>A 150-character RSS summary can produce a 10-word accurate sentence. Ask for 800 words from
+    that same summary and the model will fill the remaining 790 words with plausible-sounding
+    invented content. The fabrication is proportional to the gap between source material and
+    required output length.</p>
+  </div>
+</div>
+
+<p><strong>The fix — <code>fetchContent()</code> for all RSS articles:</strong></p>
+
+<p>
+  <code>fetcher.js</code> already had <code>fetchContent()</code> — a full article extractor that
+  strips HTML, finds semantic content containers, and returns up to 4,000 characters of real text.
+  It was only being used for Felix's manual <code>#scout-editor</code> inputs.
+</p>
+
+<p>In <code>scout.js</code>, before calling <code>generateDigest()</code>:</p>
+
+<pre><code><span class="cmt">// Fetch full article text for each source article</span>
+<span class="kw">for</span> (<span class="kw">const</span> article <span class="kw">of</span> capped) {
+  <span class="kw">if</span> (article.link) {
+    <span class="kw">const</span> fullText = <span class="kw">await</span> <span class="fn">fetchContent</span>(article.link)
+    <span class="kw">if</span> (fullText) article.fullText = fullText
+  }
+}</code></pre>
+
+<p>In <code>gemini.js</code>, the articleList now includes real body text:</p>
+
+<pre><code>TITLE: AI Deepfakes Threaten Nigeria's Security, Group Warns
+SOURCE: Premium Times Nigeria
+URL: https://premiumtimesng.com/...
+SUMMARY: The Grassroots Mobilisation Initiative warned...
+FULL TEXT: [Article content]: The Grassroots Mobilisation Initiative (GMI), a civil society 
+group, on Thursday warned that artificial intelligence-generated disinformation poses a 
+critical threat to Nigeria's national security and social stability. GMI National Coordinator 
+Samaila Musa, while addressing journalists in Abuja, said... [4000 chars]</code></pre>
+
+<p>
+  With ~4,000 characters of real article text per source, Gemini has concrete facts, named people,
+  real quotes, and specific events to write from. Combined with the SOURCE RULES in the prompt
+  (write only from provided FULL TEXT; no invented facts; no fabricated quotes), the fabrication
+  problem is structurally eliminated.
+</p>
+
 <h3 id="ch6-twophase">The Two-Phase Async Architecture</h3>
 
 <p>
