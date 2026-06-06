@@ -286,7 +286,7 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 0. Fetch Felix's editorial inputs from #scout-editor Slack (last 8h)
 1. Load evergreen vocabulary from Supabase evergreen_vocab table
    (merged with 40-term hardcoded baseline)
-2. Fetch all RSS feeds (17 feeds across 4 categories)
+2. Fetch all RSS feeds (25 feeds across 4 categories)
 3. Deduplicate against scout_memory — skip already-seen articles
 4. Score each article by evergreen potential (vocab match count)
 5. Group by category, sort by score, cap at MAX_ARTICLES=5
@@ -322,16 +322,28 @@ scout-agent/
       scout.yml  ← GHA workflow: cron + workflow_dispatch, Node 24, timeout 15min
 ```
 
-### RSS Feeds (17 total)
-**Africa-specific (primary — mission-critical):**
+### RSS Feeds (25 total)
+**Nigeria & Africa AI — AI-dedicated portals (primary):**
+- AIBase Nigeria → `industry`
+- Africa AI News → `industry`
+- iAfrica → `industry`
+- AI in Nigeria → `industry`
+- Techeconomy Nigeria → `industry`
+- CIO Africa → `industry`
+- Innovation Village → `industry`
+
+**Africa tech media:**
 - TechCabal → `industry`
 - Techpoint Africa → `industry`
 - Disrupt Africa → `industry`
 - Ventureburn → `industry`
+- Premium Times Nigeria → `industry`
+- BusinessDay Nigeria → `industry`
+- The Eagle Online → `industry`
 
-**Anthropic:**
-- Anthropic official → `anthropic`
-- Hacker News Anthropic/Claude filter → `anthropic`
+**Anthropic (2 feeds — satisfies MIN_ARTICLES=2):**
+- Anthropic official (GitHub mirror) → `anthropic`
+- Hacker News Anthropic filter (points≥10) → `anthropic`
 
 **Global AI Industry:**
 - TechCrunch AI → `industry`
@@ -343,11 +355,9 @@ scout-agent/
 - Google AI → `ai-models`
 - HuggingFace → `ai-models`
 - Google DeepMind → `ai-models`
-- Mistral AI → `ai-models`
 
 **Tools & Dev:**
-- Hacker News (AI/LLM filter) → `tools`
-- Simon Willison → `tools`
+- Hacker News (native RSS) → `tools`
 - DeepLearning.AI The Batch → `tools`
 
 ### Environment Variables — Scout (.env + GitHub Secrets)
@@ -395,7 +405,7 @@ npm start   # runs index.js
 ```
 
 ### What Has Been Built ✅
-- RSS fetching from 17 feeds (10 original + 7 added in Round 1)
+- RSS fetching from 25 feeds (10 original + 7 Round 1 + 8 Session #5 + 1 Session #6: HN Anthropic)
 - Supabase deduplication (scout_memory)
 - Evergreen scoring — 40-term baseline + self-updating DB vocabulary
 - Self-updating vocabulary — TRENDING_TERMS saved to evergreen_vocab after each run
@@ -475,7 +485,7 @@ npm start   # runs index.js
 - ✅ **`FAIT-Blog/aitrends-project` GitHub repo created** — hosts `CLAUDE.md`, `SESSION_LOG.html`, `TRAINING_MANUAL.html`.
 
 ### 🔴 Critical
-- [ ] **Add second Anthropic feed source** — anthropic category now has only 1 feed (official GitHub-hosted RSS). With `MIN_ARTICLES=2`, anthropic posts are being skipped every run. Need a second reliable source for that category to resume anthropic coverage.
+- ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
 - [ ] **Nigerian feeds are general news — may produce non-AI Nigerian posts** — Premium Times/BusinessDay/Eagle Online cover all topics. When their recent articles have no AI angle, Gemini correctly SKIPs. But when they do discuss fintech/business tech (Glovo, Paystack, etc.), Gemini publishes it as this is Nigeria-relevant. Monitor whether published industry posts are sufficiently AI-focused or too general business. May need to find Nigeria-specific AI/tech RSS feeds (e.g. Techpoint Africa tech section).
 - ✅ **Editorial specification implemented** (b473367) — 7 new AI-focused Nigerian/African feeds added (AIBase Nigeria, Africa AI News, iAfrica, AI in Nigeria, Techeconomy, CIO Africa, Innovation Village); post structure changed to 4 fixed sections (Why it matters / What happened / The bigger picture / What's next); source article og:image fetched as PRIMARY image, AI illustration (paint/pencil only) as fallback. Tested: 48 articles fetched, cluster scoring surfaced Pan-African trending story, source photo used (39KB), correct 4-section structure published.
 - ✅ **Fabrication root cause fixed** (3fd9671) — Gemini was receiving only 100-300 char RSS summaries per article; scout.js now calls fetchContent() (existing fetcher.js function) for each article before calling generateDigest(), attaching up to 4000 chars of real article body as article.fullText. gemini.js articleList now includes FULL TEXT field. SOURCE RULES block added: write only from provided text, no invented facts, no fabricated quotes. Verified: 4 of 5 articles returned 3766-4019 chars in Phase 1 test run 27061669340.
@@ -560,3 +570,4 @@ This session log is a teaching document. It demonstrates what real autonomous Cl
 | combined S2 | 4 June 2026 PM | both | Image pipeline rebuilt: Pollinations confirmed broken (x402 payment standard), plain `<img>` tags with onError fallback, two-phase async pipeline (Phase 1 queue / Phase 2 complete), 3 providers (HF/Fal/AI Horde) behind one env var, Supabase Storage `post-images` bucket, `pending_posts` table, HF FLUX.1-schnell confirmed working (HTTP 200, 3s generation), live end-to-end test passed — first Africa-first post with permanent Supabase image published |
 | combined S4 | 5 June 2026 PM | both | Reliability + share + docs: Phase 1 → Phase 2 direct trigger (8ada833), cron-job.org external trigger every 30 min (204 confirmed), scout.yml permissions fix — actions:write (adae741) fixes 403 on Phase 2 dispatch, ShareButtons component — X/WhatsApp/LinkedIn/Telegram/Copy Link (ed4fdd6), image regeneration complete; TRAINING_MANUAL Chapter 5 reliability section + War Stories 5–7 added (761aa41); 7 stale items corrected across CLAUDE.md + TRAINING_MANUAL (14e7426) |
 | combined S5 | 6 June 2026 | scout-agent + aitrends.ng | Comprehensive pipeline overhaul across 10 turns: Phase 1 false-failure fixed (HTTP 403 schedule restriction, d2d983d); 3 broken feeds fixed; Slack UUID URL bug fixed; cron-job.org Phase 1 trigger added + confirmed; Africa content SKIP rejection gate (0585682); 7 new AI-focused Nigerian/African portals (b473367); 4-section editorial structure (Why it matters/What happened/Bigger picture/What's next); source article og:image as primary image; AI illustration restricted to paint/pencil only; full SEO compliance pass — canonical URLs, JSON-LD Article schema, og:url/robots/Twitter handle (6817792, 060bc61); "People Also Ask" correctly built as frontend internal link component not Gemini Q&A (21f84bc, 0ed408f); topic clustering (addClusterScores); fabrication root cause fixed — fetchContent() now called for all RSS articles giving Gemini 4000 chars of real text per article + SOURCE RULES added to prompt (3fd9671); TRAINING_MANUAL chapters 4/5/6/9/11 updated throughout session |
+| combined S6 | 6 June 2026 (afternoon) | scout-agent | Second Anthropic feed added: hnrss.org/newest?q=Anthropic&points=10 — fixes anthropic category never publishing due to MIN_ARTICLES=2 with only 1 feed. Feed count: 24 → 25. |

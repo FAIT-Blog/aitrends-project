@@ -308,6 +308,7 @@ li { margin-bottom: 6px; }
         <li><a href="#ch4-feeds">RSS Feed Management</a></li>
         <li><a href="#ch4-evergreen">Evergreen Scoring Algorithm</a></li>
         <li><a href="#ch4-gemini">Africa-First Gemini Prompt Engineering</a></li>
+        <li><a href="#ch4-structure">The 4-Section Post Structure</a></li>
         <li><a href="#ch4-dedup">Deduplication with scout_memory</a></li>
       </ul>
     </li>
@@ -344,11 +345,22 @@ li { margin-bottom: 6px; }
         <li><a href="#ch9-gha-cron">The Phase 2 That Never Fired</a></li>
         <li><a href="#ch9-github-token-403">HTTP 403 — Token That Couldn't Trigger Its Sibling</a></li>
         <li><a href="#ch9-pat-scope">The PAT That Got a 404 on a Repo That Exists</a></li>
+        <li><a href="#ch9-schedule-dispatch">War Story 8: The Schedule That Made permissions:actions:write Useless</a></li>
+        <li><a href="#ch9-fabricated-africa">War Story 9: The Post About a British Developer's Python Library That Claimed to Help Nigeria</a></li>
       </ul>
     </li>
     <li><a href="#ch10">Patterns &amp; Best Practices</a></li>
     <li><a href="#ch11">Session Logging &amp; Documentation</a></li>
-    <li><a href="#ch12">Project Structure Reference</a></li>
+    <li><a href="#ch12">Project Structure Reference</a>
+      <ul class="sub">
+        <li><a href="#ch12-scout">scout-agent/ — The Brain</a></li>
+        <li><a href="#ch12-frontend">aitrends.ng/ — The Face</a></li>
+        <li><a href="#ch12-pipeline">The Complete Pipeline Flow</a></li>
+        <li><a href="#ch12-editorial">The Editorial Architecture</a></li>
+        <li><a href="#ch12-triggers">The Trigger Architecture</a></li>
+        <li><a href="#ch12-envvars">Environment Variables — Complete List</a></li>
+      </ul>
+    </li>
   </ol>
 </div>
 
@@ -2264,89 +2276,498 @@ FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre
   <h2>Project Structure Reference</h2>
 </div>
 
-<h3>scout-agent/</h3>
+<p>
+  Consider this chapter your map of the city. You have now built a genuinely complex autonomous system
+  — two GitHub repos, a Supabase backend, a Vercel deployment, and a cron-job.org account holding it
+  all together. When something breaks at 3am (and it will), this is the chapter you open first.
+  Every file has a job. Every variable has a home. Nothing is here by accident.
+</p>
+
+<h3 id="ch12-scout">scout-agent/ — The Brain</h3>
+
+<p>
+  This is where the intelligence lives. Every six hours it wakes up, reads 23 RSS feeds, scores what
+  it finds, fetches the full text of the most important articles, asks Gemini to write an 800-word
+  Africa-first editorial, generates or fetches an image, and goes back to sleep. The blog publishes
+  itself. That is the whole trick.
+</p>
+
 <pre><code>scout-agent/
-  scout.js              ← Phase 1: queue posts (runs every 6h)
-  complete.js           ← Phase 2: complete images + publish (runs every 5min)
+  ├── scout.js             ← Phase 1: the content brain (runs every 6h via cron-job.org)
+  ├── complete.js          ← Phase 2: the publisher (runs every 30min via cron-job.org)
+  │
+  ├── feeds.js             ← 23 RSS feeds — Scout's curated reading list
+  ├── gemini.js            ← Gemini 3.5 Flash: Africa-first editorial engine
+  ├── memory.js            ← Supabase CRUD: deduplication, evergreen vocab, pending queue
+  ├── publisher.js         ← POSTs finished posts to aitrends.ng /api/posts/create
+  ├── slack.js             ← Sends Block Kit notification to #aitrends-feed
+  ├── felix.js             ← Reads #scout-editor channel (Felix's editorial direction)
+  ├── fetcher.js           ← Extracts full article body from any URL (4000 chars)
+  ├── image.js             ← Legacy Pollinations URL builder (kept, unused)
+  ├── migrate-images.js    ← One-time migration script (done, never run again)
+  ├── regenerate-images.js ← One-time image regeneration script (done, never run again)
+  │
+  ├── image-providers/
+  │   ├── index.js         ← Unified interface: reads IMAGE_PROVIDER, delegates
+  │   ├── huggingface.js   ← HF FLUX.1-schnell (active, free $0.10/month credits)
+  │   ├── fal.js           ← Fal.ai FLUX Schnell ($0.003/image — upgrade path)
+  │   └── aihorde.js       ← AI Horde SDXL (free forever — last-resort fallback)
+  │
+  └── .github/
+      └── workflows/
+          ├── scout.yml    ← Phase 1 GHA trigger (cron + workflow_dispatch)
+          └── complete.yml ← Phase 2 GHA trigger (cron — fallback only)</code></pre>
 
-  image-providers/
-    index.js            ← Unified interface — read IMAGE_PROVIDER, delegate
-    huggingface.js      ← HF FLUX.1-schnell (free $0.10/month, synchronous)
-    fal.js              ← Fal.ai FLUX Schnell ($0.003/image, async queue)
-    aihorde.js          ← AI Horde SDXL (free forever, async queue)
+<h4>What each file actually does (the real story)</h4>
 
-  feeds.js              ← 17 RSS feeds (4 Africa-specific + 13 global)
-  gemini.js             ← Gemini 3.5 Flash API (Africa-first prompt, retry logic)
-  memory.js             ← Supabase ops: hasSeen, markSeen, pending_posts CRUD
-  publisher.js          ← POST to /api/posts/create
-  slack.js              ← Success notifications to #aitrends-feed
-  felix.js              ← Reads #scout-editor (Felix's editorial inputs)
-  fetcher.js            ← URL content extraction (YouTube transcripts, articles)
-  image.js              ← buildImageUrl() fallback (legacy Pollinations URL builder)
-  migrate-images.js     ← One-time script: retroactively store images in Supabase
+<p><strong>scout.js</strong> is the orchestrator. It runs through a 10-step pipeline every six hours:</p>
 
-  .github/workflows/
-    scout.yml           ← Phase 1 GHA (cron 0 */6 * * *)
-    complete.yml        ← Phase 2 GHA (cron */15 * * * * — GHA fallback only)</code></pre>
+<ol>
+  <li>Reads Felix's #scout-editor Slack channel for editorial hints</li>
+  <li>Loads the self-updating evergreen vocabulary from Supabase</li>
+  <li>Fetches the latest 5 items from each of the 23 RSS feeds</li>
+  <li>Deduplicates against scout_memory (articles seen before are skipped)</li>
+  <li>Scores each article with <code>evergreenScore()</code> — Africa terms score highest</li>
+  <li>Detects clusters: articles from <em>different</em> sources sharing 2+ title keywords get a ×3 priority boost. If three Nigerian outlets all run a story about AI deepfakes on the same day, that story wins automatically.</li>
+  <li><strong>Fetches the full article body</strong> from each top-scoring article URL using <code>fetchContent()</code> — up to 4,000 characters of real journalism, not just RSS summaries</li>
+  <li>Passes the enriched articles to Gemini and waits for the editorial</li>
+  <li>If Gemini returns <code>SKIP_NO_AFRICA_RELEVANCE</code>, marks articles seen and moves on silently</li>
+  <li>Saves approved posts to the <code>pending_posts</code> queue for Phase 2</li>
+</ol>
 
-<h3>aitrends.ng/</h3>
-<pre><code>aitrends.ng/
-  app/
-    page.tsx                  ← Homepage (force-dynamic, Supabase)
-    layout.tsx                ← Root layout + global metadata
-    about/page.tsx            ← About page
-    post/[slug]/page.tsx      ← Individual post (force-dynamic)
-    category/[slug]/page.tsx  ← Category feed (force-dynamic)
-    sitemap.ts                ← Dynamic sitemap.xml
-    feed.xml/route.ts         ← RSS 2.0 feed
-    robots.ts                 ← robots.txt
-    api/
-      posts/create/route.ts   ← Protected endpoint (SCOUT_API_KEY check)
-      posts/draft/route.ts    ← Draft endpoint
-      health/route.ts         ← GET → {status: "ok"}
+<p><strong>complete.js</strong> is the quiet publisher. It runs every 30 minutes, checks the queue, and for each pending post:</p>
 
-  components/
-    PostCard.tsx              ← Grid card (plain img, onError fallback)
-    HeroPost.tsx              ← Featured post (plain img, onError fallback)
-    PostGrid.tsx              ← Responsive grid + Load More
-    Sidebar.tsx               ← About blurb + category counts + recent posts
-    NavBar.tsx                ← Site navigation
-    Footer.tsx                ← FAIT attribution + "Today and the next AI trends"
-    CategoryBadge.tsx         ← Coloured category pill
-    ShareButtons.tsx          ← Post share buttons (X, WhatsApp, LinkedIn, Telegram, Copy Link)
+<ol>
+  <li>Tries to fetch the real editorial photograph from the source article's <code>og:image</code> tag — this is a real news photo, not generated art</li>
+  <li>If no source photo found: falls back to HuggingFace FLUX for AI illustration (watercolour or pencil sketch only)</li>
+  <li>Uploads the image to Supabase Storage</li>
+  <li>POSTs the full post to <code>/api/posts/create</code> on aitrends.ng</li>
+  <li>Sends a Slack notification to #aitrends-feed with the post title, excerpt, image, and a working "Read Post →" link (slug-based, not UUID)</li>
+</ol>
 
-  lib/
-    supabase.ts               ← Lazy Proxy client (safe at build time)
-    createPost.ts             ← Unique slug generation + Supabase insert
-    slugify.ts                ← URL-safe slug from title
-    types.ts                  ← Post TypeScript interface
+<p><strong>feeds.js</strong> is Scout's curated reading list. There are now 23 feeds in four categories:</p>
 
-  next.config.ts              ← Allows *.supabase.co images</code></pre>
-
-<h3>The Supabase Database</h3>
-<pre><code>Tables:
-  posts           ← published blog posts
-  scout_memory    ← deduplication (feed_url + item_guid)
-  evergreen_vocab ← self-updating scoring vocabulary
-  pending_posts   ← async image pipeline queue
-
-Storage Buckets:
-  post-images     ← permanent cover images (public, CDN-served)</code></pre>
-
-<h3>Key Environment Variables</h3>
 <table>
-  <tr><th>Variable</th><th>Where set</th><th>Purpose</th></tr>
-  <tr><td><code>SUPABASE_URL</code></td><td>Both</td><td>Supabase project URL</td></tr>
-  <tr><td><code>SUPABASE_SECRET_KEY</code></td><td>Both</td><td>Service role key (bypasses RLS)</td></tr>
-  <tr><td><code>GEMINI_API_KEY</code></td><td>Scout</td><td>Google Gemini API access</td></tr>
-  <tr><td><code>SCOUT_API_KEY</code></td><td>Both</td><td>Shared secret between Scout and blog API</td></tr>
-  <tr><td><code>IMAGE_PROVIDER</code></td><td>Scout</td><td><code>huggingface</code> | <code>fal</code> | <code>aihorde</code></td></tr>
-  <tr><td><code>HF_API_TOKEN</code></td><td>Scout</td><td>HuggingFace write role token</td></tr>
-  <tr><td><code>FAL_API_KEY</code></td><td>Scout</td><td>Fal.ai key (when upgrading)</td></tr>
-  <tr><td><code>SLACK_WEBHOOK_URL</code></td><td>Scout</td><td>Outgoing posts to #aitrends-feed</td></tr>
-  <tr><td><code>SLACK_BOT_TOKEN</code></td><td>Scout</td><td>Reads #scout-editor channel</td></tr>
-  <tr><td><code>BLOG_API_URL</code></td><td>Scout</td><td>aitrends.ng /api/posts/create</td></tr>
+  <tr><th>Category</th><th>Feeds (23 total)</th></tr>
+  <tr><td><strong>industry</strong> (10 feeds)</td><td>AIBase Nigeria ★, Africa AI News ★, iAfrica ★, AI in Nigeria ★, Techeconomy Nigeria ★, CIO Africa ★, Innovation Village ★, TechCabal, Techpoint Africa, Disrupt Africa, Ventureburn, Premium Times Nigeria, BusinessDay Nigeria, The Eagle Online, TechCrunch AI, VentureBeat AI, MIT Technology Review</td></tr>
+  <tr><td><strong>anthropic</strong> (1 feed)</td><td>Anthropic (GitHub-hosted RSS)</td></tr>
+  <tr><td><strong>ai-models</strong> (4 feeds)</td><td>OpenAI, Google AI, HuggingFace, Google DeepMind</td></tr>
+  <tr><td><strong>tools</strong> (2 feeds)</td><td>Hacker News (native RSS), DeepLearning.AI The Batch</td></tr>
 </table>
+
+<p>★ = AI-dedicated Nigerian/African portals added in Session #5. These are not general news sources. They specifically cover AI in Nigeria and Africa, which means Gemini receives genuinely Africa-first source material instead of global tech news with Africa awkwardly appended at the end.</p>
+
+<p><strong>gemini.js</strong> is the editorial brain. The prompt inside it encodes:</p>
+<ul>
+  <li>The Africa Relevance GATE — if no genuine Nigeria/Africa angle exists, output <code>SKIP_NO_AFRICA_RELEVANCE</code></li>
+  <li>SOURCE RULES — write only from the FULL TEXT provided; never fabricate quotes or facts</li>
+  <li>The 4-section editorial structure — every post follows exactly: Why it matters → What happened → The bigger picture → What's next</li>
+  <li>SEO rules — primary keyword in title, first paragraph, and all four h3 headings</li>
+  <li>Image prompt rules — watercolour or pencil sketch only; no abstract risograph; no "person at laptop with Lagos skyline"</li>
+</ul>
+
+<p><strong>fetcher.js</strong> is the article reader. It had existed since early sessions but was only being used for Felix's manual <code>#scout-editor</code> inputs. In Session #5 it was finally connected to the main RSS pipeline. Now before Gemini sees any article, <code>fetchContent(article.link)</code> is called, which:</p>
+
+<pre><code><span class="cmt">// fetcher.js — what it does internally</span>
+<span class="kw">async function</span> <span class="fn">fetchArticleText</span>(url) {
+  <span class="kw">const</span> response = <span class="kw">await</span> <span class="fn">fetch</span>(url, {
+    signal: AbortSignal.<span class="fn">timeout</span>(<span class="num">10000</span>),
+    headers: { <span class="str">'User-Agent'</span>: <span class="str">'Mozilla/5.0'</span> }
+  })
+  <span class="kw">const</span> html = <span class="kw">await</span> response.<span class="fn">text</span>()
+  <span class="kw">const</span> root = <span class="fn">parse</span>(html)
+  <span class="cmt">// strips ads, nav, footer, scripts — finds the real article body</span>
+  root.<span class="fn">querySelectorAll</span>(<span class="str">'script,style,nav,header,footer,aside'</span>)
+      .<span class="fn">forEach</span>(el => el.<span class="fn">remove</span>())
+  <span class="kw">const</span> article = root.<span class="fn">querySelector</span>(<span class="str">'article,[role="main"],main,.post-content'</span>)
+  <span class="kw">return</span> text.<span class="fn">slice</span>(<span class="num">0</span>, <span class="num">4000</span>)  <span class="cmt">// up to 4,000 characters of clean article text</span>
+}</code></pre>
+
+<p>Before this change, Gemini received 150 characters of RSS summary and had to write 800 words from it. The result was hallucination. Now it receives 4,000 characters of real journalism per source article. The fabrication is structurally eliminated.</p>
+
+<p><strong>memory.js</strong> is the system's memory. Three jobs:</p>
+<ul>
+  <li><code>hasSeen()</code> / <code>markSeen()</code> — prevents the same article from triggering a post twice</li>
+  <li><code>loadEvergreens()</code> / <code>saveEvergreens()</code> — maintains the self-updating AI vocabulary that scores articles</li>
+  <li><code>savePendingPost()</code> / <code>getPendingPosts()</code> / <code>updatePendingPost()</code> — the Phase 1 → Phase 2 queue. Phase 1 saves. Phase 2 reads, processes, updates to 'published'.</li>
+</ul>
+
+<hr style="margin:32px 0; border-color:var(--border)">
+
+<h3 id="ch12-frontend">aitrends.ng/ — The Face</h3>
+
+<p>
+  The blog itself. A Next.js 16 app deployed on Vercel, reading from Supabase, auto-deploying on
+  every push to main. When Scout publishes a post via the API, Vercel serves it within seconds.
+  No cache invalidation dance. No manual deploys. It just appears.
+</p>
+
+<pre><code>aitrends.ng/
+  ├── app/
+  │   ├── page.tsx                  ← Homepage (force-dynamic, Supabase query)
+  │   ├── layout.tsx                ← Root layout — NavBar, Footer, SEO metadata
+  │   ├── globals.css               ← Brand colours, Google Fonts import
+  │   ├── about/page.tsx            ← About AITrends.ng
+  │   ├── post/[slug]/page.tsx      ← Individual post — SEO, JSON-LD, People Also Ask
+  │   ├── category/[slug]/page.tsx  ← Category-filtered feed
+  │   ├── sitemap.ts                ← Dynamic sitemap (all published posts)
+  │   ├── feed.xml/route.ts         ← RSS 2.0 feed (latest 20 posts)
+  │   ├── robots.ts                 ← robots.txt (allows all, references sitemap)
+  │   └── api/
+  │       ├── posts/create/route.ts ← Scout's publish endpoint (x-api-key protected)
+  │       ├── posts/draft/route.ts  ← Saves drafts (x-api-key protected)
+  │       └── health/route.ts       ← GET → {status: "ok"}
+  │
+  ├── components/
+  │   ├── HeroPost.tsx              ← Featured top post (plain img, onError fallback)
+  │   ├── PostCard.tsx              ← Grid card (plain img, onError fallback)
+  │   ├── PostGrid.tsx              ← Responsive 9-per-page grid + Load More
+  │   ├── Sidebar.tsx               ← About blurb + category counts + recent posts
+  │   ├── NavBar.tsx                ← Site navigation with active highlighting
+  │   ├── Footer.tsx                ← "Today and the next AI trends" — by FAIT
+  │   ├── CategoryBadge.tsx         ← Coloured pill per category
+  │   └── ShareButtons.tsx          ← X, WhatsApp, LinkedIn, Telegram, Copy Link
+  │
+  ├── lib/
+  │   ├── supabase.ts               ← Lazy Proxy clients (public + admin)
+  │   ├── createPost.ts             ← Unique slug loop + Supabase insert
+  │   ├── slugify.ts                ← URL-safe slug generator
+  │   └── types.ts                  ← Post TypeScript interface
+  │
+  └── next.config.ts                ← Image remote patterns (*.supabase.co)</code></pre>
+
+<h4>What matters in the frontend (the changes that mattered)</h4>
+
+<p><strong>app/post/[slug]/page.tsx</strong> — this is the most important page on the site, and for a long time it was the most neglected. A visitor lands here from a Google search or a Slack link. If it is incomplete, they leave. Three significant additions in Session #5:</p>
+
+<p><em>1. Canonical URL and JSON-LD Article schema</em> — every post now tells Google its canonical address and declares itself as a structured Article with publication date, author (AITrends.ng), and keywords. This is what unlocks rich search result snippets — the ones that show the article date and description directly in Google results.</p>
+
+<pre><code><span class="cmt">// generateMetadata() — what it now returns</span>
+{
+  title: <span class="str">`${post.title} — AITrends.ng`</span>,
+  description: post.excerpt,
+  alternates: { canonical: <span class="str">`https://aitrends.ng/post/${post.slug}`</span> },  <span class="cmt">← new</span>
+  openGraph: {
+    title: post.title,
+    description: post.excerpt,
+    images: [{ url: post.cover_image_url, alt: post.title }],        <span class="cmt">← alt added</span>
+    url: <span class="str">`https://aitrends.ng/post/${post.slug}`</span>,
+    type: <span class="str">'article'</span>,
+    publishedTime: post.published_at,                                 <span class="cmt">← new</span>
+    tags: post.tags,                                                  <span class="cmt">← new</span>
+  },
+  twitter: { card: <span class="str">'summary_large_image'</span>, images: [post.cover_image_url] }  <span class="cmt">← images added</span>
+}
+
+<span class="cmt">// JSON-LD — injected as &lt;script type="application/ld+json"&gt; in the page</span>
+{
+  <span class="str">"@context"</span>: <span class="str">"https://schema.org"</span>,
+  <span class="str">"@type"</span>: <span class="str">"Article"</span>,
+  <span class="str">"headline"</span>: post.title,
+  <span class="str">"datePublished"</span>: post.published_at,
+  <span class="str">"author"</span>: { <span class="str">"@type"</span>: <span class="str">"Organization"</span>, <span class="str">"name"</span>: <span class="str">"AITrends.ng"</span> },
+  <span class="str">"mainEntityOfPage"</span>: { <span class="str">"@id"</span>: <span class="str">`https://aitrends.ng/post/${post.slug}`</span> }
+}</code></pre>
+
+<p><em>2. People Also Ask section</em> — at the bottom of every post, instead of image cards that compete for attention, there is now a clean bordered box labelled "PEOPLE ALSO ASK" showing 3 hyperlinked titles from the same category. Each title links to another post on the site. This is internal linking — it helps Google discover and index every post, distributes PageRank across the site, and keeps visitors reading.</p>
+
+<pre><code><span class="cmt">// The People Also Ask box — uses existing getRelated() data, no extra Supabase call</span>
+&lt;div style={{ background: <span class="str">'var(--surface)'</span>, border: <span class="str">'1px solid var(--border)'</span>, ... }}&gt;
+  &lt;p style={{ textTransform: <span class="str">'uppercase'</span>, ... }}&gt;People Also Ask&lt;/p&gt;
+  &lt;ul&gt;
+    {related.map(p =&gt; (
+      &lt;li key={p.id}&gt;
+        &lt;Link href={<span class="str">`/post/${p.slug}`</span>}&gt;{p.title}&lt;/Link&gt;  <span class="cmt">← internal navigation, no page reload</span>
+        &lt;p&gt;{p.excerpt}&lt;/p&gt;
+      &lt;/li&gt;
+    ))}
+  &lt;/ul&gt;
+&lt;/div&gt;</code></pre>
+
+<p><em>3. layout.tsx root SEO</em> — the root layout now declares the canonical domain as <code>aitrends.ng</code> (not the Vercel deployment URL), includes a default Open Graph image for homepage sharing, and sets explicit <code>robots: { index: true, follow: true }</code> so Google knows without ambiguity that it is welcome.</p>
+
+<hr style="margin:32px 0; border-color:var(--border)">
+
+<h3 id="ch12-pipeline">The Complete Pipeline Flow</h3>
+
+<p>
+  A student asked me once: "But what actually happens between an RSS article appearing at 06:00 UTC
+  and a post going live on the website?" Here is the answer, step by step, with the exact file
+  responsible at each stage.
+</p>
+
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:24px; margin:24px 0; font-size:0.875rem; line-height:2;">
+<strong style="color:var(--gold)">06:00 UTC — cron-job.org fires</strong><br>
+↓ POST to GitHub Actions API → scout.yml starts<br>
+<br>
+<strong style="color:var(--blue)">scout.js — Phase 1 (~90 seconds)</strong><br>
+│ felix.js → reads #scout-editor for editorial hints<br>
+│ memory.js → loads evergreen vocabulary from Supabase<br>
+│ feeds.js → 23 RSS feeds fetched (5 items each = up to 115 articles)<br>
+│ memory.js → hasSeen() filters already-processed articles<br>
+│ scout.js → evergreenScore() scores each article (Africa terms win)<br>
+│ scout.js → addClusterScores() boosts articles covered by multiple sources<br>
+│ <em>Sort by combined score → take top 5 per category</em><br>
+│ fetcher.js → fetchContent() downloads full article body (4000 chars) per article<br>
+│ gemini.js → Africa Relevance GATE: if not genuinely Africa-relevant → SKIP<br>
+│ gemini.js → generateDigest() → 800-word editorial in 4 sections + image prompt<br>
+│ image-providers/index.js → submitImageJob() (HF: null jobId, Phase 2 generates)<br>
+│ memory.js → savePendingPost() → saved to pending_posts with status: pending_image<br>
+│ memory.js → markSeen() → articles recorded so they never re-queue<br>
+↓ Phase 1 exits cleanly<br>
+<br>
+<strong style="color:var(--gold)">06:30 UTC — cron-job.org fires again</strong><br>
+↓ POST to GitHub Actions API → complete.yml starts<br>
+<br>
+<strong style="color:var(--blue)">complete.js — Phase 2 (~20 seconds)</strong><br>
+│ memory.js → getPendingPosts() → finds the pending_image post(s)<br>
+│ updatePendingPost() → locks post (status: generating)<br>
+│ trySourceImage() → fetches og:image from source article URL<br>
+│   ✓ Found: real editorial photo downloaded → skip AI generation<br>
+│   ✗ Not found: processImageJob() → HF FLUX generates watercolour/pencil illustration<br>
+│ supabase.storage.upload() → image stored at covers/{post.id}.jpg<br>
+│ publisher.js → POST /api/posts/create → post appears on aitrends.ng immediately<br>
+│ updatePendingPost() → status: published<br>
+│ slack.js → "📡 New AITrends.ng Post Published" with slug-based Read Post link<br>
+↓ Phase 2 exits cleanly<br>
+<br>
+<strong style="color:var(--green)">Post is live on aitrends.ng ✓</strong>
+</div>
+
+<p>
+  The whole chain takes roughly 2 minutes for Phase 1 and 30 seconds for Phase 2.
+  Every step has error handling. If the image fails, it retries up to 8 times across 8 Phase 2 cycles.
+  If a post gets stuck for 15 minutes, the stuck-guard resets it automatically.
+  No human intervention required.
+</p>
+
+<hr style="margin:32px 0; border-color:var(--border)">
+
+<h3 id="ch12-editorial">The Editorial Architecture</h3>
+
+<p>
+  This is the part that took the longest to get right. Getting the automation to run reliably
+  was the engineering problem. Getting it to write <em>good journalism</em> was the editorial problem.
+  They are completely different problems. The second one is harder.
+</p>
+
+<h4>The Africa Relevance GATE</h4>
+
+<p>
+  For months, posts were being published with fabricated Africa connections.
+  "African developers face expensive cloud infrastructure costs and this UK developer's
+  micropython-wasm library could help them." That is not journalism. That is a language model
+  obeying instructions it cannot fulfil with the source material available.
+</p>
+
+<p>
+  The fix was to give Gemini an explicit rejection gate. The first thing the prompt says now is:
+</p>
+
+<pre><code>AFRICA RELEVANCE GATE — CHECK THIS BEFORE WRITING ANYTHING:
+
+GENUINE relevance means at least ONE of these is true:
+- A Nigerian, Ghanaian, Kenyan, or other African organisation is directly involved
+- The event happened IN Africa or is directly targeting Africa's market
+- Multiple African news outlets are covering this very story
+- An Africa-based company raised funding or launched a product
+
+FABRICATED relevance (DO NOT accept these):
+- "African developers could use this tool"
+- "This US technology could help Nigerian startups"
+- Any connection that applies equally to any country in the world
+
+IF the articles DO NOT meet the genuine relevance test, output EXACTLY:
+SKIP_NO_AFRICA_RELEVANCE</code></pre>
+
+<p>
+  When Gemini outputs that signal, scout.js catches it, marks the articles as seen
+  (so they do not re-queue), and moves on silently. No post is published. No error is thrown.
+  It just quietly skips a category the way a good editor would skip a story that
+  does not belong in the publication.
+</p>
+
+<h4>The 4-Section Post Structure</h4>
+
+<p>
+  Felix's editorial specification defined exactly how every post should be structured.
+  Not guidelines. Not suggestions. Exactly. The prompt now encodes four fixed sections
+  with specific instructions for each:
+</p>
+
+<table>
+  <tr><th>Section</th><th>What it does</th><th>Key rule</th></tr>
+  <tr><td><strong>Why it matters</strong></td><td>Analysis before facts — why a Lagos reader should care</td><td>Must come FIRST. Impact before information.</td></tr>
+  <tr><td><strong>What happened</strong></td><td>The facts: who, what, where, when</td><td>Must name the specific person/org and include a direct quote or clear attribution</td></tr>
+  <tr><td><strong>The bigger picture</strong></td><td>Context, precedents, ecosystem implications</td><td>Must connect to Nigerian/African infrastructure, regulation, or opportunity</td></tr>
+  <tr><td><strong>What's next</strong></td><td>Forward-looking conclusion</td><td>Ends with "Bottom line for African builders:" — one sharp takeaway</td></tr>
+</table>
+
+<p>
+  Each h3 heading must contain the primary keyword of the specific story — not a generic label.
+  "Why Standard Bank's AI Strategy Matters for Nigerian Fintechs" is correct.
+  "Why it matters" is not SEO and is not journalism.
+</p>
+
+<h4>The SOURCE RULES — How Fabrication Was Stopped</h4>
+
+<p>
+  Discovered in Session #5: Gemini was receiving ~150 characters of RSS summary per article,
+  then being asked to write 800 words with named people, quotes, and African-specific facts.
+  Of course it invented. There was nothing else to work with.
+</p>
+
+<p>
+  The fix was two-pronged. First, <code>fetcher.js</code> was connected to the main pipeline —
+  <code>fetchContent(article.link)</code> now runs for every article before Gemini sees it.
+  This gives Gemini up to 4,000 characters of real article body to work from.
+  Second, explicit SOURCE RULES were added to the prompt:
+</p>
+
+<pre><code>SOURCE RULES — strictly enforced:
+- Write ONLY from content provided in the FULL TEXT fields above.
+- Never fabricate quotes. If no verbatim quote appears in FULL TEXT,
+  attribute clearly: "according to [Source name]" and paraphrase.
+- If the source material does not contain enough detail to support
+  a section, write what is known — do not pad with invented context.
+- If a claim cannot be traced to the FULL TEXT provided, do not include it.</code></pre>
+
+<p>
+  Gemini's job changed from "write an 800-word editorial about AI in Africa" to
+  "summarise, analyse, and contextualise the specific articles I am giving you."
+  That is a much more honest task, and Gemini performs it much more honestly.
+</p>
+
+<hr style="margin:32px 0; border-color:var(--border)">
+
+<h3 id="ch12-triggers">The Trigger Architecture</h3>
+
+<p>
+  "GitHub Actions cron is unreliable." Every developer who has used GHA for more than a month
+  knows this. Scheduled workflows get delayed 15–60 minutes. They get skipped entirely.
+  If the workflow fails repeatedly, GHA's scheduler quietly gives up.
+  Designing a 24/7 autonomous publishing system on GHA cron alone was a recipe for gaps.
+</p>
+
+<p>
+  The solution was simple: use <a href="https://cron-job.org" target="_blank">cron-job.org</a> —
+  a free, dedicated cron service that runs from its own servers — to fire both workflows via
+  the GitHub <code>workflow_dispatch</code> API. GHA's own scheduler stays as a passive fallback.
+</p>
+
+<pre><code><span class="cmt"># What cron-job.org sends every 6 hours to trigger Phase 1:</span>
+POST https://api.github.com/repos/FAIT-Blog/scout-agent/actions/workflows/scout.yml/dispatches
+Authorization: Bearer &lt;PAT with Actions: write on FAIT-Blog org&gt;
+Content-Type: application/json
+Body: {"ref": "main"}
+→ HTTP 204 (success, workflow queued)
+
+<span class="cmt"># What cron-job.org sends every 30 minutes to trigger Phase 2:</span>
+POST https://api.github.com/repos/FAIT-Blog/scout-agent/actions/workflows/complete.yml/dispatches
+Authorization: Bearer &lt;same PAT&gt;
+Body: {"ref": "main"}
+→ HTTP 204 (success)</code></pre>
+
+<p>
+  The PAT must be created with <strong>FAIT-Blog as the Resource Owner</strong>
+  (not your personal GitHub account). This is the single most common setup mistake.
+  See War Story 7 for the full detective story.
+</p>
+
+<div class="callout">
+  <div class="callout-icon">💡</div>
+  <div class="callout-body">
+    <strong>Why Phase 1 cannot trigger Phase 2 directly</strong>
+    <p>An earlier version of scout.yml had a step that ran <code>gh workflow run complete.yml</code>
+    after Phase 1 finished. This worked perfectly when Phase 1 was triggered manually
+    (<code>workflow_dispatch</code>). It failed with HTTP 403 every time the GHA cron triggered it
+    (on a <code>schedule</code> event). GitHub prevents scheduled workflows from dispatching other
+    workflows to stop infinite loops. The step was removed. cron-job.org handles both triggers now.
+    See War Story 8.</p>
+  </div>
+</div>
+
+<table>
+  <tr><th>Phase</th><th>Primary trigger</th><th>Schedule</th><th>Fallback</th></tr>
+  <tr><td>Phase 1 (Scout)</td><td>cron-job.org → workflow_dispatch</td><td>0 0,6,12,18 * * *</td><td>GHA cron 0 */6 * * *</td></tr>
+  <tr><td>Phase 2 (Complete)</td><td>cron-job.org → workflow_dispatch</td><td>*/30 * * * *</td><td>GHA cron */15 * * * *</td></tr>
+</table>
+
+<hr style="margin:32px 0; border-color:var(--border)">
+
+<h3 id="ch12-envvars">Environment Variables — Complete List</h3>
+
+<p>
+  These must be set in three places simultaneously: <code>scout-agent/.env</code> (local),
+  GitHub Actions Secrets (for GHA runs), and Vercel environment variables (for the blog frontend).
+  Miss any one of them and something will break silently.
+</p>
+
+<h4>scout-agent — GitHub Actions Secrets + .env</h4>
+
+<table>
+  <tr><th>Variable</th><th>Purpose</th><th>Notes</th></tr>
+  <tr><td><code>SUPABASE_URL</code></td><td>Supabase project URL</td><td>https://tixagzzcaeqdohuyrngl.supabase.co</td></tr>
+  <tr><td><code>SUPABASE_SECRET_KEY</code></td><td>Service role key (bypasses RLS)</td><td>Starts with eyJ... Keep secret.</td></tr>
+  <tr><td><code>GEMINI_API_KEY</code></td><td>Google Gemini API key</td><td>From Google AI Studio</td></tr>
+  <tr><td><code>BLOG_API_URL</code></td><td>aitrends.ng publish endpoint</td><td>https://aitrends-ng.vercel.app/api/posts/create</td></tr>
+  <tr><td><code>SCOUT_API_KEY</code></td><td>Shared secret — Scout ↔ blog API</td><td>Must match in scout + Vercel simultaneously</td></tr>
+  <tr><td><code>IMAGE_PROVIDER</code></td><td>Active image provider</td><td><code>huggingface</code> | <code>fal</code> | <code>aihorde</code></td></tr>
+  <tr><td><code>HF_API_TOKEN</code></td><td>HuggingFace write-role token</td><td>Required for FLUX.1-schnell generation</td></tr>
+  <tr><td><code>FAL_API_KEY</code></td><td>Fal.ai key</td><td>Only needed if IMAGE_PROVIDER=fal</td></tr>
+  <tr><td><code>AIHORDE_API_KEY</code></td><td>AI Horde API key</td><td>Only needed if IMAGE_PROVIDER=aihorde</td></tr>
+  <tr><td><code>SLACK_WEBHOOK_URL</code></td><td>Sends post notifications to #aitrends-feed</td><td>Incoming webhook URL from Slack app settings</td></tr>
+  <tr><td><code>SLACK_BOT_TOKEN</code></td><td>Reads #scout-editor channel</td><td>Bot token (xoxb-...) — needs channels:history scope</td></tr>
+</table>
+
+<h4>aitrends.ng — Vercel Environment Variables + .env.local</h4>
+
+<table>
+  <tr><th>Variable</th><th>Purpose</th><th>Notes</th></tr>
+  <tr><td><code>NEXT_PUBLIC_SUPABASE_URL</code></td><td>Supabase project URL (public)</td><td>Same URL as above — safe to expose</td></tr>
+  <tr><td><code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code></td><td>Supabase anon key (public)</td><td>Respects RLS — safe to expose</td></tr>
+  <tr><td><code>SUPABASE_SECRET_KEY</code></td><td>Service role key (private)</td><td>Used by createPost.ts — never expose</td></tr>
+  <tr><td><code>SCOUT_API_KEY</code></td><td>Validates Scout's publish requests</td><td>Must match scout-agent's SCOUT_API_KEY exactly</td></tr>
+  <tr><td><code>SLACK_WEBHOOK_URL</code></td><td>Optional — success notifications</td><td>Same webhook as scout-agent</td></tr>
+  <tr><td><code>NEXT_PUBLIC_SITE_URL</code></td><td>Canonical domain for URLs</td><td>https://aitrends.ng</td></tr>
+</table>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>SCOUT_API_KEY must be identical in three places</strong>
+    <p>If you rotate this key, you must update it simultaneously in:
+    (1) <code>scout-agent/.env</code>,
+    (2) GitHub Actions Secrets → SCOUT_API_KEY,
+    (3) Vercel Environment Variables → SCOUT_API_KEY.
+    Update any two without the third and Scout will start returning 401 Unauthorized
+    when it tries to publish. Posts will queue but never go live.</p>
+  </div>
+</div>
+
+<h4>The Supabase Database — Four Tables</h4>
+
+<pre><code>posts              ← Every published and draft blog post
+  id, slug, title, content, excerpt, category, tags, cover_image_url,
+  cover_image_prompt, source_urls, status, auto_generated,
+  created_at, published_at
+
+scout_memory       ← Deduplication log — every article Scout has ever seen
+  id, feed_url, item_guid, item_title, post_id, created_at
+  UNIQUE constraint on (feed_url, item_guid)
+
+evergreen_vocab    ← Self-updating AI keyword vocabulary
+  id, term, source ('auto' or 'manual'), added_at
+  UNIQUE constraint on (term)
+
+pending_posts      ← The Phase 1 → Phase 2 queue
+  id, title, content, excerpt, category, tags, source_urls,
+  image_prompt, image_job_id, provider, post_id,
+  status (pending_image → generating → published | failed),
+  attempts, image_url, published_at, created_at, updated_at
+
+Storage Bucket: post-images
+  covers/{post_id}.jpg (or .webp)  ← Every cover image, permanent, public CDN</code></pre>
 
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 <div class="manual-footer">
@@ -2355,6 +2776,7 @@ Storage Buckets:
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
+    Last updated: 6 June 2026 — Combined Session #5.
   </p>
 </div>
 
