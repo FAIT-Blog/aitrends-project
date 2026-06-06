@@ -5059,6 +5059,72 @@ git push  → To https://github.com/FAIT-Blog/aitrends-project.git (919fa29..6ed
 </div>
 
 
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Read through the training manual thoroughly and go through CLAUDE.md and SESSION LOG and fill/complete things that are missing in TRAINING MANUAL.html because there are somethings that were left out by Claude before it hit the "API Error: Usage credits required for 1M context"</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — TRAINING_MANUAL audit</div>
+  <div class="bubble">
+    <p>Read all 2784 lines of TRAINING_MANUAL.html in full. Cross-referenced against CLAUDE.md (session history, to-do list, RSS feed counts) and SESSION_LOG.html to find everything cut off by the prior API context error.</p>
+    <p><strong>12 errors found and fixed:</strong></p>
+
+    <h4>Chapter 4 — Pipeline &amp; Feed Table</h4>
+    <ul>
+      <li>Pipeline Step 2: <code>Fetch all 17 RSS feeds</code> → <code>25 RSS feeds</code></li>
+      <li>Feed table header: <code>23 feeds — Session #5</code> → <code>25 feeds — Session #6</code></li>
+      <li>Feed table: Added missing <code>Hacker News — Anthropic ★★</code> row (Session #6 addition)</li>
+      <li>Callout for removed feeds: Updated to note hnrss.org/newest?q=Anthropic&amp;points=10 was re-added in Session #6 (different endpoint from the one removed in Session #5)</li>
+    </ul>
+
+    <h4>Chapter 6 — The Image Pipeline</h4>
+    <p>This chapter had two structural problems introduced when Session #5 content was appended without updating the TOC:</p>
+    <ul>
+      <li><strong>Broken TOC link</strong>: <code>ch6-diagnosis</code> was in the TOC but no section with that anchor existed in the content. The 402 diagnosis was embedded within the V1 section — no separate section was ever written.</li>
+      <li><strong>Missing TOC entries</strong>: <code>ch6-sourcephoto</code> (V3) and <code>ch6-fabrication</code> were added to the content in Session #5 but were never added to the TOC.</li>
+      <li><strong>Wrong chronological order</strong>: V3 (Source Article Photograph, Session #5) and V4 (Fabrication Fix, Session #5) appeared BEFORE V2 (Two-Phase Async Architecture, Session #2). The "story of evolution" was told out of order.</li>
+    </ul>
+    <p>Fixes applied:</p>
+    <ul>
+      <li>TOC replaced: <code>ch6-diagnosis</code> removed → correct V2/V3/V4 entries added in order</li>
+      <li>Content reordered: V1 → V2 (Two-Phase) → V3 (Source Photo) → V4 (Fabrication Fix)</li>
+      <li><code>V2:</code> prefix added to Two-Phase section heading; <code>V4:</code> prefix added to Fabrication Fix heading</li>
+    </ul>
+
+    <h4>Chapter 12 — Project Structure Reference</h4>
+    <ul>
+      <li>5 occurrences of "23 RSS feeds" → 25: in paragraph, file tree, scout step list, pipeline flow diagram, "there are now X feeds" summary</li>
+      <li>Pipeline flow: "up to 115 articles" → "up to 125 articles" (25 feeds × 5 items)</li>
+      <li>Category feed counts: <code>industry (10 feeds)</code> → 17 feeds; <code>anthropic (1 feed)</code> → 2 feeds</li>
+      <li>Anthropic row: Added HN Anthropic filter URL to the cell</li>
+      <li>Legend paragraph: Added ★★ footnote explaining HN Anthropic addition</li>
+    </ul>
+
+    <h4>Footer</h4>
+    <ul>
+      <li>"Last updated: 6 June 2026 — Combined Session #5" → "Session #6"</li>
+    </ul>
+
+    <h4>Verification</h4>
+    <pre><code>grep "ch6-" TRAINING_MANUAL.html | head -8
+→ V1: Pollinations (line 1136)
+→ V2: Two-Phase Async Architecture (line 1178)
+→ V3: Source Article Photograph (line 1264)
+→ V4: Fabrication Fix (line 1316)
+→ Chapter 7 starts (line 1373)  ✓ correct chronological order
+
+grep "25 RSS\|25 feeds\|17 feeds\|2 feeds" TRAINING_MANUAL.html
+→ All 7 feed count references corrected ✓</code></pre>
+
+    <h4>Bash: git add TRAINING_MANUAL.html &amp;&amp; git commit + push</h4>
+    <pre><code>commit 21fcbe4 — "docs: comprehensive TRAINING_MANUAL audit — fix 12 errors left by API cutoff"
+→ To https://github.com/FAIT-Blog/aitrends-project.git (bfcaae1..21fcbe4)</code></pre>
+  </div>
+</div>
+
+
 </div>
 </body>
 </html>
