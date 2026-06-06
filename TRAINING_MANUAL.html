@@ -323,8 +323,9 @@ li { margin-bottom: 6px; }
     <li><a href="#ch6">The Image Pipeline — A Story of Evolution</a>
       <ul class="sub">
         <li><a href="#ch6-v1">V1: Pollinations Lazy URLs (broken)</a></li>
-        <li><a href="#ch6-diagnosis">Diagnosing the 402 Problem</a></li>
-        <li><a href="#ch6-twophase">The Two-Phase Async Architecture</a></li>
+        <li><a href="#ch6-twophase">V2: The Two-Phase Async Architecture</a></li>
+        <li><a href="#ch6-sourcephoto">V3: Source Article Photograph (Primary)</a></li>
+        <li><a href="#ch6-fabrication">V4: The Fabrication Fix — Full Article Text</a></li>
       </ul>
     </li>
     <li><a href="#ch7">Multi-Provider Image System</a>
@@ -639,7 +640,7 @@ li { margin-bottom: 6px; }
 <pre><code><span class="lang">The Phase 1 pipeline</span>
 Step  0: Read #scout-editor Slack channel (Felix's editorial inputs, last 8h)
 Step  1: Load evergreen vocabulary from Supabase (40 baseline + learned terms)
-Step  2: Fetch all 17 RSS feeds (Africa-specific + global)
+Step  2: Fetch all 25 RSS feeds (Africa-specific + global)
 Step  3: Deduplicate — skip articles already in scout_memory
 Step  4: Score each article by evergreen potential (vocab match count)
 Step  5: Group by category, sort by score, cap at MAX_ARTICLES = 5
@@ -692,7 +693,7 @@ Step 13: EXIT. Nothing is published here.</code></pre>
   </div>
 </div>
 
-<h4>Current Feed List (23 feeds — updated 6 June 2026, Session #5)</h4>
+<h4>Current Feed List (25 feeds — updated 6 June 2026, Session #6)</h4>
 
 <table>
   <tr><th>Category</th><th>Source</th><th>URL</th></tr>
@@ -704,6 +705,7 @@ Step 13: EXIT. Nothing is published here.</code></pre>
   <tr><td>industry</td><td>VentureBeat AI</td><td>venturebeat.com/category/ai/feed/</td></tr>
   <tr><td>industry</td><td>MIT Technology Review</td><td>technologyreview.com/feed/</td></tr>
   <tr><td>anthropic</td><td>Anthropic</td><td>raw.githubusercontent.com/taobojlen/anthropic-rss-feed/…</td></tr>
+  <tr><td>anthropic</td><td>Hacker News — Anthropic ★★</td><td>hnrss.org/newest?q=Anthropic&amp;points=10</td></tr>
   <tr><td>ai-models</td><td>OpenAI</td><td>openai.com/news/rss.xml</td></tr>
   <tr><td>ai-models</td><td>Google AI</td><td>blog.google/technology/ai/rss/</td></tr>
   <tr><td>ai-models</td><td>HuggingFace</td><td>huggingface.co/blog/feed.xml</td></tr>
@@ -735,7 +737,7 @@ Step 13: EXIT. Nothing is published here.</code></pre>
     <p><strong>Feeds removed in Session #5 (6 June 2026):</strong></p>
     <ul>
       <li><strong>Mistral AI</strong> (<code>mistral.ai/feed.xml</code>) — removed. No RSS feed exists at any path. All common feed URL patterns return 404. Mistral discontinued their blog RSS.</li>
-      <li><strong>HN Anthropic filter</strong> (<code>hnrss.org/frontpage?q=anthropic+OR+claude</code>) — removed. hnrss.org returning 502 Bad Gateway consistently. The official Anthropic feed is sufficient for the anthropic category.</li>
+      <li><strong>HN Anthropic filter</strong> (<code>hnrss.org/frontpage?q=anthropic+OR+claude</code>) — removed in Session #5. hnrss.org returning 502 Bad Gateway consistently at that time. <em>Updated Session #6:</em> A new HN Anthropic filter was re-added (<code>hnrss.org/newest?q=Anthropic&amp;points=10</code>) — this endpoint (search-based, not frontpage filter) confirmed HTTP 200, 20 items, working. Anthropic category now has 2 feeds. ★★ in table below.</li>
       <li><strong>HN Tools filter</strong> (<code>hnrss.org/frontpage?q=llm+OR+AI+…</code>) — replaced with <code>news.ycombinator.com/rss</code> (native HN RSS). hnrss.org was down; native RSS returns valid XML on GET requests. The <code>evergreenScore()</code> function filters for AI relevance.</li>
     </ul>
     <p><strong>Feed URL fixed in Session #5:</strong></p>
@@ -1173,115 +1175,7 @@ means the request was rejected:</p>
   }]
 }</code></pre>
 
-<h3 id="ch6-sourcephoto">V3: Source Article Photograph (Primary)</h3>
-
-<p>
-  <strong>Added in Session #5 (6 June 2026) — this is now the primary image strategy.</strong>
-</p>
-
-<p>
-  Every news article has an editorial photograph. When a Nigerian newspaper writes about the CBN
-  Governor announcing an interest rate cut, they publish a photograph of the governor at the
-  podium. That photograph is the correct image for the story. No AI generator can produce it.
-</p>
-
-<p>
-  The new image priority order:
-</p>
-
-<ol>
-  <li><strong>Source article og:image</strong> — fetch the real photograph from the source article URL</li>
-  <li><strong>AI illustration (paint/pencil only)</strong> — fall back to HuggingFace FLUX if no source image</li>
-</ol>
-
-<p>
-  Implementation in <code>complete.js</code> — <code>trySourceImage(sourceUrls)</code>:
-</p>
-
-<pre><code><span class="cmt">// Fetches the og:image meta tag from the source article</span>
-<span class="cmt">// Returns { done, imageBuffer, contentType } or null</span>
-<span class="kw">async function</span> <span class="fn">trySourceImage</span>(sourceUrls) {
-  <span class="kw">const</span> res = <span class="kw">await</span> <span class="fn">fetch</span>(sourceUrls[<span class="num">0</span>], { signal: AbortSignal.timeout(<span class="num">8000</span>) })
-  <span class="kw">const</span> html = <span class="kw">await</span> res.<span class="fn">text</span>()
-  <span class="kw">const</span> match = html.<span class="fn">match</span>(<span class="str">/&lt;meta[^&gt;]+property=["']og:image["'][^&gt;]+content=["']([^"']+)["']/i</span>)
-  <span class="kw">const</span> imgRes = <span class="kw">await</span> <span class="fn">fetch</span>(match[<span class="num">1</span>])
-  <span class="kw">const</span> imageBuffer = Buffer.<span class="fn">from</span>(<span class="kw">await</span> imgRes.<span class="fn">arrayBuffer</span>())
-  <span class="kw">if</span> (imageBuffer.length &lt; <span class="num">5000</span>) <span class="kw">return null</span>  <span class="cmt">// reject icons/placeholders</span>
-  <span class="kw">return</span> { done: <span class="kw">true</span>, imageBuffer, contentType }
-}</code></pre>
-
-<div class="callout">
-  <div class="callout-icon">💡</div>
-  <div class="callout-body">
-    <strong>Why og:image and not scraping the first &lt;img&gt; tag</strong>
-    <p>The <code>og:image</code> Open Graph tag is specifically set by editors for sharing — it is the image the publication CHOSE to represent the article. Nigerian newspapers set this to the editorial photo of the key person or event. It is more reliable than the first image in the HTML (which is often a logo or ad).</p>
-  </div>
-</div>
-
-<p><strong>AI illustration styles (fallback only):</strong> Restricted to two styles per Felix's specification:</p>
-<ul>
-  <li>Watercolour or oil paint — for hopeful, positive, energetic stories</li>
-  <li>Pencil sketch — for serious, analytical, cautionary stories</li>
-</ul>
-<p>Risograph, vector illustration, and editorial ink sketch were removed. They produced abstract art that did not visually communicate the story.</p>
-
-<h3 id="ch6-fabrication">The Fabrication Problem — Why RSS Summaries Are Not Enough</h3>
-
-<p>
-  When Gemini was only receiving RSS summaries (100-300 characters) per article, then being asked
-  to write 800+ words with named people, direct quotes, and specific African facts, it fabricated
-  content to fill the gap. This is not misbehaviour — it is a predictable response to impossible
-  constraints given insufficient source material.
-</p>
-
-<div class="callout warn">
-  <div class="callout-icon">⚠️</div>
-  <div class="callout-body">
-    <strong>Never ask an LLM to write detailed factual content from summaries</strong>
-    <p>A 150-character RSS summary can produce a 10-word accurate sentence. Ask for 800 words from
-    that same summary and the model will fill the remaining 790 words with plausible-sounding
-    invented content. The fabrication is proportional to the gap between source material and
-    required output length.</p>
-  </div>
-</div>
-
-<p><strong>The fix — <code>fetchContent()</code> for all RSS articles:</strong></p>
-
-<p>
-  <code>fetcher.js</code> already had <code>fetchContent()</code> — a full article extractor that
-  strips HTML, finds semantic content containers, and returns up to 4,000 characters of real text.
-  It was only being used for Felix's manual <code>#scout-editor</code> inputs.
-</p>
-
-<p>In <code>scout.js</code>, before calling <code>generateDigest()</code>:</p>
-
-<pre><code><span class="cmt">// Fetch full article text for each source article</span>
-<span class="kw">for</span> (<span class="kw">const</span> article <span class="kw">of</span> capped) {
-  <span class="kw">if</span> (article.link) {
-    <span class="kw">const</span> fullText = <span class="kw">await</span> <span class="fn">fetchContent</span>(article.link)
-    <span class="kw">if</span> (fullText) article.fullText = fullText
-  }
-}</code></pre>
-
-<p>In <code>gemini.js</code>, the articleList now includes real body text:</p>
-
-<pre><code>TITLE: AI Deepfakes Threaten Nigeria's Security, Group Warns
-SOURCE: Premium Times Nigeria
-URL: https://premiumtimesng.com/...
-SUMMARY: The Grassroots Mobilisation Initiative warned...
-FULL TEXT: [Article content]: The Grassroots Mobilisation Initiative (GMI), a civil society 
-group, on Thursday warned that artificial intelligence-generated disinformation poses a 
-critical threat to Nigeria's national security and social stability. GMI National Coordinator 
-Samaila Musa, while addressing journalists in Abuja, said... [4000 chars]</code></pre>
-
-<p>
-  With ~4,000 characters of real article text per source, Gemini has concrete facts, named people,
-  real quotes, and specific events to write from. Combined with the SOURCE RULES in the prompt
-  (write only from provided FULL TEXT; no invented facts; no fabricated quotes), the fabrication
-  problem is structurally eliminated.
-</p>
-
-<h3 id="ch6-twophase">The Two-Phase Async Architecture</h3>
+<h3 id="ch6-twophase">V2: The Two-Phase Async Architecture</h3>
 
 <p>
   The root insight that fixed everything: <strong>decouple discovery from publishing</strong>.
@@ -1366,6 +1260,114 @@ create index pending_posts_status_idx on pending_posts (status, created_at);</co
   <span class="kw">if</span> (error) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">`getPendingPosts failed: </span><span class="kw">${</span>error.message<span class="kw">}</span><span class="str">`</span>)
   <span class="kw">return</span> data || []
 }</code></pre>
+
+<h3 id="ch6-sourcephoto">V3: Source Article Photograph (Primary)</h3>
+
+<p>
+  <strong>Added in Session #5 (6 June 2026) — this is now the primary image strategy.</strong>
+</p>
+
+<p>
+  Every news article has an editorial photograph. When a Nigerian newspaper writes about the CBN
+  Governor announcing an interest rate cut, they publish a photograph of the governor at the
+  podium. That photograph is the correct image for the story. No AI generator can produce it.
+</p>
+
+<p>
+  The new image priority order:
+</p>
+
+<ol>
+  <li><strong>Source article og:image</strong> — fetch the real photograph from the source article URL</li>
+  <li><strong>AI illustration (paint/pencil only)</strong> — fall back to HuggingFace FLUX if no source image</li>
+</ol>
+
+<p>
+  Implementation in <code>complete.js</code> — <code>trySourceImage(sourceUrls)</code>:
+</p>
+
+<pre><code><span class="cmt">// Fetches the og:image meta tag from the source article</span>
+<span class="cmt">// Returns { done, imageBuffer, contentType } or null</span>
+<span class="kw">async function</span> <span class="fn">trySourceImage</span>(sourceUrls) {
+  <span class="kw">const</span> res = <span class="kw">await</span> <span class="fn">fetch</span>(sourceUrls[<span class="num">0</span>], { signal: AbortSignal.timeout(<span class="num">8000</span>) })
+  <span class="kw">const</span> html = <span class="kw">await</span> res.<span class="fn">text</span>()
+  <span class="kw">const</span> match = html.<span class="fn">match</span>(<span class="str">/&lt;meta[^&gt;]+property=["']og:image["'][^&gt;]+content=["']([^"']+)["']/i</span>)
+  <span class="kw">const</span> imgRes = <span class="kw">await</span> <span class="fn">fetch</span>(match[<span class="num">1</span>])
+  <span class="kw">const</span> imageBuffer = Buffer.<span class="fn">from</span>(<span class="kw">await</span> imgRes.<span class="fn">arrayBuffer</span>())
+  <span class="kw">if</span> (imageBuffer.length &lt; <span class="num">5000</span>) <span class="kw">return null</span>  <span class="cmt">// reject icons/placeholders</span>
+  <span class="kw">return</span> { done: <span class="kw">true</span>, imageBuffer, contentType }
+}</code></pre>
+
+<div class="callout">
+  <div class="callout-icon">💡</div>
+  <div class="callout-body">
+    <strong>Why og:image and not scraping the first &lt;img&gt; tag</strong>
+    <p>The <code>og:image</code> Open Graph tag is specifically set by editors for sharing — it is the image the publication CHOSE to represent the article. Nigerian newspapers set this to the editorial photo of the key person or event. It is more reliable than the first image in the HTML (which is often a logo or ad).</p>
+  </div>
+</div>
+
+<p><strong>AI illustration styles (fallback only):</strong> Restricted to two styles per Felix's specification:</p>
+<ul>
+  <li>Watercolour or oil paint — for hopeful, positive, energetic stories</li>
+  <li>Pencil sketch — for serious, analytical, cautionary stories</li>
+</ul>
+<p>Risograph, vector illustration, and editorial ink sketch were removed. They produced abstract art that did not visually communicate the story.</p>
+
+<h3 id="ch6-fabrication">V4: The Fabrication Fix — Why RSS Summaries Are Not Enough</h3>
+
+<p>
+  When Gemini was only receiving RSS summaries (100-300 characters) per article, then being asked
+  to write 800+ words with named people, direct quotes, and specific African facts, it fabricated
+  content to fill the gap. This is not misbehaviour — it is a predictable response to impossible
+  constraints given insufficient source material.
+</p>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>Never ask an LLM to write detailed factual content from summaries</strong>
+    <p>A 150-character RSS summary can produce a 10-word accurate sentence. Ask for 800 words from
+    that same summary and the model will fill the remaining 790 words with plausible-sounding
+    invented content. The fabrication is proportional to the gap between source material and
+    required output length.</p>
+  </div>
+</div>
+
+<p><strong>The fix — <code>fetchContent()</code> for all RSS articles:</strong></p>
+
+<p>
+  <code>fetcher.js</code> already had <code>fetchContent()</code> — a full article extractor that
+  strips HTML, finds semantic content containers, and returns up to 4,000 characters of real text.
+  It was only being used for Felix's manual <code>#scout-editor</code> inputs.
+</p>
+
+<p>In <code>scout.js</code>, before calling <code>generateDigest()</code>:</p>
+
+<pre><code><span class="cmt">// Fetch full article text for each source article</span>
+<span class="kw">for</span> (<span class="kw">const</span> article <span class="kw">of</span> capped) {
+  <span class="kw">if</span> (article.link) {
+    <span class="kw">const</span> fullText = <span class="kw">await</span> <span class="fn">fetchContent</span>(article.link)
+    <span class="kw">if</span> (fullText) article.fullText = fullText
+  }
+}</code></pre>
+
+<p>In <code>gemini.js</code>, the articleList now includes real body text:</p>
+
+<pre><code>TITLE: AI Deepfakes Threaten Nigeria's Security, Group Warns
+SOURCE: Premium Times Nigeria
+URL: https://premiumtimesng.com/...
+SUMMARY: The Grassroots Mobilisation Initiative warned...
+FULL TEXT: [Article content]: The Grassroots Mobilisation Initiative (GMI), a civil society 
+group, on Thursday warned that artificial intelligence-generated disinformation poses a 
+critical threat to Nigeria's national security and social stability. GMI National Coordinator 
+Samaila Musa, while addressing journalists in Abuja, said... [4000 chars]</code></pre>
+
+<p>
+  With ~4,000 characters of real article text per source, Gemini has concrete facts, named people,
+  real quotes, and specific events to write from. Combined with the SOURCE RULES in the prompt
+  (write only from provided FULL TEXT; no invented facts; no fabricated quotes), the fabrication
+  problem is structurally eliminated.
+</p>
 
 <!-- ═══════════════════ CHAPTER 7 ═══════════════════ -->
 <div class="chapter" id="ch7">
@@ -2286,7 +2288,7 @@ FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre
 <h3 id="ch12-scout">scout-agent/ — The Brain</h3>
 
 <p>
-  This is where the intelligence lives. Every six hours it wakes up, reads 23 RSS feeds, scores what
+  This is where the intelligence lives. Every six hours it wakes up, reads 25 RSS feeds, scores what
   it finds, fetches the full text of the most important articles, asks Gemini to write an 800-word
   Africa-first editorial, generates or fetches an image, and goes back to sleep. The blog publishes
   itself. That is the whole trick.
@@ -2296,7 +2298,7 @@ FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre
   ├── scout.js             ← Phase 1: the content brain (runs every 6h via cron-job.org)
   ├── complete.js          ← Phase 2: the publisher (runs every 30min via cron-job.org)
   │
-  ├── feeds.js             ← 23 RSS feeds — Scout's curated reading list
+  ├── feeds.js             ← 25 RSS feeds — Scout's curated reading list
   ├── gemini.js            ← Gemini 3.5 Flash: Africa-first editorial engine
   ├── memory.js            ← Supabase CRUD: deduplication, evergreen vocab, pending queue
   ├── publisher.js         ← POSTs finished posts to aitrends.ng /api/posts/create
@@ -2325,7 +2327,7 @@ FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre
 <ol>
   <li>Reads Felix's #scout-editor Slack channel for editorial hints</li>
   <li>Loads the self-updating evergreen vocabulary from Supabase</li>
-  <li>Fetches the latest 5 items from each of the 23 RSS feeds</li>
+  <li>Fetches the latest 5 items from each of the 25 RSS feeds</li>
   <li>Deduplicates against scout_memory (articles seen before are skipped)</li>
   <li>Scores each article with <code>evergreenScore()</code> — Africa terms score highest</li>
   <li>Detects clusters: articles from <em>different</em> sources sharing 2+ title keywords get a ×3 priority boost. If three Nigerian outlets all run a story about AI deepfakes on the same day, that story wins automatically.</li>
@@ -2345,17 +2347,17 @@ FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre
   <li>Sends a Slack notification to #aitrends-feed with the post title, excerpt, image, and a working "Read Post →" link (slug-based, not UUID)</li>
 </ol>
 
-<p><strong>feeds.js</strong> is Scout's curated reading list. There are now 23 feeds in four categories:</p>
+<p><strong>feeds.js</strong> is Scout's curated reading list. There are now 25 feeds in four categories:</p>
 
 <table>
   <tr><th>Category</th><th>Feeds (23 total)</th></tr>
-  <tr><td><strong>industry</strong> (10 feeds)</td><td>AIBase Nigeria ★, Africa AI News ★, iAfrica ★, AI in Nigeria ★, Techeconomy Nigeria ★, CIO Africa ★, Innovation Village ★, TechCabal, Techpoint Africa, Disrupt Africa, Ventureburn, Premium Times Nigeria, BusinessDay Nigeria, The Eagle Online, TechCrunch AI, VentureBeat AI, MIT Technology Review</td></tr>
-  <tr><td><strong>anthropic</strong> (1 feed)</td><td>Anthropic (GitHub-hosted RSS)</td></tr>
+  <tr><td><strong>industry</strong> (17 feeds)</td><td>AIBase Nigeria ★, Africa AI News ★, iAfrica ★, AI in Nigeria ★, Techeconomy Nigeria ★, CIO Africa ★, Innovation Village ★, TechCabal, Techpoint Africa, Disrupt Africa, Ventureburn, Premium Times Nigeria, BusinessDay Nigeria, The Eagle Online, TechCrunch AI, VentureBeat AI, MIT Technology Review</td></tr>
+  <tr><td><strong>anthropic</strong> (2 feeds)</td><td>Anthropic (GitHub-hosted RSS), Hacker News Anthropic filter (hnrss.org/newest?q=Anthropic&amp;points=10)</td></tr>
   <tr><td><strong>ai-models</strong> (4 feeds)</td><td>OpenAI, Google AI, HuggingFace, Google DeepMind</td></tr>
   <tr><td><strong>tools</strong> (2 feeds)</td><td>Hacker News (native RSS), DeepLearning.AI The Batch</td></tr>
 </table>
 
-<p>★ = AI-dedicated Nigerian/African portals added in Session #5. These are not general news sources. They specifically cover AI in Nigeria and Africa, which means Gemini receives genuinely Africa-first source material instead of global tech news with Africa awkwardly appended at the end.</p>
+<p>★ = AI-dedicated Nigerian/African portals added in Session #5. ★★ = HN Anthropic filter (<code>hnrss.org/newest?q=Anthropic&amp;points=10</code>) added in Session #6 — fixes the Anthropic category's MIN_ARTICLES=2 gap. These feeds are not general news sources. They specifically cover AI in Nigeria and Africa, which means Gemini receives genuinely Africa-first source material instead of global tech news with Africa awkwardly appended at the end.</p>
 
 <p><strong>gemini.js</strong> is the editorial brain. The prompt inside it encodes:</p>
 <ul>
@@ -2503,7 +2505,7 @@ FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre
 <strong style="color:var(--blue)">scout.js — Phase 1 (~90 seconds)</strong><br>
 │ felix.js → reads #scout-editor for editorial hints<br>
 │ memory.js → loads evergreen vocabulary from Supabase<br>
-│ feeds.js → 23 RSS feeds fetched (5 items each = up to 115 articles)<br>
+│ feeds.js → 25 RSS feeds fetched (5 items each = up to 125 articles)<br>
 │ memory.js → hasSeen() filters already-processed articles<br>
 │ scout.js → evergreenScore() scores each article (Africa terms win)<br>
 │ scout.js → addClusterScores() boosts articles covered by multiple sources<br>
@@ -2776,7 +2778,7 @@ Storage Bucket: post-images
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 6 June 2026 — Combined Session #5.
+    Last updated: 6 June 2026 — Session #6.
   </p>
 </div>
 
