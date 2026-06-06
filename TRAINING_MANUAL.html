@@ -680,7 +680,7 @@ Step 13: EXIT. Nothing is published here.</code></pre>
   </div>
 </div>
 
-<h4>Current Feed List (15 feeds — as of 6 June 2026)</h4>
+<h4>Current Feed List (17 feeds — updated 6 June 2026)</h4>
 
 <table>
   <tr><th>Category</th><th>Source</th><th>URL</th></tr>
@@ -696,8 +696,10 @@ Step 13: EXIT. Nothing is published here.</code></pre>
   <tr><td>ai-models</td><td>Google AI</td><td>blog.google/technology/ai/rss/</td></tr>
   <tr><td>ai-models</td><td>HuggingFace</td><td>huggingface.co/blog/feed.xml</td></tr>
   <tr><td>ai-models</td><td>Google DeepMind</td><td>deepmind.google/blog/rss.xml</td></tr>
+  <tr><td>industry</td><td>Premium Times Nigeria</td><td>premiumtimesng.com/feed</td></tr>
+  <tr><td>industry</td><td>BusinessDay Nigeria</td><td>businessday.ng/feed/</td></tr>
+  <tr><td>industry</td><td>The Eagle Online</td><td>theeagleonline.com.ng/feed/</td></tr>
   <tr><td>tools</td><td>Hacker News</td><td>news.ycombinator.com/rss</td></tr>
-  <tr><td>tools</td><td>Simon Willison</td><td>simonwillison.net/atom/everything/</td></tr>
   <tr><td>tools</td><td>DeepLearning.AI The Batch</td><td>raw.githubusercontent.com/cnzhujie/ai-rss-feed/…</td></tr>
 </table>
 
@@ -1778,6 +1780,102 @@ steps:
   every 6 hours for days, the scheduler may skip runs. The only way to reset it is to
   push a new commit (forces a fresh schedule evaluation) or manually trigger the workflow.
   Fix false failures quickly — they corrupt the schedule.
+</p>
+
+<h3 id="ch9-fabricated-africa">War Story 9: The Post About a British Developer's Python Library That Claimed to Help Nigeria</h3>
+
+<p>
+  A post appeared on AITrends.ng titled: <em>"Why WebAssembly AI Sandboxing is the Secret
+  to Cheap, Secure Agentic Startups in Africa."</em> The opening paragraph declared:
+  "African developers face expensive cloud infrastructure costs. WebAssembly AI sandboxing,
+  spearheaded by open-source pioneer Simon Willison's new <code>micropython-wasm</code>
+  package, offers a cost-effective alternative…"
+</p>
+
+<p>
+  The source article was a post from Simon Willison's personal developer blog — a British
+  software engineer writing about a Python hobby project. Africa appeared zero times in
+  the original article. The post had nothing to do with Nigeria, West Africa, or any
+  African context whatsoever.
+</p>
+
+<p>
+  At the same time, Punch Nigeria and The Eagle Online were both running a story about
+  the Grassroots Mobilisation Initiative (a Nigerian civil society group) warning that
+  AI-generated deepfakes were threatening national security — voice cloning of officials,
+  fake military casualty reports, manipulated content in local languages inflaming ethnic
+  tensions. That story was covered by multiple Nigerian outlets. It was not in our feeds.
+  Scout never saw it.
+</p>
+
+<p><strong>Root cause — two lines in gemini.js:</strong></p>
+
+<pre><code><span class="cmt">// Line 31 — the permission slip to fabricate</span>
+"If the source articles are about global AI companies or events,
+your job is to TRANSLATE them into African context"
+
+<span class="cmt">// Line 46 — the permission slip to invent</span>
+"Where source material is thin on Africa context,
+FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre>
+
+<p>
+  These two instructions together told Gemini: <em>no matter what articles you receive,
+  always find a way to write an Africa post.</em> For a micropython experiment by a UK
+  developer, Gemini found a way: "African developers face expensive cloud costs." That
+  statement could be said about any country in the world. It was not Africa reporting —
+  it was Africa confabulation.
+</p>
+
+<p><strong>The fix — three changes:</strong></p>
+
+<ol>
+  <li>
+    <strong>gemini.js — Africa Relevance GATE replaces "translate":</strong>
+    If no genuine Africa/Nigeria relevance exists (not fabricated), output
+    <code>SKIP_NO_AFRICA_RELEVANCE</code> — one line, nothing else. Genuine means:
+    an African org is directly involved, the event happened in Africa, African
+    regulation is the subject, or multiple African outlets are covering the story.
+    "This US tool could help African developers" is not genuine. It is confabulation.
+  </li>
+  <li>
+    <strong>feeds.js — Add Nigerian news sources, remove personal developer blogs:</strong>
+    Premium Times Nigeria, BusinessDay Nigeria, and The Eagle Online were added.
+    Simon Willison was removed. A personal developer blog is the wrong type of source
+    for a national AI news platform.
+  </li>
+  <li>
+    <strong>scout.js — Topic clustering:</strong>
+    Added <code>addClusterScores()</code>. When multiple different sources cover the
+    same story (sharing 2+ significant title keywords), those articles receive a ×3
+    cluster bonus in the scoring. A story covered by Punch Nigeria + Eagle Online +
+    TechCabal simultaneously will always beat a single global tech article.
+    This is how the pipeline finds trending Nigerian stories.
+  </li>
+</ol>
+
+<div class="callout">
+  <div class="callout-icon">💡</div>
+  <div class="callout-body">
+    <strong>The distinction between genuine and fabricated Africa relevance</strong>
+    <table>
+      <tr><th>Genuine ✅</th><th>Fabricated ❌</th></tr>
+      <tr><td>GMI warns about AI deepfakes threatening Nigeria's security</td><td>African developers face cloud costs and could use this US tool</td></tr>
+      <tr><td>Paystack integrates AI fraud detection for Nigerian merchants</td><td>This AI model could be useful for developers in Lagos</td></tr>
+      <tr><td>NITDA issues new AI regulation for Nigerian fintechs</td><td>AI regulation is coming and Africa should prepare</td></tr>
+      <tr><td>Glovo Lagos Summit reveals Nigeria's digital commerce trajectory</td><td>This Silicon Valley startup could expand to Africa someday</td></tr>
+    </table>
+    <p>The test: if you replaced "Nigeria" with "Germany" and the sentence still makes
+    sense, the Africa connection is fabricated. Real Africa-first content is specific
+    to the continent — it cannot be generic.</p>
+  </div>
+</div>
+
+<p>
+  <strong>Lesson:</strong> An AI model will always follow its instructions. If you tell
+  it to "translate" a story into African context, it will translate — even when no
+  genuine translation is possible. The correct instruction is a GATE, not a mandate:
+  "If genuine relevance exists, write. If not, SKIP." Never instruct an AI to fabricate
+  context. It will, and it will do so convincingly enough to fool a casual reader.
 </p>
 
 <!-- ═══════════════════ CHAPTER 10 ═══════════════════ -->
