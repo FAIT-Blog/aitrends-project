@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-05
+**Last Updated:** 2026-06-06
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -412,7 +412,7 @@ npm start   # runs index.js
 ---
 
 ## 7. MASTER TO-DO LIST
-*Updated: 2026-06-05*
+*Updated: 2026-06-06*
 *Status key: 🔴 Critical | 🟠 High | 🟡 Medium | 🔵 Low / Later*
 
 ### ✅ Completed — Round 1 (4 June 2026, morning)
@@ -443,6 +443,15 @@ npm start   # runs index.js
 - ✅ **Live end-to-end test passed** — Phase 1 queued "Funding the Future: How Core DAO, Talstack, and Apple-Approved AI Agents are Driving AI Innovation in Africa". Phase 2 generated image via HF in 3s, uploaded 94KB JPEG to Supabase Storage, published to aitrends.ng, notified Slack. Total Phase 2 time: 14 seconds.
 - ✅ **TechCabal Africa content confirmed working** — first article scored and selected: "Talstack Supports Nigerian Founders" — exactly the Africa-first content the mission requires.
 
+### ✅ Completed — Combined Session #5 (6 June 2026, early hours)
+- ✅ **Phase 1 false-failure fixed** — "Trigger Phase 2" step removed from `scout.yml`. GITHUB_TOKEN on scheduled runs cannot dispatch workflow_dispatch (HTTP 403) regardless of `permissions: actions: write`. cron-job.org already handles Phase 2 every 30 min reliably. False failures were causing GHA to skip Phase 1's own scheduled runs (00:00 UTC June 6 not fired).
+- ✅ **3 broken RSS feeds removed** — Mistral AI (no RSS found, all paths 404), hnrss.org Anthropic filter (hnrss.org 502), hnrss.org Tools filter (hnrss.org 502). Feed count: 17 → 15.
+- ✅ **Google DeepMind feed fixed** — URL changed from `/discover/blog/rss.xml` → `/blog/rss.xml` (200 confirmed).
+- ✅ **Hacker News tools feed replaced** — hnrss.org/frontpage → `news.ycombinator.com/rss` (native HN RSS, GET returns valid XML).
+- ✅ **Slack notification URL fixed** — `complete.js` image-regeneration branch was using UUID as post URL (`/post/{uuid}`). Now queries Supabase for slug before building URL. Root cause of "every Slack link broken" report.
+- ✅ **Post page 404 confirmed NOT a code bug** — `curl` tests confirm `/post/{slug}` returns HTTP 200 on Vercel. The broken links were all UUID-based URLs from the Session #3 regeneration batch.
+- ✅ **Phase 1 manually triggered + verified** — run 27051910295: ✓ success in 1m32s, 3 posts queued (industry, ai-models, tools), all 15 feeds fetched without errors.
+
 ### ✅ Completed — Combined Session #4 (5 June 2026, evening)
 - ✅ **Phase 1 → Phase 2 direct trigger** — `scout.yml` now fires `complete.yml` via `workflow_dispatch` immediately after every successful Phase 1 run (commit 8ada833). GHA's 15-min cron was running 0 times — posts were sitting in pending queue for hours. Direct trigger fixes this; posts now publish within minutes of being queued.
 - ✅ **`scout.yml` permissions fix** — added `permissions: actions: write` at workflow level (commit adae741). Without it, `GITHUB_TOKEN` returned HTTP 403 when Phase 1 tried to dispatch Phase 2 — Phase 1 marked itself as failed even though content was queued correctly.
@@ -461,8 +470,8 @@ npm start   # runs index.js
 - ✅ **`FAIT-Blog/aitrends-project` GitHub repo created** — hosts `CLAUDE.md`, `SESSION_LOG.html`, `TRAINING_MANUAL.html`.
 
 ### 🔴 Critical
-- [ ] **Fix individual post page 404s** — every Slack "Read Post →" link is broken. Route file `app/post/[slug]/page.tsx` exists and code is correct; Vercel not serving it. Investigate: check Vercel function logs, check slug format stored vs URL expected.
-- [ ] **Fix broken RSS feeds** — 5 feeds failing: Ventureburn (415), HuggingFace blog (429), Google DeepMind (404), Mistral AI (404), Hacker News (429). Need correct feed URLs.
+- [ ] **Add second Anthropic feed source** — anthropic category now has only 1 feed (official GitHub-hosted RSS). With `MIN_ARTICLES=2`, anthropic posts are being skipped every run. Need a second reliable source for that category to resume anthropic coverage.
+- [ ] **Add cron-job.org external trigger for Phase 1** — GHA's scheduled cron is unreliable (skipped the 00:00 UTC June 6 run after repeated failures). cron-job.org already reliably triggers Phase 2. Add a second cron-job.org entry to POST to the Phase 1 `workflow_dispatch` endpoint every 6 hours using the existing PAT. Manual step on cron-job.org dashboard.
 
 ### 🟠 High
 - [ ] **Verify new prompt produces focused single-topic posts** — check next published post: is it ONE story with h3 angle headings? Is the image avoiding the banned person+laptop+window pattern?
@@ -540,3 +549,4 @@ This session log is a teaching document. It demonstrates what real autonomous Cl
 | combined S1 | 4 June 2026 AM | both | Round 1: Africa-first Gemini prompt, 17 feeds (+4 Africa), markSeen retry, footer updated, taglines updated, About page fixed, project restructured into aitrends-project/, unified CLAUDE.md + SESSION_LOG.html written |
 | combined S2 | 4 June 2026 PM | both | Image pipeline rebuilt: Pollinations confirmed broken (x402 payment standard), plain `<img>` tags with onError fallback, two-phase async pipeline (Phase 1 queue / Phase 2 complete), 3 providers (HF/Fal/AI Horde) behind one env var, Supabase Storage `post-images` bucket, `pending_posts` table, HF FLUX.1-schnell confirmed working (HTTP 200, 3s generation), live end-to-end test passed — first Africa-first post with permanent Supabase image published |
 | combined S4 | 5 June 2026 PM | both | Reliability + share + docs: Phase 1 → Phase 2 direct trigger (8ada833), cron-job.org external trigger every 30 min (204 confirmed), scout.yml permissions fix — actions:write (adae741) fixes 403 on Phase 2 dispatch, ShareButtons component — X/WhatsApp/LinkedIn/Telegram/Copy Link (ed4fdd6), image regeneration complete; TRAINING_MANUAL Chapter 5 reliability section + War Stories 5–7 added (761aa41); 7 stale items corrected across CLAUDE.md + TRAINING_MANUAL (14e7426) |
+| combined S5 | 6 June 2026 AM | scout-agent | Automation assessment + fine-tune: Phase 2 confirmed running perfectly every 30 min via cron-job.org; Phase 1 had false failure (HTTP 403 on GITHUB_TOKEN dispatch, schedule trigger restriction) causing GHA to skip scheduled runs; fixed by removing Trigger Phase 2 step (d2d983d); fixed 3 broken feeds (Mistral removed, hnrss.org ×2 removed/replaced), fixed DeepMind URL (/discover→/blog), replaced hnrss.org Tools with news.ycombinator.com/rss; fixed Slack UUID URL bug in complete.js image-update path; confirmed post pages return 200 on Vercel (broken links were UUID-based from regeneration batch); Phase 1 manually triggered and verified ✓ (3 posts queued, all 15 feeds clean) |
