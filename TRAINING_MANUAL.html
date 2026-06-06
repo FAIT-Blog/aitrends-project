@@ -830,15 +830,29 @@ implication for African developers and builders."</span></code></pre>
   <tr><td><code>&lt;h3&gt;What's next&lt;/h3&gt;</code></td><td>Forward-looking conclusion</td><td>What to watch, what to expect. Closes with &lt;strong&gt;Bottom line for African builders:&lt;/strong&gt;</td></tr>
 </table>
 
-<div class="callout warn">
-  <div class="callout-icon">⚠️</div>
+<div class="callout">
+  <div class="callout-icon">💡</div>
   <div class="callout-body">
-    <strong>Do not add sections. Do not reorder. Do not add "People Also Ask."</strong>
-    <p>All four sections must address the SAME story throughout. If Gemini returns posts with more than four h3 sections, the structure prompt needs tightening — not new examples. Examples cause Gemini to follow the pattern literally. State the rule explicitly instead.</p>
+    <strong>SEO rule: h3 headings must be keyword-specific, not generic labels</strong>
+    <p>The four sections are thematic guides — they tell Gemini WHAT content goes in each section. But the h3 heading text itself must contain the primary keyword of the specific story.</p>
+    <p>✅ Correct: <code>&lt;h3&gt;Why Nigeria's AI Deepfake Threat Demands Immediate Action&lt;/h3&gt;</code></p>
+    <p>❌ Wrong: <code>&lt;h3&gt;Why it matters&lt;/h3&gt;</code> — generic, not searchable, SEO-neutral</p>
+    <p>Google ranks h3 headings as signals for topical relevance. Generic headings waste that signal.</p>
   </div>
 </div>
 
-<p><strong>Word count:</strong> 500–700 words. The previous 800-word minimum produced over-stuffed posts that felt like roundups. 500–700 forces focus.</p>
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>Do not add sections. Do not reorder. Always include People Also Ask.</strong>
+    <p>All four h3 sections + the People Also Ask block must address the SAME story throughout. If Gemini returns posts with more than four h3 sections (plus PAA), the structure prompt needs tightening — not new examples.</p>
+  </div>
+</div>
+
+<p><strong>Word count:</strong> 800 words minimum — hard SEO floor. This was originally set for SEO and must not be reduced. Posts under 800 words are too thin for Google to rank competitively in the AI news vertical.</p>
+
+<h4>People Also Ask — SEO Rationale</h4>
+<p>The PAA section (`&lt;h2&gt;People Also Ask&lt;/h2&gt;` followed by 2–3 Q&A pairs) is not decorative. Google indexes PAA content separately and uses it to populate the "People also ask" boxes in search results. A post that answers real search questions gets two ranking opportunities: the organic result and the PAA feature box. Never remove it.</p>
 
 <h3 id="ch4-dedup">Deduplication with scout_memory</h3>
 
@@ -2111,6 +2125,26 @@ FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre
     it should already be in your plan.</p>
   </div>
 </div>
+
+<h3>SEO Compliance Checklist — Verify After Every Change</h3>
+
+<p>Any change to the post pipeline or frontend must be checked against this list before shipping:</p>
+
+<table>
+  <tr><th>Element</th><th>Where</th><th>Status</th></tr>
+  <tr><td>800-word minimum in gemini.js</td><td>CONTENT RULES section</td><td>Hard SEO floor — never reduce</td></tr>
+  <tr><td>Primary keyword in title</td><td>gemini.js SEO RULES</td><td>Required every post</td></tr>
+  <tr><td>Primary keyword in first paragraph</td><td>gemini.js SEO RULES</td><td>Required every post</td></tr>
+  <tr><td>Primary keyword in all 4 h3 headings</td><td>gemini.js STRUCTURE</td><td>Headings must be keyword-specific, not generic</td></tr>
+  <tr><td>3–5 semantic terms in body</td><td>gemini.js SEO RULES</td><td>Required every post</td></tr>
+  <tr><td>People Also Ask section</td><td>gemini.js SEO RULES</td><td>2–3 Q&A pairs — never remove</td></tr>
+  <tr><td>Canonical URL per post</td><td>app/post/[slug]/page.tsx — alternates.canonical</td><td>Prevents duplicate content penalty</td></tr>
+  <tr><td>JSON-LD Article schema per post</td><td>app/post/[slug]/page.tsx — &lt;script type="application/ld+json"&gt;</td><td>Enables Google rich snippets</td></tr>
+  <tr><td>og:image with alt text</td><td>app/post/[slug]/page.tsx — openGraph.images</td><td>Required for social sharing</td></tr>
+  <tr><td>metadataBase set to canonical domain</td><td>app/layout.tsx</td><td>Must be aitrends.ng, not vercel.app</td></tr>
+  <tr><td>Root og:url, og:image, og:type</td><td>app/layout.tsx</td><td>Affects homepage social sharing</td></tr>
+  <tr><td>Dynamic sitemap includes all published posts</td><td>app/sitemap.ts</td><td>Submit to Google Search Console after adding new posts</td></tr>
+</table>
 
 <h3>The Template-First Rule — Do Not Code What You Have Not Specified</h3>
 

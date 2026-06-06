@@ -4768,6 +4768,72 @@ tools: ⏭️  Skipping — Gemini: no genuine Africa relevance in source articl
   </div>
 </div>
 
+
+<!-- COMBINED S5 · TURN 7 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">The word count is a minor. It was 800 due to SEO recommendations. And you have to make sure all that you have created, updated or optimised are SEO compliant. To be sure, go over them again now. If not, tighten them to be SEO compliant.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Full SEO audit — read gemini.js + aitrends.ng frontend files</h3>
+
+    <h4>gemini.js audit findings</h4>
+    <ul>
+      <li>❌ Word count changed to 500–700 by mistake — must be 800 minimum (SEO requirement)</li>
+      <li>❌ People Also Ask section removed — critical for Google's featured snippet PAA boxes</li>
+      <li>❌ SEO keyword placement rules removed — must restore: primary keyword in title + first paragraph + all h3 headings</li>
+      <li>❌ h3 headings are now generic labels ("Why it matters") — SEO requires keyword-specific headings per story</li>
+    </ul>
+
+    <h4>aitrends.ng frontend audit findings (Explore agent)</h4>
+    <ul>
+      <li>❌ post/[slug]/page.tsx: no canonical URL tag → duplicate content risk</li>
+      <li>❌ post/[slug]/page.tsx: no JSON-LD Article schema → not eligible for Google rich snippets</li>
+      <li>❌ post/[slug]/page.tsx: og:image missing alt text; twitter.images missing</li>
+      <li>❌ layout.tsx: metadataBase pointed to vercel.app not aitrends.ng (canonical domain)</li>
+      <li>❌ layout.tsx: no og:url, no default og:image, no og:title/description at root level</li>
+      <li>❌ layout.tsx: no explicit robots meta; no Twitter site handle</li>
+    </ul>
+
+    <h3>Fixes applied</h3>
+
+    <h4>Edit: gemini.js (commit 6817792)</h4>
+    <ul>
+      <li>Word count restored: 800 minimum (hard SEO floor)</li>
+      <li>h3 headings: generic → keyword-specific per story (e.g. "Why [CBN interest rate cut Nigeria] matters for Lagos businesses" not "Why it matters")</li>
+      <li>SEO rules restored: primary keyword in title + first paragraph + all 4 h3 headings; 3–5 semantic terms in body</li>
+      <li>People Also Ask restored: 2–3 Q&A pairs targeting real Nigerian/African search intent</li>
+      <li>Output format label updated: "800+ words + PAA + Bottom line for African builders"</li>
+    </ul>
+
+    <h4>Edit: app/post/[slug]/page.tsx (commit 060bc61)</h4>
+    <ul>
+      <li>Added <code>alternates: { canonical: url }</code> to generateMetadata()</li>
+      <li>Added og:image alt text and og:publishedTime and og:tags</li>
+      <li>Added twitter.images array</li>
+      <li>Added JSON-LD Article schema: headline, description, image, datePublished, author (AITrends.ng org), publisher, mainEntityOfPage, keywords</li>
+    </ul>
+
+    <h4>Edit: app/layout.tsx (commit 060bc61)</h4>
+    <ul>
+      <li>metadataBase updated to aitrends.ng (canonical domain, not vercel.app)</li>
+      <li>alternates.canonical added for root URL</li>
+      <li>robots: { index: true, follow: true } added explicitly</li>
+      <li>openGraph.url, openGraph.title, openGraph.description, openGraph.images (og-default.png 1200×630) added</li>
+      <li>twitter.site (@aitrends_ng), twitter.title, twitter.description added</li>
+    </ul>
+
+    <h4>Bash: git push — scout-agent 6817792, aitrends-ng 060bc61</h4>
+    <pre><code>scout-agent: [main 6817792] fix: restore full SEO compliance in gemini.js
+aitrends-ng: [main 060bc61] fix: SEO compliance — canonical, JSON-LD, og:url, robots, Twitter</code></pre>
+
+    <p>All SEO gaps identified by audit are now addressed. Vercel will auto-deploy aitrends-ng from 060bc61.</p>
+  </div>
+</div>
+
 </div>
 
 </div>
