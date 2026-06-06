@@ -315,7 +315,7 @@ li { margin-bottom: 6px; }
       <ul class="sub">
         <li><a href="#ch5-scout">Phase 1: Scout Workflow</a></li>
         <li><a href="#ch5-complete">Phase 2: Complete Workflow</a></li>
-        <li><a href="#ch5-reliability">GHA Cron Reliability &amp; The Three-Layer Fix</a></li>
+        <li><a href="#ch5-reliability">GHA Cron Reliability — Two External Triggers + One Fallback</a></li>
         <li><a href="#ch5-secrets">Secrets Management</a></li>
       </ul>
     </li>
@@ -680,6 +680,50 @@ Step 13: EXIT. Nothing is published here.</code></pre>
   </div>
 </div>
 
+<h4>Current Feed List (15 feeds — as of 6 June 2026)</h4>
+
+<table>
+  <tr><th>Category</th><th>Source</th><th>URL</th></tr>
+  <tr><td>industry</td><td>TechCabal</td><td>techcabal.com/feed/</td></tr>
+  <tr><td>industry</td><td>Techpoint Africa</td><td>techpoint.africa/feed/</td></tr>
+  <tr><td>industry</td><td>Disrupt Africa</td><td>disrupt-africa.com/feed/</td></tr>
+  <tr><td>industry</td><td>Ventureburn</td><td>ventureburn.com/feed/</td></tr>
+  <tr><td>industry</td><td>TechCrunch AI</td><td>techcrunch.com/category/artificial-intelligence/feed/</td></tr>
+  <tr><td>industry</td><td>VentureBeat AI</td><td>venturebeat.com/category/ai/feed/</td></tr>
+  <tr><td>industry</td><td>MIT Technology Review</td><td>technologyreview.com/feed/</td></tr>
+  <tr><td>anthropic</td><td>Anthropic</td><td>raw.githubusercontent.com/taobojlen/anthropic-rss-feed/…</td></tr>
+  <tr><td>ai-models</td><td>OpenAI</td><td>openai.com/news/rss.xml</td></tr>
+  <tr><td>ai-models</td><td>Google AI</td><td>blog.google/technology/ai/rss/</td></tr>
+  <tr><td>ai-models</td><td>HuggingFace</td><td>huggingface.co/blog/feed.xml</td></tr>
+  <tr><td>ai-models</td><td>Google DeepMind</td><td>deepmind.google/blog/rss.xml</td></tr>
+  <tr><td>tools</td><td>Hacker News</td><td>news.ycombinator.com/rss</td></tr>
+  <tr><td>tools</td><td>Simon Willison</td><td>simonwillison.net/atom/everything/</td></tr>
+  <tr><td>tools</td><td>DeepLearning.AI The Batch</td><td>raw.githubusercontent.com/cnzhujie/ai-rss-feed/…</td></tr>
+</table>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>RSS Feed Hygiene — Audit Regularly</strong>
+    <p>External RSS feeds break silently. A feed returning HTTP 404 or 502 causes a
+    <code>console.error</code> warning in Phase 1 and that source is simply skipped —
+    no crash, no alert. If enough feeds in a category fail, the category drops below
+    <code>MIN_ARTICLES=2</code> and is silently skipped entirely. Posts stop appearing
+    with no visible error.</p>
+    <p><strong>Feeds removed in Session #5 (6 June 2026):</strong></p>
+    <ul>
+      <li><strong>Mistral AI</strong> (<code>mistral.ai/feed.xml</code>) — removed. No RSS feed exists at any path. All common feed URL patterns return 404. Mistral discontinued their blog RSS.</li>
+      <li><strong>HN Anthropic filter</strong> (<code>hnrss.org/frontpage?q=anthropic+OR+claude</code>) — removed. hnrss.org returning 502 Bad Gateway consistently. The official Anthropic feed is sufficient for the anthropic category.</li>
+      <li><strong>HN Tools filter</strong> (<code>hnrss.org/frontpage?q=llm+OR+AI+…</code>) — replaced with <code>news.ycombinator.com/rss</code> (native HN RSS). hnrss.org was down; native RSS returns valid XML on GET requests. The <code>evergreenScore()</code> function filters for AI relevance.</li>
+    </ul>
+    <p><strong>Feed URL fixed in Session #5:</strong></p>
+    <ul>
+      <li><strong>Google DeepMind</strong> — URL changed from <code>/discover/blog/rss.xml</code> (404) to <code>/blog/rss.xml</code> (200 confirmed). DeepMind restructured their site.</li>
+    </ul>
+    <p>To audit feeds: run Phase 1 locally with verbose logging, or test each URL with <code>curl -sI &lt;url&gt;</code>. Fix broken URLs before they starve a category.</p>
+  </div>
+</div>
+
 <h3 id="ch4-evergreen">Evergreen Scoring Algorithm</h3>
 
 <p>
@@ -923,7 +967,7 @@ jobs:
 <pre><code><span class="kw">echo</span> "your-secret-value" | gh secret set SECRET_NAME --repo FAIT-Blog/scout-agent</code></pre>
 
 
-<h3 id="ch5-reliability">GHA Cron Reliability — And the Three-Layer Fix</h3>
+<h3 id="ch5-reliability">GHA Cron Reliability — Two External Triggers + One Fallback</h3>
 
 <p>
   GitHub Actions scheduled crons are <strong>not reliable at short intervals</strong>.
@@ -943,50 +987,31 @@ jobs:
   </div>
 </div>
 
-<p>The fix is <strong>three independent trigger layers</strong>:</p>
+<p>The fix is <strong>two independent external trigger layers</strong>, plus GHA as an unreliable fallback:</p>
 
 <table>
-  <tr><th>Layer</th><th>Mechanism</th><th>Interval</th><th>Reliability</th></tr>
-  <tr><td>1 (primary)</td><td>Phase 1 directly dispatches Phase 2 after queuing work</td><td>Immediately after Phase 1</td><td>✅ Guaranteed — same run</td></tr>
-  <tr><td>2 (backup)</td><td>cron-job.org external HTTP trigger</td><td>Every 30 min</td><td>✅ Reliable — dedicated server</td></tr>
-  <tr><td>3 (fallback)</td><td>GHA <code>schedule</code> cron</td><td>Every 15 min</td><td>⚠️ Unreliable</td></tr>
+  <tr><th>Layer</th><th>Mechanism</th><th>What it triggers</th><th>Schedule</th><th>Reliability</th></tr>
+  <tr><td>1 (primary)</td><td>cron-job.org external HTTP trigger</td><td>Phase 1 (scout.yml)</td><td>Every 6 hours</td><td>✅ Reliable — dedicated server</td></tr>
+  <tr><td>2 (primary)</td><td>cron-job.org external HTTP trigger</td><td>Phase 2 (complete.yml)</td><td>Every 30 min</td><td>✅ Reliable — dedicated server</td></tr>
+  <tr><td>3 (fallback)</td><td>GHA <code>schedule</code> cron</td><td>Both workflows</td><td>6h / 15 min</td><td>⚠️ Unreliable — may skip or delay</td></tr>
 </table>
 
-<h4>Layer 1 — Phase 1 Triggers Phase 2 Directly</h4>
-
-<p>At the end of <code>scout.yml</code>, after Phase 1 finishes, a step dispatches <code>complete.yml</code>
-immediately. The key requirement: the workflow needs <code>permissions: actions: write</code>
-or <code>GITHUB_TOKEN</code> returns HTTP 403.</p>
-
-<pre><code><span class="lang">scout.yml (relevant sections)</span>
-<span class="cmt"># At the workflow level — required for GITHUB_TOKEN to dispatch other workflows</span>
-permissions:
-  actions: write
-
-jobs:
-  run-scout:
-    steps:
-      <span class="cmt"># ... Phase 1 steps ...</span>
-
-      - name: Trigger Phase 2 immediately after Phase 1 queues work
-        if: <span class="kw">${{ success() && github.event.inputs.migrate_images != 'true' }}</span>
-        env:
-          GH_TOKEN: <span class="kw">${{ secrets.GITHUB_TOKEN }}</span>
-        run: |
-          gh workflow run complete.yml --repo <span class="kw">${{ github.repository }}</span></code></pre>
-
-<div class="callout">
-  <div class="callout-icon">💡</div>
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
   <div class="callout-body">
-    <strong>permissions: actions: write is not optional</strong>
-    <p>By default, <code>GITHUB_TOKEN</code> in a GHA workflow cannot dispatch other workflows.
-    The <code>gh workflow run</code> call silently returns HTTP 403 and the step fails.
-    Add <code>permissions: actions: write</code> at the top-level <code>jobs:</code>
-    block — not inside the step itself.</p>
+    <strong>Why "Phase 1 triggers Phase 2 directly" was removed</strong>
+    <p>An earlier version of <code>scout.yml</code> had a step that ran <code>gh workflow run complete.yml</code>
+    at the end of Phase 1. This worked when Phase 1 was triggered by <code>workflow_dispatch</code> (manual run).
+    It failed every time Phase 1 ran on the GHA <code>schedule</code> cron.</p>
+    <p><strong>Root cause:</strong> <code>GITHUB_TOKEN</code> on <em>schedule-triggered</em> runs cannot
+    dispatch <code>workflow_dispatch</code> events on other workflows, regardless of the
+    <code>permissions: actions: write</code> declaration. This is a GitHub security restriction to
+    prevent automated feedback loops from scheduled runs. The fix is to use an external PAT
+    (cron-job.org) instead. See War Story 8 for the full investigation.</p>
   </div>
 </div>
 
-<h4>Layer 2 — cron-job.org External Trigger</h4>
+<h4>Layer 1 &amp; 2 — cron-job.org External Triggers (Both Phases)</h4>
 
 <p>
   <a href="https://cron-job.org" target="_blank">cron-job.org</a> is a free external
@@ -1586,6 +1611,23 @@ jobs:
   This is a one-line fix but takes real debugging to find.
 </p>
 
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>Part 2 — The fix worked for manual runs only</strong>
+    <p>Adding <code>permissions: actions: write</code> fixed the 403 when Phase 1 was
+    triggered manually via <code>workflow_dispatch</code>. But when the GHA cron fired
+    Phase 1 on its regular schedule, the same HTTP 403 came back. The permission block
+    was in the YAML. The token was the same. Same repo, same workflow. Still 403.</p>
+    <p>The deeper restriction: <code>GITHUB_TOKEN</code> on <strong>schedule-triggered</strong>
+    runs cannot dispatch <code>workflow_dispatch</code> events, even with <code>actions: write</code>.
+    GitHub prevents this specifically to stop scheduled workflows from creating automated
+    dispatch loops. The fix only applies to <code>workflow_dispatch</code>-triggered parent runs.</p>
+    <p>The real solution: <strong>remove the step entirely</strong> and let cron-job.org handle
+    Phase 2 triggering via an external PAT, which has no such restriction. See War Story 8.</p>
+  </div>
+</div>
+
 <h3 id="ch9-pat-scope">War Story 7: The PAT That Got a 404 on a Repo That Exists</h3>
 
 <p>
@@ -1635,6 +1677,107 @@ Permissions → Actions: Read and write</code></pre>
   always set the <strong>Resource Owner to the organisation</strong>, not your
   personal account. The error codes (404 vs 401) are misleading — the repo
   isn't missing, the token just can't see it. This trips up everyone the first time.
+</p>
+
+<h3 id="ch9-schedule-dispatch">War Story 8: The Schedule That Made permissions:actions:write Useless</h3>
+
+<p>
+  Phase 1 had been marked as "failure" on every scheduled run for hours. The content was
+  being queued correctly — the Safaricom post got into <code>pending_posts</code>, Phase 2
+  picked it up, it published. But Phase 1's GHA run status showed ❌ failure every time.
+</p>
+
+<p>Checking the run log:</p>
+
+<pre><code>✅ Queued: "Why Safaricom's $6 Plan Proves Affordable Broadband Internet..."
+   Job ID: (none — HF generates in Phase 2)
+   Phase 2 will publish when image is ready.
+
+Triggering Phase 2 (complete.yml)...
+HTTP 403: Resource not accessible by integration
+(https://api.github.com/repos/FAIT-Blog/scout-agent/actions/workflows/complete.yml)
+##[error]Process completed with exit code 1.</code></pre>
+
+<p>
+  The <code>permissions: actions: write</code> fix from War Story 6 was already in place —
+  confirmed in the YAML. The step worked fine when Phase 1 was manually triggered.
+  But every time the GHA <strong>schedule</strong> cron fired Phase 1, the 403 came back.
+</p>
+
+<p>
+  <strong>Investigation:</strong> Tested by triggering Phase 1 manually via
+  <code>workflow_dispatch</code> immediately after a failed scheduled run.
+  The manual run succeeded — Phase 2 was dispatched. The scheduled run failed.
+  Same code. Same token. Same permissions block. Different result.
+</p>
+
+<p>
+  <strong>Root cause:</strong> This is a <strong>GitHub security policy</strong>,
+  not a configuration error. When a workflow is triggered by the <code>schedule</code>
+  event, GitHub restricts the <code>GITHUB_TOKEN</code> from dispatching
+  <code>workflow_dispatch</code> events on other workflows — even if
+  <code>permissions: actions: write</code> is declared. The restriction does not
+  apply to <code>workflow_dispatch</code>-triggered runs (manual triggers).
+</p>
+
+<p>
+  The reason for this restriction: it prevents automated schedule chains where
+  Workflow A triggers Workflow B which triggers Workflow C, creating runaway
+  execution loops that consume GHA minutes indefinitely.
+</p>
+
+<p><strong>Impact discovered:</strong></p>
+<ul>
+  <li>Phase 1 was marking itself as "failed" on every 6-hour cron run</li>
+  <li>After repeated failures, GHA's scheduler became unreliable — the 00:00 UTC run was skipped entirely</li>
+  <li>The content pipeline continued working (Phase 2 published posts via cron-job.org) but Phase 1 appeared broken</li>
+  <li>Every Slack "Scout Agent failed" alert was a false alarm — content was actually queued</li>
+</ul>
+
+<p><strong>Fix:</strong> Remove the "Trigger Phase 2" step from <code>scout.yml</code> entirely.
+cron-job.org was already triggering Phase 2 every 30 minutes. Phase 1's job is to generate
+content and queue it — not to manage Phase 2's trigger. Separating these responsibilities
+completely eliminates the false failures.</p>
+
+<pre><code><span class="lang">scout.yml — BEFORE (broken on schedule runs)</span>
+permissions:
+  actions: write          <span class="cmt"># works for workflow_dispatch, useless for schedule</span>
+
+steps:
+  <span class="cmt"># ... Phase 1 steps ...</span>
+
+  - name: Trigger Phase 2 immediately after Phase 1 queues work
+    if: <span class="kw">${{ success() }}</span>
+    env:
+      GH_TOKEN: <span class="kw">${{ secrets.GITHUB_TOKEN }}</span>
+    run: gh workflow run complete.yml --repo <span class="kw">${{ github.repository }}</span>
+    <span class="cmt"># ↑ HTTP 403 on every schedule-triggered run</span></code></pre>
+
+<pre><code><span class="lang">scout.yml — AFTER (clean, no false failures)</span>
+<span class="cmt"># permissions block removed — nothing in this workflow needs it</span>
+
+steps:
+  <span class="cmt"># ... Phase 1 steps ...</span>
+
+  <span class="cmt"># "Trigger Phase 2" step removed entirely.</span>
+  <span class="cmt"># Phase 2 is triggered by cron-job.org every 30 minutes.</span>
+  <span class="cmt"># Posts wait at most 30 minutes between queuing and publishing — acceptable.</span></code></pre>
+
+<p>
+  <strong>Lesson:</strong> <code>GITHUB_TOKEN</code> on <code>schedule</code>-triggered
+  runs <strong>cannot dispatch workflow_dispatch events on other workflows, period</strong>.
+  No permissions block fixes this — it is a GitHub policy.
+  If you need reliable cross-workflow triggering from scheduled runs, use an external PAT
+  (cron-job.org, a webhook, a GitHub App token). Do not fight this restriction.
+  Remove the step and use the external trigger you already have.
+</p>
+
+<p>
+  <strong>Bonus lesson:</strong> Repeated "failed" runs on a scheduled workflow will cause
+  GHA's cron scheduler to become unreliable for that workflow. If Phase 1 is failing
+  every 6 hours for days, the scheduler may skip runs. The only way to reset it is to
+  push a new commit (forces a fresh schedule evaluation) or manually trigger the workflow.
+  Fix false failures quickly — they corrupt the schedule.
 </p>
 
 <!-- ═══════════════════ CHAPTER 10 ═══════════════════ -->
@@ -1753,8 +1896,9 @@ Permissions → Actions: Read and write</code></pre>
 <h3>The Project Documentation Hierarchy</h3>
 
 <pre><code>aitrends-project/
-  CLAUDE.md          ← Master spec. Read at start of EVERY session.
-  SESSION_LOG.html   ← Master log. Append at end of EVERY session.
+  CLAUDE.md              ← Master spec. Read at start of EVERY session.
+  SESSION_LOG.html       ← Master log. Append EVERY turn, verbatim.
+  TRAINING_MANUAL.html   ← This file. Update after EVERY session with new lessons.
 
   aitrends.ng/
     AITRENDS_NG_SPEC.md      ← Frontend-specific reference
@@ -1763,6 +1907,27 @@ Permissions → Actions: Read and write</code></pre>
   scout-agent/
     SCOUT_AGENT_SPEC.md    ← Scout-specific reference
     SESSION_LOG_SCOUT.html ← Archived scout-only sessions</code></pre>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>Three documents. All three. Every session.</strong>
+    <p>After any session that changes code, fixes a bug, discovers a new pattern, or
+    resolves a mystery:</p>
+    <ol>
+      <li><strong>SESSION_LOG.html</strong> — append every turn verbatim (Felix's exact words,
+      every tool call, every output, every error and fix, every commit hash)</li>
+      <li><strong>CLAUDE.md</strong> — update the to-do list (mark items done, add new ones),
+      add a completed session block, update the session history table row, update Last Updated date</li>
+      <li><strong>TRAINING_MANUAL.html</strong> — update any chapter whose technical content
+      is now stale (architecture diagrams, feed lists, reliability tables), add new War Stories
+      for any investigation that required real debugging, add new patterns discovered</li>
+    </ol>
+    <p>You should not need to be told. When you commit scout-agent or aitrends.ng changes,
+    the documentation update is part of the same session. Do not wait for "update documents" —
+    it should already be in your plan.</p>
+  </div>
+</div>
 
 <!-- ═══════════════════ CHAPTER 12 ═══════════════════ -->
 <div class="chapter" id="ch12">
