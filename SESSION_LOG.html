@@ -4675,6 +4675,99 @@ So guide me / give a template that I can feed you with so you can code/build wha
   </div>
 </div>
 
+
+<!-- COMBINED S5 · TURN 6 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">[Attached: AItrends Specifications.pdf — completed editorial template]
+
+Question 1 (job portals included by mistake). Replacements: AIBase Nigeria, Africa AI News, iAfrica, TechCabal, Techpoint Africa, AI in Nigeria (AIN Network), Technext, Techeconomy, CIO Africa, Innovation Village.
+
+Question 2: Option C — Merge.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Specification summary read from all 6 PDF pages</h3>
+
+    <p><strong>Section 1 — Sources:</strong> 11 listed; 4 were job portals (by mistake). Felix confirmed replacement with 10 AI-focused Nigerian/African portals. Also confirmed Option C (merge with existing feeds).</p>
+
+    <p><strong>Section 2 — Post structure:</strong> ONE story. Feature-style: headline → opening paragraph → 2–3 sub-headings exploring SAME topic → closing. Always quote source. 500–700 words. Analysis-first.</p>
+
+    <p><strong>Section 3 — Images:</strong> PRIMARY: photograph of person/event/building/product fetched from source article. FALLBACK: AI illustration in paint colour or pencil sketch ONLY. VERY VERY IMPORTANT.</p>
+
+    <p><strong>Section 4 — Example post:</strong> CBN interest rate cut. Structure: "Why it matters:" → "What happened:" → "The bigger picture:" → "What's next:". Image: paint colour/pencil sketch of CBN Governor at MPC briefing.</p>
+
+    <p><strong>Section 5 — Reject:</strong> Anything not AI-related + Nigeria/Africa-connected.</p>
+
+    <h3>Plan written and approved. Implementation:</h3>
+
+    <h4>Bash: curl -sI — RSS feed tests for all 8 new portals</h4>
+    <pre><code>AIBase Nigeria      https://aibase.ng/feed/              → HTTP 200 ✅ valid RSS
+Africa AI News      https://www.africaainews.com/feed     → HTTP 200 ✅ valid RSS (Substack)
+iAfrica             https://iafrica.com/feed/             → HTTP 200 ✅ valid RSS
+AI in Nigeria       https://aiinnigeria.com/feed/         → HTTP 200 ✅ valid RSS
+Technext            https://technext.ng/feed/             → HTTP 403 ❌ blocked — skipped
+Techeconomy Nigeria https://techeconomy.ng/feed/          → HTTP 200 ✅ valid RSS
+CIO Africa          https://cioafrica.co/feed/            → HTTP 200 ✅ valid RSS
+Innovation Village  https://innovation-village.com/feed/  → HTTP 200 ✅ valid RSS
+Result: 7 of 8 added. Technext excluded.</code></pre>
+
+    <h4>Edit: feeds.js — Change A</h4>
+    <p>Added 7 new AI-focused portals at the top of the industry category. All 16 existing feeds kept (Option C merge). Total feeds: 16 → 23.</p>
+
+    <h4>Edit: gemini.js — Change B (3 targeted edits)</h4>
+    <p><strong>B1 — Word count:</strong> "Minimum 800 words" → "500–700 words — do not go below 500 or above 700"</p>
+    <p><strong>B2 — Structure:</strong> Replaced flexible h3 angles with EXACTLY 4 fixed sections:</p>
+    <pre><code>&lt;h3&gt;Why it matters&lt;/h3&gt; — analysis first, impact for Nigeria/Africa
+&lt;h3&gt;What happened&lt;/h3&gt; — facts, who/what/where/when, direct quote
+&lt;h3&gt;The bigger picture&lt;/h3&gt; — context, ecosystem implications
+&lt;h3&gt;What's next&lt;/h3&gt; — forward-looking, Bottom line for African builders</code></pre>
+    <p>Removed "People Also Ask" section.</p>
+    <p><strong>B3 — Image styles:</strong> Restricted from 4 styles (watercolour, vector, editorial ink, risograph) to 2 only: watercolour/oil paint OR pencil sketch. Removed 3 "GOOD EXAMPLES" (were causing Gemini to repeat same patterns literally). Mood rule: paint for hopeful stories, pencil for serious/cautionary.</p>
+
+    <h4>Edit: complete.js — Change C (source image extraction)</h4>
+    <p>Added trySourceImage(sourceUrls) function: fetches og:image meta tag from source article URL, downloads the real photograph. New image priority: (1) source article photo → (2) AI illustration. Falls back to HF FLUX only when no og:image found or fails (too small &lt; 5KB rejected as icon). Skipped for image-regeneration jobs. No new dependencies — uses node-fetch already in package.json.</p>
+
+    <h4>Bash: git commit b473367 + push</h4>
+    <pre><code>[main b473367] feat: editorial spec — new feeds, 4-section structure, source photo first
+ 3 files changed, 122 insertions(+), 51 deletions(-)</code></pre>
+
+    <h3>Phase 1 test — run 27058608442</h3>
+    <pre><code>Fetching: AIBase Nigeria ✅
+Fetching: Africa AI News ✅
+Fetching: iAfrica ✅
+Fetching: AI in Nigeria ✅
+Fetching: Techeconomy Nigeria ✅
+Fetching: CIO Africa ✅
+Fetching: Innovation Village ✅
+...all 23 feeds...
+Found 48 fresh articles across all feeds
+
+Scores: [ev:1 cl:18] Pan-African Research Consortium Lau...
+🔗 Cluster detected: 1 article(s) share this story across sources
+→ ✅ Queued: "The Banking AI Blueprint: Why South Africa's Financial Giant..."
+   Trending terms: standard bank, nedbank, openai
+
+tools: ⏭️  Skipping — Gemini: no genuine Africa relevance in source articles</code></pre>
+
+    <h3>Phase 2 test — run 27058701833 (09:30 UTC)</h3>
+    <pre><code>Checking source article for photograph (og:image)...
+📸 Source photo found (39KB) — skipping AI generation
+📦 Stored in Supabase Storage (39KB)
+✅ Published: https://aitrends-ng.vercel.app/post/the-banking-ai-blueprint-why-south-africas-financial-giants-are-winning-the-cont</code></pre>
+
+    <h3>Published post verification (WebFetch)</h3>
+    <p>Headline: "The Banking AI Blueprint: Why South Africa's Financial Giants Are Winning the Continent's First Real AI Race"</p>
+    <p>H3 sections in order: Why it matters / What happened / The bigger picture / What's next ✅</p>
+    <p>Cover image: real 39KB photograph from source article — no abstract AI art ✅</p>
+    <p>Africa-first opening: "For founders and developers in Lagos, Nairobi, and Johannesburg..." ✅</p>
+    <p>⚠️ No direct quote found in this post — source article may not have had one</p>
+    <p>⚠️ Word count ~750 — slightly above 700 target; prompt constraint in place, will calibrate</p>
+  </div>
+</div>
+
 </div>
 
 </div>
