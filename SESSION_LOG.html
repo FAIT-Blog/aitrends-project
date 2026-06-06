@@ -4834,6 +4834,47 @@ aitrends-ng: [main 060bc61] fix: SEO compliance — canonical, JSON-LD, og:url, 
   </div>
 </div>
 
+
+<!-- COMBINED S5 · TURN 8 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">The "People Also Ask" feature is usually a selection of titles of the related posts that is from one of the published posts that the website is hosting. So it's a recommendation of similar or related posts that is hyperlinked. So that when a viewer/visitor clicks on any of them, they take you to another post/page. If you understand me, let's do ours that way so that it will not be counting from our "word count" that is part of our editorial/post.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>Understood. "People Also Ask" on AITrends.ng = internal related post links — hyperlinked titles from other published posts on the site. Outside the article body. Does not count toward word count.</p>
+
+    <h3>Plan written and approved. Two changes:</h3>
+    <ol>
+      <li>Remove the Q&amp;A PAA block from the Gemini prompt (was inside article body, counted toward word count)</li>
+      <li>Replace the "More in {category}" PostCard grid on the post page with a "People Also Ask" section of hyperlinked titles + excerpts</li>
+    </ol>
+
+    <h4>Read: app/post/[slug]/page.tsx — confirmed existing patterns</h4>
+    <p>getRelated() already fetches 3 related posts from same category (no new Supabase call needed). Link from next/link already imported. CSS variables var(--surface), var(--border), var(--blue), var(--muted) already in use.</p>
+
+    <h4>Edit: scout-agent/gemini.js</h4>
+    <p>Removed from SEO RULES: "After the four sections, add a People Also Ask block: &lt;h2&gt;People Also Ask&lt;/h2&gt; 2-3 Q&amp;A pairs..." Removed reference from STRUCTURE closing line and output format label. 800-word minimum and all keyword placement rules unchanged.</p>
+
+    <h4>Edit: aitrends.ng/app/post/[slug]/page.tsx</h4>
+    <p>Replaced the "More in {category}" PostCard card grid with a "People Also Ask" box (dark surface background, bordered, rounded). Shows each related post as:</p>
+    <ul>
+      <li>Title → hyperlink in var(--blue), navigates to /post/{slug}</li>
+      <li>Excerpt → muted text below the title</li>
+      <li>Divider line between items (not after the last one)</li>
+    </ul>
+    <p>Removed unused PostCard import.</p>
+
+    <h4>Bash: git commit + push</h4>
+    <pre><code>scout-agent: [main 21f84bc] fix: remove Q&amp;A People Also Ask from article body
+aitrends-ng: [main 0ed408f] feat: People Also Ask — internal related post links</code></pre>
+
+    <p>Vercel will auto-deploy aitrends-ng from 0ed408f. The People Also Ask section will appear on all post pages immediately after deployment, showing up to 3 related post links from the same category.</p>
+  </div>
+</div>
+
 </div>
 
 </div>
