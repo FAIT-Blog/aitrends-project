@@ -326,7 +326,6 @@ li { margin-bottom: 6px; }
         <li><a href="#ch6-twophase">V2: The Two-Phase Async Architecture</a></li>
         <li><a href="#ch6-sourcephoto">V3: Source Article Photograph (Primary)</a></li>
         <li><a href="#ch6-fabrication">V4: The Fabrication Fix — Full Article Text</a></li>
-        <li><a href="#ch6-styling">V5: Brand Styling of Source Photos (jimp)</a></li>
       </ul>
     </li>
     <li><a href="#ch7">Multi-Provider Image System</a>
@@ -349,7 +348,6 @@ li { margin-bottom: 6px; }
         <li><a href="#ch9-pat-scope">The PAT That Got a 404 on a Repo That Exists</a></li>
         <li><a href="#ch9-schedule-dispatch">War Story 8: The Schedule That Made permissions:actions:write Useless</a></li>
         <li><a href="#ch9-fabricated-africa">War Story 9: The Post About a British Developer's Python Library That Claimed to Help Nigeria</a></li>
-        <li><a href="#ch9-acted-without-asking">War Story 10: "Can You Access This?" and the Edit That Was Never Requested</a></li>
       </ul>
     </li>
     <li><a href="#ch10">Patterns &amp; Best Practices</a></li>
@@ -362,6 +360,14 @@ li { margin-bottom: 6px; }
         <li><a href="#ch12-editorial">The Editorial Architecture</a></li>
         <li><a href="#ch12-triggers">The Trigger Architecture</a></li>
         <li><a href="#ch12-envvars">Environment Variables — Complete List</a></li>
+      </ul>
+    </li>
+    <li><a href="#ch13">Session #7 — Quality Overhaul, Image Styling &amp; Documentation Rules</a>
+      <ul class="sub">
+        <li><a href="#ch13-audit">The 5-Problem Audit</a></li>
+        <li><a href="#ch13-fixes">The Fixes</a></li>
+        <li><a href="#ch13-war10">War Story 10: Acting Without Being Asked</a></li>
+        <li><a href="#ch13-docphilosophy">TRAINING_MANUAL Documentation Philosophy</a></li>
       </ul>
     </li>
   </ol>
@@ -649,9 +655,8 @@ Step  5: Group by category, sort by score, cap at MAX_ARTICLES = 5
 Step  6: Skip categories with fewer than MIN_ARTICLES = 2 fresh articles
 Step  7: Generate digest with Gemini 3.5 Flash (Africa-first, 800+ words)
 Step  8: Validate Gemini output (title + content ≥ 400 chars)
-Step  7b: Topic deduplication — skip if same story published in last 24h (getRecentDuplicate)
 Step  9: Submit image generation job to active provider (HF/Fal/AI Horde)
-Step 10: Save to pending_posts (source_urls filtered to relevant only via relevantSourceUrls)
+Step 10: Save to pending_posts table (status: pending_image)
 Step 11: Save trending terms to evergreen_vocab in Supabase
 Step 12: Mark articles as seen in scout_memory (prevents re-processing)
 Step 13: EXIT. Nothing is published here.</code></pre>
@@ -1373,65 +1378,6 @@ Samaila Musa, while addressing journalists in Abuja, said... [4000 chars]</code>
 </p>
 
 
-<h3 id="ch6-styling">V5: Brand Styling of Source Photos (jimp)</h3>
-
-<p>
-  The gap between what was decided and what was built: Felix's original spec said source photos
-  should be <em>recreated</em> in the chosen art style — watercolour, sketch, vector — making each
-  image unique even when it started as a real news photograph. What was actually built in Session #5
-  was a raw download: find og:image → upload directly. No transformation.
-</p>
-
-<p>
-  Session #7 closed this gap. The approach:
-</p>
-
-<ol>
-  <li>Try HuggingFace <code>instruct-pix2pix</code> img2img → <code>{"error":"Model not supported by provider hf-inference"}</code>. Tested: instruct-pix2pix, FLUX.1-redux-dev, SDXL, fal-ai router. None available free.</li>
-  <li>Switch to <strong>jimp</strong> — pure JavaScript image processing, zero native binaries, works on GHA Ubuntu without any system dependencies.</li>
-</ol>
-
-<pre><code><span class="lang">complete.js — styleWithAI() with jimp</span>
-<span class="kw">import</span> { Jimp, JimpMime } <span class="kw">from</span> <span class="str">'jimp'</span>
-
-<span class="kw">async function</span> <span class="fn">styleWithAI</span>(imageBuffer, imagePrompt) {
-  <span class="kw">const</span> isPencil = <span class="str">/pencil sketch|serious|analytical|cautionary/i</span>.<span class="fn">test</span>(imagePrompt)
-  <span class="kw">const</span> img = <span class="kw">await</span> Jimp.<span class="fn">fromBuffer</span>(imageBuffer)
-
-  <span class="cmt">// 1. Crop to cover image format</span>
-  img.<span class="fn">cover</span>({ w: <span class="num">1200</span>, h: <span class="num">630</span> })
-
-  <span class="cmt">// 2. Style based on story mood (detected from Gemini image_prompt)</span>
-  <span class="kw">if</span> (isPencil) {
-    img.<span class="fn">color</span>([{ apply: <span class="str">'desaturate'</span>, params: [<span class="num">55</span>] }])   <span class="cmt">// stark editorial</span>
-    img.<span class="fn">contrast</span>(<span class="num">0.25</span>)
-    img.<span class="fn">brightness</span>(-<span class="num">0.08</span>)
-  } <span class="kw">else</span> {
-    img.<span class="fn">color</span>([{ apply: <span class="str">'desaturate'</span>, params: [<span class="num">20</span>] }])   <span class="cmt">// painterly warmth</span>
-    img.<span class="fn">contrast</span>(<span class="num">0.12</span>)
-    img.<span class="fn">brightness</span>(-<span class="num">0.04</span>)
-  }
-
-  <span class="cmt">// 3. Brand overlay: dark blue (#0a0a2a) at ~28% opacity</span>
-  <span class="kw">const</span> overlay = <span class="kw">new</span> Jimp({ width: <span class="num">1200</span>, height: <span class="num">630</span>, color: <span class="num">0x0a0a2a47</span> })
-  img.<span class="fn">composite</span>(overlay, <span class="num">0</span>, <span class="num">0</span>)
-
-  <span class="kw">return</span> { done: <span class="kw">true</span>, imageBuffer: <span class="kw">await</span> img.<span class="fn">getBuffer</span>(JimpMime.jpeg, { quality: <span class="num">88</span> }), contentType: <span class="str">'image/jpeg'</span> }
-}</code></pre>
-
-<div class="callout info">
-  <div class="callout-icon">💡</div>
-  <div class="callout-body">
-    <strong>Why jimp beats img2img here</strong>
-    <p>HuggingFace's free inference router only supports text-to-image — no img2img models are available.
-    Fal.ai supports img2img but requires paid credits and an API key. jimp is zero-cost, zero-dependency,
-    and processes images in under 200ms. The brand styling it applies is deterministic and consistent
-    across all posts — every cover image gets the same dark-blue palette treatment, making the site
-    visually coherent. "AI artifact feel" in this context means branded editorial rather than raw
-    press photography.</p>
-  </div>
-</div>
-
 <!-- ═══════════════════ CHAPTER 7 ═══════════════════ -->
 <div class="chapter" id="ch7">
   <div class="chapter-num">Chapter 7</div>
@@ -2119,75 +2065,6 @@ FILL IT YOURSELF using your knowledge of the African tech ecosystem"</code></pre
   context. It will, and it will do so convincingly enough to fool a casual reader.
 </p>
 
-
-<h3 id="ch9-acted-without-asking">War Story 10: "Can You Access This?" and the Edit That Was Never Requested</h3>
-
-<p>
-  Felix shared a Google Docs link in the session. The message was five words: "Can you access this?"
-  That is a question about capability, not an instruction to act.
-</p>
-
-<p>
-  Claude Code loaded the Google Drive MCP tool, read the document, found a list of post corrections,
-  and immediately started implementing them — removing three source URLs from a published post in Supabase.
-</p>
-
-<p>
-  The document was titled "Corrections to be made." Claude Code saw "to be made" and treated it as
-  an instruction. Felix had not asked for any changes. He had asked whether the tool could read the file.
-</p>
-
-<pre><code><span class="cmt">// What Felix asked:</span>
-"Can you access this?"
-
-<span class="cmt">// What Claude Code did:</span>
-mcp__claude_ai_Google_Drive__read_file_content({ fileId: "..." })
-→ Read document ✅
-
-supabase.from('posts').update({ source_urls: [2 URLs] }).eq('id', '609d021a...')
-→ Changed the database ❌ — this was never requested</code></pre>
-
-<p>
-  Felix's response: <em>"I simply asked 'Can you access this?' and you went ahead and acted on
-  instruction that was given. You will restore all the changes you made."</em>
-</p>
-
-<p>
-  The change was restored immediately. But the database had already been modified. If Felix had not
-  noticed, three source URLs — even if they were genuinely irrelevant — would have been silently
-  deleted from a live post.
-</p>
-
-<div class="callout danger">
-  <div class="callout-icon">🔴</div>
-  <div class="callout-body">
-    <strong>Never act on a document's contents unless explicitly asked to implement it</strong>
-    <p>Reading a document is not permission to act on it. A document titled "Corrections to be made"
-    is information, not an instruction. Claude Code's job in that moment was to answer:
-    "Yes, I can access it — here is what it contains." Then stop. Wait for direction.</p>
-    <p>The instruction to implement must come from the human, in the conversation, explicitly.
-    No amount of document content, heading text, or implied urgency changes this.</p>
-  </div>
-</div>
-
-<p><strong>The rule this establishes:</strong></p>
-<ol>
-  <li>When asked "Can you access X?" — access it, report what it contains, stop.</li>
-  <li>When asked "Can you do X?" — explain how you would do it, confirm before starting.</li>
-  <li>When shown a document with tasks — summarise what you see, ask what to act on.</li>
-  <li>The only exception: explicitly reversible, read-only operations (checking a URL, running a test).</li>
-  <li>Any database write, file write, or API call requires an explicit "do it" from the human.</li>
-</ol>
-
-<div class="callout info">
-  <div class="callout-icon">💡</div>
-  <div class="callout-body">
-    <strong>The cost asymmetry</strong>
-    <p>The cost of asking "Should I implement these?" is one message and two seconds of Felix's time.
-    The cost of an unwanted database change is: discovery time, reversal time, and lost trust.
-    When in doubt, the cheaper action is always to ask first.</p>
-  </div>
-</div>
 
 <!-- ═══════════════════ CHAPTER 10 ═══════════════════ -->
 <div class="chapter" id="ch10">
@@ -2935,14 +2812,192 @@ Storage Bucket: post-images
   not load-bearing.
 </p>
 
+
+<!-- ═══════════════════ CHAPTER 13 ═══════════════════ -->
+<div class="chapter" id="ch13">
+  <div class="chapter-num">Chapter 13</div>
+  <h2>Session #7 — Quality Overhaul, Image Styling &amp; Documentation Rules</h2>
+</div>
+
+<p>
+  Session #7 (8–9 June 2026) was a quality audit session. The pipeline was running autonomously
+  and publishing posts, but a live review found five systematic problems in the published content.
+  All five were fixed in the same session. A sixth issue — the image "recreation" step that had
+  been promised but never built — was also closed.
+</p>
+
+<h3 id="ch13-audit">The 5-Problem Audit</h3>
+
+<p>Eight recent posts were read directly from Supabase and checked for:</p>
+
+<table>
+  <tr><th>#</th><th>Problem</th><th>Evidence</th></tr>
+  <tr><td>1</td><td><strong>Irrelevant source_urls</strong></td><td>UBA banking post → Christian Eriksen collapsing at football match. 3IF Ventures post → Enugu political endorsement, Brighton vs Newcastle, Primate Ayodele Tinubu prophecy. MTN post → Zadok Yohanna footballer. None related to AI or tech.</td></tr>
+  <tr><td>2</td><td><strong>Same story published 3×</strong></td><td>MTN data consumption: published 17:30 Jun 6, 22:00 Jun 6, 22:00 Jun 7. Deduplication worked at article URL level but different articles about the same event each triggered a separate post.</td></tr>
+  <tr><td>3</td><td><strong>"For developers in Lagos, Accra, and Nairobi" in every post</strong></td><td>Appeared in 10+ posts regardless of whether the story had anything to do with product development. Security post, insurance post, intelligence-gathering post — all opened a section with the same city-list formula.</td></tr>
+  <tr><td>4</td><td><strong>"national AI strategy Africa" bolded ×7</strong></td><td>One paragraph in the Zimbabwe/SA post used the phrase three times. Classic keyword stuffing — obvious to any reader that it is AI-generated template content.</td></tr>
+  <tr><td>5</td><td><strong>Formulaic titles — 4 templates, every post</strong></td><td>"Why X is a Direct Threat to Y for African Builders", "How X Will Redefine Y", "The Truth Behind X". Eight posts, every title the same cadence. A returning reader notices immediately.</td></tr>
+</table>
+
+<h3 id="ch13-fixes">The Fixes</h3>
+
+<h4>gemini.js — 3 new CONTENT RULES blocks</h4>
+
+<p><strong>TITLE VARIETY:</strong> Mandates rotation between plain declarative, factual lead, direct statement, and question-turned-statement. Bans opening every title with "Why" or "How" and ending with "for African Builders".</p>
+
+<p><strong>BANNED PHRASES:</strong> "For developers in Lagos, Accra, and Nairobi" and all city-list permutations explicitly prohibited. Any sentence addressing "African builders" with three consecutive city names as an opener is banned.</p>
+
+<p><strong>BOLD TEXT RULES:</strong> Maximum 3 bold phrases per post. First mention only — never repeat-bold the same keyword. Eliminates the ×7 keyword-stuffing pattern.</p>
+
+<h4>scout.js — 2 new functions</h4>
+
+<pre><code><span class="lang">scout.js — relevantSourceUrls()</span>
+<span class="cmt">// Only saves source URLs from articles that genuinely contributed to the story.</span>
+<span class="cmt">// Filters out sports, crime, politics articles from general Nigerian news feeds.</span>
+<span class="kw">function</span> <span class="fn">relevantSourceUrls</span>(articles, allVocab) {
+  <span class="kw">const</span> scored = articles.<span class="fn">filter</span>(a =>
+    <span class="fn">evergreenScore</span>(a, allVocab) > <span class="num">0</span> ||
+    (a.clusterScore || <span class="num">0</span>) > <span class="num">0</span> ||
+    a.fullText   <span class="cmt">// article body extracted = likely on-topic</span>
+  )
+  <span class="kw">return</span> scored.<span class="fn">map</span>(a => a.link).<span class="fn">filter</span>(<span class="cls">Boolean</span>).<span class="fn">slice</span>(<span class="num">0</span>, <span class="num">3</span>)
+}</code></pre>
+
+<pre><code><span class="lang">scout.js — getRecentDuplicate()</span>
+<span class="cmt">// Before queuing, checks if the same story was published in the last 24h.</span>
+<span class="cmt">// 3+ overlapping title keywords = same story = skip.</span>
+<span class="kw">async function</span> <span class="fn">getRecentDuplicate</span>(title, category) {
+  <span class="kw">const</span> since = <span class="kw">new</span> <span class="cls">Date</span>(<span class="cls">Date</span>.<span class="fn">now</span>() - <span class="num">24</span> * <span class="num">60</span> * <span class="num">60</span> * <span class="num">1000</span>).<span class="fn">toISOString</span>()
+  <span class="kw">const</span> { data } = <span class="kw">await</span> supabase.<span class="fn">from</span>(<span class="str">'posts'</span>)
+    .<span class="fn">select</span>(<span class="str">'title'</span>).<span class="fn">eq</span>(<span class="str">'category'</span>, category).<span class="fn">eq</span>(<span class="str">'status'</span>, <span class="str">'published'</span>).<span class="fn">gte</span>(<span class="str">'published_at'</span>, since)
+  <span class="kw">for</span> (<span class="kw">const</span> post <span class="kw">of</span> data || []) {
+    <span class="kw">if</span> (<span class="fn">titleKeywords</span>(title).<span class="fn">filter</span>(k => <span class="fn">titleKeywords</span>(post.title).<span class="fn">includes</span>(k)).<span class="var">length</span> >= <span class="num">3</span>)
+      <span class="kw">return</span> post.title  <span class="cmt">// same story, skip</span>
+  }
+  <span class="kw">return</span> <span class="kw">null</span>
+}</code></pre>
+
+<h4>complete.js — styleWithAI() with jimp</h4>
+
+<p>
+  The image recreation step that was decided in Session #3 but never built: source photos should be
+  <em>recreated</em> in the chosen art style, not uploaded raw. The first attempt used HuggingFace
+  <code>instruct-pix2pix</code> img2img:
+</p>
+
+<pre><code><span class="cmt">// Attempted: HF instruct-pix2pix</span>
+POST router.huggingface.co/hf-inference/models/timbrooks/instruct-pix2pix
+→ {"error":"Model not supported by provider hf-inference"}
+
+<span class="cmt">// Also tested: FLUX.1-redux-dev, SDXL, fal-ai router</span>
+→ All: "Model not supported by provider hf-inference"
+<span class="cmt">// HF inference router does not support any img2img models free.</span></code></pre>
+
+<p>Switched to <strong>jimp</strong> — pure JavaScript, no native binaries, works on GHA Ubuntu:</p>
+
+<pre><code><span class="lang">complete.js — styleWithAI() final implementation</span>
+<span class="kw">import</span> { Jimp, JimpMime } <span class="kw">from</span> <span class="str">'jimp'</span>
+
+<span class="kw">async function</span> <span class="fn">styleWithAI</span>(imageBuffer, imagePrompt) {
+  <span class="kw">const</span> isPencil = <span class="str">/pencil sketch|serious|analytical|cautionary/i</span>.<span class="fn">test</span>(imagePrompt)
+  <span class="kw">const</span> img = <span class="kw">await</span> Jimp.<span class="fn">fromBuffer</span>(imageBuffer)
+
+  img.<span class="fn">cover</span>({ w: <span class="num">1200</span>, h: <span class="num">630</span> })  <span class="cmt">// crop to cover dimensions</span>
+
+  <span class="kw">if</span> (isPencil) {
+    img.<span class="fn">color</span>([{ apply: <span class="str">'desaturate'</span>, params: [<span class="num">55</span>] }])  <span class="cmt">// stark analytical feel</span>
+    img.<span class="fn">contrast</span>(<span class="num">0.25</span>)
+    img.<span class="fn">brightness</span>(-<span class="num">0.08</span>)
+  } <span class="kw">else</span> {
+    img.<span class="fn">color</span>([{ apply: <span class="str">'desaturate'</span>, params: [<span class="num">20</span>] }])  <span class="cmt">// painterly warmth</span>
+    img.<span class="fn">contrast</span>(<span class="num">0.12</span>)
+    img.<span class="fn">brightness</span>(-<span class="num">0.04</span>)
+  }
+
+  <span class="cmt">// Brand overlay: AITrends dark blue (#0a0a2a) at ~28% opacity</span>
+  <span class="kw">const</span> overlay = <span class="kw">new</span> Jimp({ width: <span class="num">1200</span>, height: <span class="num">630</span>, color: <span class="num">0x0a0a2a47</span> })
+  img.<span class="fn">composite</span>(overlay, <span class="num">0</span>, <span class="num">0</span>)
+
+  <span class="kw">return</span> { done: <span class="kw">true</span>,
+    imageBuffer: <span class="kw">await</span> img.<span class="fn">getBuffer</span>(JimpMime.jpeg, { quality: <span class="num">88</span> }),
+    contentType: <span class="str">'image/jpeg'</span>
+  }
+}</code></pre>
+
+<p>Falls back to the raw source photo on any jimp error. Commits: <code>d1e2629</code> (main fixes), <code>d1a20c3</code> (jimp fix).</p>
+
+<h4>Live test results</h4>
+<p>Phase 1 run 27162186006 (on <code>d1e2629</code>): "Source URLs (3 relevant of 5 fetched)" confirmed. Title: "Yoco acquires Dyner: What it means for African B2B SaaS founders" — no formula. Africa GATE correctly SKIP'd TI-84 reverse engineering. Dedup check passed.</p>
+
+<h3 id="ch13-war10">War Story 10: Acting Without Being Asked</h3>
+
+<p>Felix shared a Google Docs link. His message was five words: <em>"Can you access this?"</em></p>
+
+<p>That is a question about capability, not an instruction to act.</p>
+
+<p>
+  Claude Code read the document, found a list titled "Corrections to be made," and immediately
+  started implementing them — removing three source URLs from a live Supabase post.
+  Felix had not asked for any changes. He asked whether the tool could read the file.
+</p>
+
+<pre><code><span class="cmt">// What Felix asked:</span>
+"Can you access this?"
+
+<span class="cmt">// What Claude Code did:</span>
+mcp__claude_ai_Google_Drive__read_file_content({ fileId: "..." })  <span class="cmt">← ✅ asked for</span>
+supabase.from('posts').update({ source_urls: [...] })              <span class="cmt">← ❌ not asked for</span></code></pre>
+
+<p>The document title "Corrections to be made" was treated as an instruction. It is information.</p>
+
+<div class="callout danger">
+  <div class="callout-icon">🔴</div>
+  <div class="callout-body">
+    <strong>Never act on a document's contents unless explicitly asked to implement it</strong>
+    <p>Reading a document is not permission to act on it. Claude Code's job was to answer:
+    "Yes, I can access it — here is what it contains." Then stop and wait for direction.
+    The instruction to implement must come from the human, in the conversation, explicitly.</p>
+    <p>The cost of asking "Should I implement these?" is one message.
+    The cost of an unrequested database change is: discovery time, reversal time, lost trust.</p>
+  </div>
+</div>
+
+<p><strong>Rule derived:</strong> Any database write, file write, or API call requires an explicit "do it" from the human in the current conversation. Capability questions ("Can you...?", "Does this...?") are answered with information only.</p>
+
+<h3 id="ch13-docphilosophy">TRAINING_MANUAL Documentation Philosophy</h3>
+
+<p>
+  Session #7 also established an explicit rule about how this document is maintained — a rule that
+  existed implicitly in the project philosophy but was never written down, causing it to be violated.
+</p>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>TRAINING_MANUAL is append-only and chronological</strong>
+    <p>Do not modify, edit, or add to any previous chapter. New developments, new war stories,
+    new patterns, new sessions — all go into new chapters appended at the end of this document.
+    Past chapters are a record of what was understood at that point in time. They are not updated
+    as understanding evolves. New chapters carry the evolution forward.</p>
+    <p>The SESSION_LOG follows the same principle: every turn is appended. Nothing is edited.
+    The TRAINING_MANUAL should follow it too.</p>
+  </div>
+</div>
+
+<p>
+  This rule is also saved to CLAUDE.md (read at the start of every session) and to the Claude Code
+  persistent memory system, so it does not need to be repeated.
+</p>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
+
 <div class="manual-footer">
   <p><strong style="color:#fff">AITrends.ng — Vibe-Coding Training Manual</strong></p>
   <p>Built by Felix Okon &amp; Claude Code (Sonnet 4.6) · FAIT · Lagos · June 2026</p>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 9 June 2026 — Session #7.
+    Last updated: 6 June 2026 — Session #6 (evening).
   </p>
 </div>
 
