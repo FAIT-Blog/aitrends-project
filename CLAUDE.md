@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-09
+**Last Updated:** 2026-06-10
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -422,7 +422,7 @@ npm start   # runs index.js
 ---
 
 ## 7. MASTER TO-DO LIST
-*Updated: 2026-06-09*
+*Updated: 2026-06-10*
 *Status key: 🔴 Critical | 🟠 High | 🟡 Medium | 🔵 Low / Later*
 
 ### ✅ Completed — Round 1 (4 June 2026, morning)
@@ -490,15 +490,24 @@ npm start   # runs index.js
 - ✅ **Forced phrases banned from Gemini prompt** — BANNED PHRASES block added: "For developers in Lagos, Accra, and Nairobi" and all city-list permutations explicitly prohibited. Was appearing in 10+ posts as an AI template filler. (d1e2629)
 - ✅ **Title variety enforced in Gemini prompt** — TITLE VARIETY block: mandates rotation between plain declarative, factual lead, direct statement, question-turned-statement. Ban on starting every title with "Why/How" or ending with "for African Builders". (d1e2629)
 - ✅ **Bold keyword stuffing restricted** — BOLD TEXT RULES block: max 3 bold phrases per post, first mention only, never repeat-bold the primary keyword. Eliminates "**national AI strategy Africa** ×7" pattern. (d1e2629)
-- ✅ **Image recreation implemented (jimp)** — `styleWithAI()` added to complete.js. When source photo found: crop to 1200×630, desaturate (20% watercolour / 55% pencil), contrast boost, brand dark-blue overlay (#0a0a2a ~28% opacity). HF img2img (instruct-pix2pix) was attempted first but "Model not supported by provider hf-inference". Switched to pure-JS jimp — no native binaries, works on GHA Ubuntu. Falls back to raw source photo on any failure. (d1a20c3)
+- ⚠️ **Image recreation (jimp) — failed, reverted in Session #8** — jimp composite() produced solid black images (rgb(1,2,10) on every pixel). JPEG pixels loaded without alpha channel; jimp treated as fully transparent; overlay×0.28 + bg×0 = black. Reverted to raw source photos. (d1a20c3 broken → 9ca0dea reverted)
 - ✅ **Phase 1 live test confirmed** — run 27162186006: 60 fresh articles, 3 of 5 source URLs relevant, Yoco/Dyner queued with non-formulaic title, tools SKIP'd correctly.
+
+### ✅ Completed — Combined Session #8 (10 June 2026)
+- ✅ **Black images fixed** — `styleWithAI()` removed from complete.js entirely. jimp composite produced rgb(1,2,10) solid black (JPEG alpha=0 bug). Raw source editorial photos now used directly. (9ca0dea)
+- ✅ **Asterisks fixed** — `publisher.js` strips `**text**` → `text` before every publish. gemini.js FORMATTING RULES: explicit ban on `**markdown**` in HTML content. (9ca0dea)
+- ✅ **Gemini simplified — capability test** — full 150-line analytical digest prompt replaced with a 2-task prompt: (1) rephrase title, (2) accurate rewrite matching source word count. No 800-word minimum. No synthesis. No fabrication. Single article passed to generateDigest(). (9ca0dea)
+- ✅ **Source URL reduced to 1** — `sourceUrls = [topArticle[0].link]`. Exactly the article Gemini rewrote from. No more WWDC articles credited to Nedbank stories. (9ca0dea)
+- ✅ **Mobile responsive** — HeroPost stacks to single column at ≤640px. NavBar scrolls horizontally on mobile. Media query in globals.css, class names on HeroPost.tsx and NavBar.tsx. (e916384)
 
 ### 🔴 Critical
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
-- [ ] **HN Anthropic feed intermittency (monitor)** — hnrss.org returning 502 on roughly half of Phase 1 runs (confirmed Jun 6, Jun 8). When down, anthropic category falls to 1 feed and MIN_ARTICLES=2 blocks publishing. Africa GATE correctly rejects Anthropic IPO/valuation news (no genuine Africa angle). Need a stable second Anthropic source — TechCrunch Anthropic tag or a newsletter RSS.
-- [ ] **Old posts need retroactive cleanup** — 55+ posts published before Session #7 still have: irrelevant source_urls in DB, forced "For developers in Lagos, Accra, and Nairobi" in body, formulaic titles, bold keyword stuffing. New code only fixes future posts. Bulk Supabase content edit needed for old posts.
-- [ ] **Google Doc corrections pending** — Felix shared a doc with specific post edits (internal link corrections, source URL fixes for specific posts). Awaiting Felix's explicit go-ahead before touching post body content.
-- [ ] **Nigerian feeds are general news** — Premium Times/BusinessDay/Eagle Online pull in sports, politics, entertainment. `relevantSourceUrls()` now filters these from source_urls attribution, but they can still influence article scoring. Monitor published posts — if non-AI content keeps appearing, narrow to AI-specific Nigerian feeds only.
+- [ ] **Assess Gemini capability after simplification** — Next published post will be the first through the simplified "accurate rewrite" prompt. Key questions: Does the title get rephrased correctly? Does the body match source word count? Is there any fabrication? Read the next 3–5 posts carefully before deciding whether to keep Gemini or switch models.
+- [ ] **HN Anthropic feed intermittency (monitor)** — hnrss.org returning 502 on roughly half of Phase 1 runs. Need a stable second Anthropic source.
+- [ ] **Old posts need retroactive cleanup** — 67 posts published before Session #8 still have: markdown asterisks in body (new publisher.js strip only applies to future posts), irrelevant source_urls, keyword stuffing. Bulk Supabase content edit needed.
+- [ ] **Google Doc corrections pending** — Felix shared a doc with specific post edits. Awaiting explicit go-ahead.
+- [ ] **Nigerian feeds are general news** — Still influencing article scoring even though source_urls now only shows 1 relevant URL. Monitor whether published topics drift into general business/politics.
+- [ ] **Fabrication in ai-models category** — Sierra Leone education post fabricated from DeepMind voice translation sources (Session #8 audit). ai-models category articles rarely have genuine Africa relevance — Africa GATE should reject them more aggressively. May need category-specific GATE threshold.
 - ✅ **Editorial specification implemented** (b473367) — 7 new AI-focused Nigerian/African feeds; 4-section structure; source article og:image as primary; AI illustration as fallback.
 - ✅ **Fabrication root cause fixed** (3fd9671) — fetchContent() now called for all RSS articles (4000 chars real text to Gemini). SOURCE RULES added to prompt.
 - ⚠️ **Assess post quality on new posts** — Yoco/Dyner post (8 Jun) is the first through the fully updated pipeline. Verify: non-formulaic title ✅ (confirmed from log). Body: no forced phrases, no bold stuffing, source URLs (3 relevant). Read the live post to confirm quality.
@@ -587,3 +596,4 @@ This session log is a teaching document. It demonstrates what real autonomous Cl
 | combined S5 | 6 June 2026 | scout-agent + aitrends.ng | Comprehensive pipeline overhaul across 10 turns: Phase 1 false-failure fixed (HTTP 403 schedule restriction, d2d983d); 3 broken feeds fixed; Slack UUID URL bug fixed; cron-job.org Phase 1 trigger added + confirmed; Africa content SKIP rejection gate (0585682); 7 new AI-focused Nigerian/African portals (b473367); 4-section editorial structure (Why it matters/What happened/Bigger picture/What's next); source article og:image as primary image; AI illustration restricted to paint/pencil only; full SEO compliance pass — canonical URLs, JSON-LD Article schema, og:url/robots/Twitter handle (6817792, 060bc61); "People Also Ask" correctly built as frontend internal link component not Gemini Q&A (21f84bc, 0ed408f); topic clustering (addClusterScores); fabrication root cause fixed — fetchContent() now called for all RSS articles giving Gemini 4000 chars of real text per article + SOURCE RULES added to prompt (3fd9671); TRAINING_MANUAL chapters 4/5/6/9/11 updated throughout session |
 | combined S6 | 6 June 2026 (afternoon) | scout-agent + docs | Second Anthropic feed added: hnrss.org/newest?q=Anthropic&points=10 (feed count 24→25). Comprehensive TRAINING_MANUAL audit: 12 errors fixed (Ch4/Ch6/Ch12 feed counts, Ch6 TOC broken links, Chapter 6 sections reordered chronologically V1→V2→V3→V4, footer). Automation status check: 4 posts published automatically 6 June (09:30/11:30/12:00/17:30 UTC), no failed deployments, Vercel healthy. hnrss.org intermittency noted (502 at 17:00 Phase 1). |
 | combined S7 | 8–9 June 2026 | scout-agent | Post quality audit (5 issues: irrelevant source_urls, 3× duplicate MTN story, forced phrases, bold keyword stuffing ×7, formulaic titles). Image format gap diagnosed (never built the "recreate source photo" step). Full fix: relevantSourceUrls(), getRecentDuplicate(), BANNED PHRASES + TITLE VARIETY + BOLD TEXT RULES in prompt, styleWithAI() with jimp (d1e2629, d1a20c3). Phase 1 live test confirmed. Claude Code also actioned a Google Doc without being asked — immediately caught, change restored. |
+| combined S8 | 10 June 2026 | scout-agent + aitrends.ng | Site audit: black images (jimp composite broken), asterisks visible in posts, Sierra Leone fabrication, source URL mismatch, mobile layout. Fixes: remove styleWithAI() (raw source photos), strip **markdown** in publisher.js, simplify Gemini to 2-task accurate-rewrite prompt + single article, 1 source URL, mobile responsive (HeroPost single-column + NavBar scroll). (9ca0dea, e916384) |

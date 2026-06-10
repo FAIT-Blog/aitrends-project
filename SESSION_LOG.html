@@ -5387,6 +5387,117 @@ Processing category: tools (3 articles)
 </div>
 
 
+
+<div class="project-divider">
+  <h2>Combined Session #8 &mdash; 10 June 2026</h2>
+  <p>scout-agent · aitrends.ng · site audit · image fix · Gemini simplification · mobile</p>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Audit the site and give latest report since the last assessment</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — full site audit</div>
+  <div class="bubble">
+    <p>Pulled Phase 1 run history, 10 most recent posts from Supabase with quality metrics, jimp styling log from Phase 2, and full body of the Yoco/Dyner post.</p>
+
+    <h4>Pipeline: 8 Phase 1 runs since Jun 8, all success. 67 total published posts.</h4>
+    <p><strong>What improved:</strong></p>
+    <ul>
+      <li>✅ "For developers in Lagos, Accra, and Nairobi" — completely absent from all 10 posts</li>
+      <li>✅ Source URL count: 3 relevant of 5 confirmed on every run</li>
+      <li>✅ jimp styling: logs show "🎨 Source photo recreated as AI illustration (21KB)" on 4 posts</li>
+      <li>✅ Dedup working for sequentially-spaced Phase 1 runs</li>
+    </ul>
+    <p><strong>Still broken:</strong></p>
+    <ol>
+      <li>Source URLs still partly irrelevant — <code>a.fullText</code> filter passes ANY reachable article including xenophobic attacks, police arrests, WWDC Apple news</li>
+      <li>Bold repeat — "Yoco acquires Dyner" bolded twice in same post</li>
+      <li>Concurrent Phase 1 dedup gap — two credit posts published same timestamp (23:00 and 23:02 Jun 8 both queued before either published)</li>
+      <li>Source-story mismatch — Nedbank sourced from WWDC articles; same WWDC articles credited to two different posts</li>
+      <li><strong>Fabrication returned</strong> — "AI in Sierra Leone Education" post sourced from DeepMind voice translation and Gemma 4 articles. Opening: "a recent development out of Sierra Leone shows AI-powered learning can accelerate student math progress" — not in any of the sources. Gemini invented it.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">[Screenshots attached showing black images on all recent posts, asterisks showing literally in post bodies, mobile layout issues]
+
+2. Bold repeat is showing asterisks on the site. the asterisks is the issue and not the boldness. If the boldness is an issue that brings asterisks, let's do away with it.
+"jimp image styling confirmed working" How? All the recent posts (7) are without images just black. Go check properly.
+Since the posts are marred with errors all the time, I suspect that Gemini model is not capable of delivering what is required. but before we do away with it, we should simplify our demand and by asking it to replicate the relevant AI information by reversing the title/heading and preserve 100% the body/main message. And we should not push for 800 words but let it copy and paste the same number of words it found on the source website. So the minimum will be determined by source even if it's 50 words it doesn't matter. What we are looking for is the accuracy of Gemini delivery exactly what it copied from the source. I want to determine its capacity to do simple tasks and to decide if to be relied upon.
+I want to point out that the site is not optimized for mobile properly.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — diagnosis</div>
+  <div class="bubble">
+    <h4>Black images — root cause found</h4>
+    <pre><code># Download cover 62 (jimp-styled) and sample pixels
+node → Jimp.read('/tmp/test_cover.jpg')
+  (0,0)    → rgb(1,2,10)
+  (600,315) → rgb(1,2,10)
+  (1199,629) → rgb(1,2,10)
+  (300,150) → rgb(1,2,10)
+  (900,450) → rgb(1,2,10)</code></pre>
+    <p>Every pixel is rgb(1,2,10) — near-black. The jimp composite() was applying the overlay (#0a0a2a47) and multiplying the background contribution by zero (JPEG pixels loaded without alpha channel, treated as fully transparent by jimp's blend engine). Result: overlay×0.28 + background×0 = near-black solid colour. All 7 recent jimp-styled covers are valid JPEGs at 21KB but pure black.</p>
+
+    <h4>Asterisks — root cause</h4>
+    <p>Post body stored with markdown <code>**bold**</code> syntax. Post page uses <code>dangerouslySetInnerHTML</code> — raw HTML render. Markdown bold is not HTML; asterisks display literally.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — implementing all fixes</div>
+  <div class="bubble">
+    <h4>Fix 1: complete.js — remove styleWithAI() entirely</h4>
+    <p>jimp import removed. <code>styleWithAI()</code> function deleted. When source photo found: use it directly, no transformation.</p>
+
+    <h4>Fix 2: publisher.js — strip markdown asterisks</h4>
+    <pre><code>const cleanContent = (post.content || '').replace(/\*\*([^*]+)\*\*/g, '$1')</code></pre>
+    <p>Applied before every POST to /api/posts/create. All <code>**text**</code> stripped to plain text.</p>
+
+    <h4>Fix 3: gemini.js — simplified prompt (capability test)</h4>
+    <p>Entire complex 150-line prompt replaced with a simple two-task prompt:</p>
+    <ol>
+      <li>TITLE: Rephrase the source title — same meaning, different wording</li>
+      <li>CONTENT: Accurate rewrite from FULL TEXT — match source word count, no minimum, no inflation, no fabrication</li>
+    </ol>
+    <p>Removed: 800-word minimum, 4-section structure, SEO rules, synthesis requirements, editorial stance, Africa-first mandate expansion. Kept: Africa Relevance GATE, no-markdown rule.</p>
+
+    <h4>Fix 4: scout.js — single article, single source URL</h4>
+    <pre><code>const topArticle = [capped[0]]
+const digest = await generateDigest(topArticle, category, felixInputs)
+const sourceUrls = topArticle[0]?.link ? [topArticle[0].link] : []</code></pre>
+    <p>Gemini now receives exactly 1 article. Source_urls = exactly 1 URL. Eliminates WWDC-credited-to-Nedbank problem permanently.</p>
+
+    <h4>Fix 5: globals.css + HeroPost.tsx + NavBar.tsx — mobile responsive</h4>
+    <p>Media query at 640px breakpoint added to globals.css:</p>
+    <ul>
+      <li><code>.hero-article</code>: gridTemplateColumns 1fr (image stacks above text)</li>
+      <li><code>.hero-image</code>: min-height 220px</li>
+      <li><code>.hero-text</code>: reduced padding, smaller h2</li>
+      <li><code>.site-nav</code>: overflow-x auto, no scrollbar, white-space nowrap</li>
+    </ul>
+    <p>Class names added to HeroPost.tsx and NavBar.tsx components.</p>
+
+    <h4>Syntax checks passed</h4>
+    <pre><code>node → import all 4 scout-agent files → ✅ clean
+cd aitrends.ng → npm run build → ✅ successful</code></pre>
+
+    <h4>Commits pushed</h4>
+    <pre><code>scout-agent: 9ca0dea "fix: black images, asterisks, Gemini simplification"
+  4 files changed, 67 insertions(+), 198 deletions(-)
+
+aitrends.ng: e916384 "fix: mobile responsive layout — HeroPost single-column, NavBar horizontal scroll"
+  3 files changed, 32 insertions(+), 1 deletion(-)</code></pre>
+  </div>
+</div>
+
+
 </div>
 </body>
 </html>

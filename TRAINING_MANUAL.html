@@ -363,6 +363,14 @@ li { margin-bottom: 6px; }
       </ul>
     </li>
     <li><a href="#ch13">Session #7 — Quality Overhaul, Image Styling &amp; Documentation Rules</a>
+    <li><a href="#ch14">Session #8 — Site Audit, Black Images, Gemini Simplification &amp; Mobile</a>
+      <ul class="sub">
+        <li><a href="#ch14-audit">The Audit Findings</a></li>
+        <li><a href="#ch14-black">War Story 11: The Black Images</a></li>
+        <li><a href="#ch14-gemini">Simplifying Gemini to an Accuracy Test</a></li>
+        <li><a href="#ch14-mobile">Mobile Responsive Fix</a></li>
+      </ul>
+    </li>
       <ul class="sub">
         <li><a href="#ch13-audit">The 5-Problem Audit</a></li>
         <li><a href="#ch13-fixes">The Fixes</a></li>
@@ -2989,6 +2997,159 @@ supabase.from('posts').update({ source_urls: [...] })              <span class="
   persistent memory system, so it does not need to be repeated.
 </p>
 
+
+<!-- ═══════════════════ CHAPTER 14 ═══════════════════ -->
+<div class="chapter" id="ch14">
+  <div class="chapter-num">Chapter 14</div>
+  <h2>Session #8 — Site Audit, Black Images, Gemini Simplification &amp; Mobile</h2>
+</div>
+
+<p>
+  Session #8 (10 June 2026) began with a full site audit. The pipeline was publishing posts
+  automatically, but a live look at the site revealed four problems visible to any visitor:
+  every image was a solid black rectangle, posts had visible asterisks in the body text, the
+  mobile layout was broken, and Gemini was fabricating African connections from unrelated sources.
+</p>
+
+<h3 id="ch14-audit">The Audit Findings</h3>
+
+<table>
+  <tr><th>#</th><th>Finding</th><th>Evidence</th></tr>
+  <tr><td>1</td><td><strong>All 7 recent post images completely black</strong></td><td>Pixel sample from cover 62: every pixel rgb(1,2,10). jimp composite() broke the images — not the display code.</td></tr>
+  <tr><td>2</td><td><strong>Asterisks visible in post body text</strong></td><td>Gemini outputs <code>**text**</code> markdown. Post page uses <code>dangerouslySetInnerHTML</code> — raw HTML render. Markdown bold syntax is not HTML; asterisks display literally.</td></tr>
+  <tr><td>3</td><td><strong>Sierra Leone education post fabricated</strong></td><td>Post sourced from DeepMind voice translation + Gemma 4 12B articles. No Sierra Leone education content in any source. Gemini invented "a groundbreaking trial in Sierra Leone" from global AI model news.</td></tr>
+  <tr><td>4</td><td><strong>Mobile layout — HeroPost two-column on narrow screens</strong></td><td>Screenshots showed hero image beside text on mobile. gridTemplateColumns: '1fr 1fr' does not collapse on small screens.</td></tr>
+</table>
+
+<h3 id="ch14-black">War Story 11: The Black Images</h3>
+
+<p>
+  The Phase 2 logs said: <em>"📸 Source photo found (603KB) — recreating in art style... 🎨 Source photo
+  recreated as AI illustration (21KB)"</em>. This was treated as confirmation that jimp was working.
+  It was not.
+</p>
+
+<p>
+  The 21KB output was suspicious — a 1200×630 JPEG with real content should be 80–200KB.
+  A pixel sample revealed the truth:
+</p>
+
+<pre><code><span class="cmt">// Sample pixels from cover_62.jpg (jimp-styled)</span>
+(0,0)     → rgb(1, 2, 10)
+(600,315) → rgb(1, 2, 10)   <span class="cmt">← centre</span>
+(1199,629) → rgb(1, 2, 10)
+
+<span class="cmt">// Every single pixel the same near-black colour — rgb(1,2,10) ≈ #01020a</span></code></pre>
+
+<p><strong>Root cause:</strong></p>
+
+<p>
+  When jimp loads a JPEG, JPEG images have no alpha channel. jimp treated every pixel of
+  the loaded photo as having alpha = 0 (fully transparent). In the composite operation
+  (<code>BLEND_SOURCE_OVER</code>):
+</p>
+
+<pre><code>output = overlay × overlay_alpha + background × background_alpha × (1 - overlay_alpha)
+       = overlay × 0.278 + background × 0 × 0.722
+       = rgb(10,10,42) × 0.278
+       = rgb(2.8, 2.8, 11.7)  ≈  rgb(1, 2, 10) ✗</code></pre>
+
+<p>
+  The dark blue overlay at 28% opacity, with the background effectively transparent,
+  produced a near-black image on every run. All 7 jimp-styled covers were this colour.
+</p>
+
+<div class="callout danger">
+  <div class="callout-icon">🔴</div>
+  <div class="callout-body">
+    <strong>Log output is not proof of correctness</strong>
+    <p>The Phase 2 log said "🎨 Source photo recreated as AI illustration (21KB)" — which sounds like success.
+    The only actual proof was downloading the image and sampling pixels. A small file size (21KB for a
+    1200×630 JPEG) is a strong signal that something is wrong. Always verify image quality visually or
+    by pixel inspection when implementing image processing, not just by log output.</p>
+  </div>
+</div>
+
+<p><strong>Fix:</strong> Remove <code>styleWithAI()</code> entirely. Raw source editorial photos are far better than solid black squares. The styling idea was sound but the implementation was broken. A real news photograph serves readers better than any broken transformation.</p>
+
+<h3 id="ch14-gemini">Simplifying Gemini to an Accuracy Test</h3>
+
+<p>
+  Felix's observation: posts were consistently marred with errors — fabricated facts, keyword
+  stuffing, irrelevant content. Before abandoning Gemini entirely, simplify the task to its
+  minimum: can it accurately rewrite a source article?
+</p>
+
+<p>The new prompt removes all of the following from the previous 150-line specification:</p>
+<ul>
+  <li>800-word minimum</li>
+  <li>4-section editorial structure</li>
+  <li>SEO keyword rules</li>
+  <li>Synthesis across multiple sources</li>
+  <li>Editorial stance and analytical mandate</li>
+  <li>Africa-first "Bottom line" conclusion</li>
+</ul>
+
+<p>The new task has two requirements only:</p>
+
+<pre><code><span class="cmt">// New simplified prompt (key section)</span>
+YOUR TASK:
+1. Rephrase the title. Same meaning, different wording. No spin.
+2. Rewrite the article body accurately from the FULL TEXT provided.
+   - Use the source's own facts, names, numbers, quotes
+   - Match the source word count. If source is 200 words, write 200. If 400, write 400.
+   - No minimum. No inflation. No invention.
+   - Plain text only — no **markdown**, no asterisks</code></pre>
+
+<p>
+  Simultaneously, <code>scout.js</code> was changed to pass only the single top-scoring article
+  to Gemini (instead of 5). And <code>sourceUrls</code> was reduced to exactly one URL —
+  the URL of the article Gemini actually rewrote from. This permanently eliminates the problem
+  of Apple WWDC articles being credited as sources for Nedbank posts.
+</p>
+
+<p>
+  The asterisk problem was fixed at two layers: <code>publisher.js</code> strips
+  <code>**text**</code> → <code>text</code> before every POST, and the prompt now explicitly
+  bans markdown syntax. Belt and suspenders — whichever layer Gemini ignores, the other catches it.
+</p>
+
+<div class="callout info">
+  <div class="callout-icon">💡</div>
+  <div class="callout-body">
+    <strong>Why this is a test, not a fix</strong>
+    <p>The simplified prompt is a capability assessment. If Gemini can accurately rewrite a single
+    source article — preserving its word count, its facts, its quotes, without inventing anything —
+    then the model can be trusted with progressively more complex tasks. If it still fabricates or
+    inflates on this simple task, a different approach (different model, RAG pipeline, or Perplexity
+    Sonar Pro with real-time search) should be considered. Results from the next 3–5 posts will
+    determine the direction.</p>
+  </div>
+</div>
+
+<h3 id="ch14-mobile">Mobile Responsive Fix</h3>
+
+<p>
+  The fix used a CSS media query in <code>globals.css</code> — the only place in the project
+  where media queries are possible (inline React styles cannot reference viewport width).
+  Class names were added to components, and the media query targets those classes at ≤640px.
+</p>
+
+<table>
+  <tr><th>Component</th><th>Desktop</th><th>Mobile (≤640px)</th></tr>
+  <tr><td><strong>HeroPost</strong></td><td>Two-column grid (image | text)</td><td>Single column (image above, text below). Image min-height 220px.</td></tr>
+  <tr><td><strong>NavBar</strong></td><td>All categories visible horizontally</td><td>Horizontal scroll. Categories don't wrap or clip. Scrollbar hidden.</td></tr>
+</table>
+
+<pre><code><span class="lang">globals.css — mobile breakpoint</span>
+@media (max-width: 640px) {
+  .hero-article { grid-template-columns: 1fr !important; }
+  .hero-image   { min-height: 220px; }
+  .hero-text    { padding: 20px 18px !important; }
+  .site-nav     { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .site-nav a   { white-space: nowrap; }
+}</code></pre>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -2997,7 +3158,7 @@ supabase.from('posts').update({ source_urls: [...] })              <span class="
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 6 June 2026 — Session #6 (evening).
+    Last updated: 10 June 2026 — Session #8.
   </p>
 </div>
 
