@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-12 (Session #9 continued)
+**Last Updated:** 2026-06-12 (Session #9 completed)
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -519,7 +519,9 @@ npm start   # runs index.js
 ### 🔴 Critical
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
 - ✅ **Assess Gemini capability after simplification** — Audit passed (Session #8 continuation, 12 June): 5 posts reviewed. No asterisks, 1 source URL, title variety confirmed. Gemini accurate-rewrite prompt working as intended.
-- [ ] **AI signal gate — push commit 000c25f to FAIT-Blog/scout-agent** — committed locally, push pending (done in Session #9 if credentials resolve).
+- ✅ **AI signal gate pushed** — 000c25f pushed to FAIT-Blog/scout-agent in Session #9.
+- ✅ **Editorial system redesigned** — Slack polling → Events API push → Supabase queue → Slack threaded reply. (a422cb8 scout-agent, 7d375b3 aitrends-ng). Pending one-time setup: run add-editorial-queue.sql, add SLACK_SIGNING_SECRET to Vercel, enable Events API in Slack app pointing at https://aitrends-ng.vercel.app/api/slack/editorial.
+- [ ] **One-time editorial setup (manual)** — (1) run supabase/add-editorial-queue.sql in Supabase SQL editor. (2) In Slack app → Event Subscriptions → Request URL: https://aitrends-ng.vercel.app/api/slack/editorial. (3) Subscribe to message.channels. (4) Copy Signing Secret → Vercel env: SLACK_SIGNING_SECRET. (5) Redeploy Vercel.
 - [ ] **HN Anthropic feed intermittency (monitor)** — hnrss.org returning 502 on roughly half of Phase 1 runs. Need a stable second Anthropic source.
 - [ ] **Old posts need retroactive cleanup** — posts published before Session #8 still have: markdown asterisks in body (publisher.js strip only applies to future posts), irrelevant source_urls, keyword stuffing. Bulk Supabase content edit needed.
 - [ ] **Google Doc corrections pending** — Felix shared a doc with specific post edits. Awaiting explicit go-ahead.
@@ -616,4 +618,4 @@ This session log is a teaching document. It demonstrates what real autonomous Cl
 | combined S7 | 8–9 June 2026 | scout-agent | Post quality audit (5 issues: irrelevant source_urls, 3× duplicate MTN story, forced phrases, bold keyword stuffing ×7, formulaic titles). Image format gap diagnosed (never built the "recreate source photo" step). Full fix: relevantSourceUrls(), getRecentDuplicate(), BANNED PHRASES + TITLE VARIETY + BOLD TEXT RULES in prompt, styleWithAI() with jimp (d1e2629, d1a20c3). Phase 1 live test confirmed. Claude Code also actioned a Google Doc without being asked — immediately caught, change restored. |
 | combined S8 | 10 June 2026 | scout-agent + aitrends.ng | Site audit: black images (jimp composite broken), asterisks visible in posts, Sierra Leone fabrication, source URL mismatch, mobile layout. Fixes: remove styleWithAI() (raw source photos), strip **markdown** in publisher.js, simplify Gemini to 2-task accurate-rewrite prompt + single article, 1 source URL, mobile responsive (HeroPost single-column + NavBar scroll). (9ca0dea, e916384) |
 | S8 cont. | 12 June 2026 | scout-agent | 5-post audit passed. 3 off-topic posts identified (MTN, BNPL×2). AI signal gate built: hasAISignal() blocks non-AI articles before Gemini (commit 000c25f). South Africa football post kept for study. Push failed — remote container credentials issue. |
-| combined S9 | 12 June 2026 | docs + scout-agent + aitrends.ng | Session recovery + major build: pushed 000c25f AI signal gate; sidebar spacing fix (22b44db); hover effects site-wide (be48564); search-aggregate pipeline built — search.js (Tavily), verify.js (named entity), generateBlendedDigest(), self-learning source_reputation table, promote/demote lifecycle (47a0c8c); Tavily key verified. Chapters 15 + 16 added to TRAINING_MANUAL. |
+| combined S9 | 12 June 2026 | docs + scout-agent + aitrends.ng | Session recovery + major build: pushed 000c25f AI signal gate; sidebar spacing fix (22b44db); hover effects site-wide (be48564); search-aggregate pipeline built — search.js (Tavily), verify.js (named entity), generateBlendedDigest(), self-learning source_reputation table, promote/demote lifecycle (47a0c8c); Tavily key verified. Chapters 15 + 16 added to TRAINING_MANUAL. Editorial system redesigned: Slack polling replaced with Events API push → aitrends.ng /api/slack/editorial webhook → editorial_queue Supabase table → felix.js reads from DB (30 lines). Slack threaded reply added to complete.js after publish (a422cb8, 7d375b3). Chapter 17 added to TRAINING_MANUAL. |

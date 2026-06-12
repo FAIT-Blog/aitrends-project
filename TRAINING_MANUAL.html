@@ -3533,6 +3533,222 @@ DEMOTED
   single-source mode. The system degrades gracefully — it does not fail or skip the category.
 </p>
 
+<!-- ═══════════════════ CHAPTER 17 ═══════════════════ -->
+
+<div class="chapter" id="ch17">
+  <h2>Chapter 17 — Redesigning the Editorial Channel: From Polling to Push</h2>
+  <div class="meta">Session #9 · 12 June 2026 · scout-agent + aitrends.ng</div>
+
+  <h3>The Original Design and Its Problem</h3>
+  <p>
+    From the beginning, Scout included an editorial channel: Felix could post messages to a
+    private Slack channel (<code>#scout-editor</code>) and Scout would pick them up at the
+    start of each run. The implementation used <code>conversations.list</code> to find the
+    channel ID and <code>conversations.history</code> to fetch the last 8 hours of messages.
+  </p>
+  <p>
+    This worked — but it was architecturally wrong. <strong>Scout was treating Slack as a
+    database.</strong> Every 6-hour run made 2 Slack API calls just to read a few messages
+    that might not even exist. If the lookback window was too narrow, messages posted near a
+    boundary could be missed or double-processed. There was no acknowledgement — Felix had no
+    way to know if his input had been used. And if the Slack bot's token was revoked or the
+    API call failed, the pipeline would crash at step zero.
+  </p>
+  <p>
+    When Felix asked "can you help me look at what can be optimised?", the instinct was to
+    patch around the edges: add caching, tune the lookback window, handle errors better.
+    But the better question was: <em>what does this system actually need to be?</em>
+  </p>
+
+  <h3>The New Design: Events Over Polling</h3>
+  <p>
+    The redesign flips the direction of data flow. Instead of Scout pulling from Slack,
+    Slack <em>pushes</em> to a webhook endpoint the moment Felix posts a message.
+  </p>
+
+  <div class="flow-diagram">
+    Felix posts to #scout-editor
+            ↓
+    Slack Events API
+            ↓
+    POST /api/slack/editorial  (aitrends.ng — always running on Vercel)
+            ↓
+    editorial_queue table  (Supabase)
+            ↓
+    felix.js reads pending rows  (at Scout run time)
+            ↓
+    consumed after a post is queued
+            ↓
+    complete.js replies in Slack thread: "✅ Used in: [title]"
+  </div>
+
+  <p>
+    Slack is now a write path, not a storage system. The DB is the single source of truth.
+    Felix's inputs survive Slack's 90-day history limit. Scout's startup is not gated on
+    a Slack API call. And for the first time, Felix gets feedback: a threaded reply in his
+    original message confirming which post his input contributed to.
+  </p>
+
+  <h3>File-by-File Walkthrough</h3>
+
+  <h4>1. Supabase table: <code>editorial_queue</code></h4>
+  <p>Seven columns that matter:</p>
+  <ul>
+    <li><code>slack_ts</code> — the Slack message timestamp. Unique. Used as <code>thread_ts</code> when replying.</li>
+    <li><code>slack_channel</code> — the channel ID. Needed to target the reply.</li>
+    <li><code>urls</code> — <code>text[]</code>. URLs extracted from the message.</li>
+    <li><code>notes</code> — any non-URL text annotation Felix included.</li>
+    <li><code>status</code> — <code>pending | consumed</code>. Scout only reads <code>pending</code> rows.</li>
+    <li><code>used_in_post</code> — post title written here when consumed. Matched by <code>complete.js</code> for the reply.</li>
+    <li><code>posted_at</code> — <code>NULL</code> until the Slack reply has been sent. Prevents double-replies.</li>
+  </ul>
+  <p>
+    The <code>UNIQUE</code> constraint on <code>slack_ts</code> makes the insert idempotent:
+    if Slack retries the webhook because our response was slow, the second insert silently
+    fails with a <code>23505</code> duplicate-key error, which the endpoint catches and
+    ignores.
+  </p>
+
+  <h4>2. The webhook endpoint: <code>/api/slack/editorial</code></h4>
+  <p>
+    Lives in aitrends.ng (Vercel — always running). Three jobs:
+  </p>
+  <ol>
+    <li>
+      <strong>url_verification</strong> — when you first point Slack at a request URL,
+      Slack sends a JSON body with <code>"type": "url_verification"</code> and a
+      <code>challenge</code> string. The endpoint must echo it back. Without this, Slack
+      refuses to save the URL.
+    </li>
+    <li>
+      <strong>Signature validation</strong> — every other request is validated with
+      HMAC-SHA256. Slack signs requests using your app's Signing Secret:
+      <code>v0={hex(sha256(SIGNING_SECRET, "v0:{timestamp}:{raw_body}"))}</code>.
+      Requests older than 5 minutes are rejected (replay attack guard). This is what
+      <code>SLACK_SIGNING_SECRET</code> is for.
+    </li>
+    <li>
+      <strong>Message handling</strong> — extract URLs and plain text from the message,
+      insert into <code>editorial_queue</code>, return <code>200 OK</code> within 3 seconds.
+      (Slack will retry if you take longer.)
+    </li>
+  </ol>
+
+  <div class="code-block">
+<pre>// Slack sends this on first-time setup — must respond with the challenge
+if (body.type === 'url_verification') {
+  return NextResponse.json({ challenge: body.challenge })
+}
+
+// Validate signature on all real requests
+if (!verifySlackSignature(signingSecret, signature, timestamp, rawBody)) {
+  return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+}
+
+// Ignore retries we've already processed
+if (req.headers.get('x-slack-retry-num')) {
+  return NextResponse.json({ ok: true })
+}</pre>
+  </div>
+
+  <h4>3. <code>felix.js</code> — 126 lines → 60 lines</h4>
+  <p>
+    The <code>getChannelId()</code> function, the pagination loop, the 8-hour lookback
+    calculation, the <code>conversations.history</code> call — all gone. Replaced with one
+    Supabase query. The return value gains a <code>rowIds</code> field alongside
+    <code>topics</code> and <code>sources</code>, so scout.js knows which rows to mark
+    consumed after a successful queue.
+  </p>
+  <p>
+    URL content is still fetched here, at Scout run time — not at webhook time. This keeps
+    the webhook response under 3 seconds and avoids fetching content for inputs that
+    ultimately don't get used.
+  </p>
+
+  <h4>4. <code>memory.js</code> — four new functions</h4>
+  <ul>
+    <li><code>getEditorialQueue()</code> — SELECT pending rows, ordered oldest-first.</li>
+    <li><code>consumeEditorialRows(ids, postTitle)</code> — UPDATE where <code>status='pending'</code>. The <code>WHERE status='pending'</code> guard makes this idempotent: if two categories both queue from the same felix inputs in one run, the second call is a no-op.</li>
+    <li><code>getPendingEditorialReplies(postTitle)</code> — SELECT consumed rows matched by post title where <code>posted_at IS NULL</code>.</li>
+    <li><code>markEditorialReplied(ids)</code> — SET <code>posted_at = now()</code>. Prevents double-replies if Phase 2 cycles again.</li>
+  </ul>
+
+  <h4>5. <code>slack.js</code> — <code>replyToFelix()</code></h4>
+  <p>
+    Uses <code>chat.postMessage</code> with <code>thread_ts</code> set to the original
+    message's Slack timestamp. The reply appears indented under Felix's original message —
+    the standard Slack threading model. Message text:
+    <em>"✅ Used in: <strong>[post title]</strong>\n[live URL]"</em>
+  </p>
+
+  <h4>6. <code>complete.js</code> — closing the loop</h4>
+  <p>
+    After <code>notifySlack()</code> completes, Phase 2 now does:
+  </p>
+  <div class="code-block">
+<pre>const replyRows = await getPendingEditorialReplies(post.title)
+if (replyRows.length > 0) {
+  for (const row of replyRows) {
+    await replyToFelix(row.slack_ts, row.slack_channel, post.title, postUrl)
+  }
+  await markEditorialReplied(replyRows.map(r => r.id))
+}</pre>
+  </div>
+  <p>
+    The match is by post title, not by ID. This works because <code>consumeEditorialRows</code>
+    writes the title into <code>used_in_post</code> in Phase 1, and Phase 2 has the same
+    title from <code>pending_posts.title</code>. The title is the join key.
+  </p>
+
+  <h3>The Vibe-Coding Lesson: Patch vs Redesign</h3>
+  <p>
+    When Felix asked about optimisations, Claude's first instinct was a list of patches:
+    cache the channel ID, handle the window boundary, add better error handling. These would
+    have all improved the code without fixing the core problem.
+  </p>
+  <p>
+    The better move was to step back and ask: <em>what is this code trying to do?</em> It
+    tries to get Felix's inputs into the pipeline. The Slack API is an implementation detail
+    — a bad one. Once the real goal was named, the right architecture was obvious: a webhook
+    that writes to a DB, and a reader that reads from a DB. Slack plays to its strengths
+    (real-time delivery). Supabase plays to its strengths (persistent, queryable state).
+    Scout plays to its strengths (runs when it's ready, reads what it needs).
+  </p>
+  <blockquote>
+    "Don't just build on this one. What would you do differently instead of patching this one?"
+    — Felix, Session #9
+  </blockquote>
+  <p>
+    This is the right instinct. When a module feels like it's fighting the architecture —
+    when you're adding retries and caches and boundary conditions — ask whether the module
+    is in the wrong position entirely. Sometimes the best refactor is to invert the data
+    flow direction.
+  </p>
+
+  <h3>Setup Required (One-Time)</h3>
+  <ol>
+    <li>Run <code>supabase/add-editorial-queue.sql</code> in the Supabase SQL editor.</li>
+    <li>
+      In your Slack app (<a href="https://api.slack.com/apps" target="_blank">api.slack.com/apps</a>):
+      <ul>
+        <li>Enable <strong>Event Subscriptions</strong></li>
+        <li>Set Request URL: <code>https://aitrends-ng.vercel.app/api/slack/editorial</code></li>
+        <li>Slack will send the <code>url_verification</code> challenge — the endpoint handles it automatically</li>
+        <li>Subscribe to bot event: <code>message.channels</code> (add <code>message.groups</code> if #scout-editor is private)</li>
+        <li>Copy the <strong>Signing Secret</strong> from Basic Information</li>
+      </ul>
+    </li>
+    <li>Add <code>SLACK_SIGNING_SECRET=[signing secret]</code> to Vercel environment variables.</li>
+    <li>Redeploy Vercel (env var changes require a deploy).</li>
+    <li>
+      The old <code>SLACK_BOT_TOKEN</code> is still needed in scout-agent <code>.env</code>
+      and GitHub Actions secrets — it is now used exclusively for <code>replyToFelix()</code>.
+      The <code>channels:read</code> and <code>channels:history</code> scopes are no longer
+      needed by Scout, but leave them in place (removing scopes from a production bot is risky).
+    </li>
+  </ol>
+</div>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -3541,7 +3757,7 @@ DEMOTED
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 12 June 2026 — Session #9 continued.
+    Last updated: 12 June 2026 — Session #9 completed.
   </p>
 </div>
 
