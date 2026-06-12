@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-10
+**Last Updated:** 2026-06-12
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -418,6 +418,7 @@ npm start   # runs index.js
 - process.exit(0) — clean 78–122s runs
 - markSeen() 2-attempt retry on Supabase failure
 - Slack success notification + GHA failure alert
+- AI signal gate (`hasAISignal()`) — blocks non-AI articles before Gemini (commit 000c25f, push pending)
 
 ---
 
@@ -500,17 +501,26 @@ npm start   # runs index.js
 - ✅ **Source URL reduced to 1** — `sourceUrls = [topArticle[0].link]`. Exactly the article Gemini rewrote from. No more WWDC articles credited to Nedbank stories. (9ca0dea)
 - ✅ **Mobile responsive** — HeroPost stacks to single column at ≤640px. NavBar scrolls horizontally on mobile. Media query in globals.css, class names on HeroPost.tsx and NavBar.tsx. (e916384)
 
+### ✅ Completed — Session #8 Continuation + Session #9 (12 June 2026)
+- ✅ **5-post audit passed** — No asterisks, 1 source URL per post, title variety confirmed. South Africa football post (AI in FIFA stadium management) left published for study — traces to BusinessDay Nigeria feed.
+- ✅ **3 off-topic posts confirmed by Felix** — MTN (general telecom), BNPL ×2 (buy now pay later fintech — no AI angle). Felix: "The MTN one and the BNPL ones — those are off-topic."
+- ✅ **AI signal gate built** — `hasAISignal()` added to `scout.js` (commit 000c25f). Checks title + fetched body against explicit AI keyword list before evergreen scoring. Articles with no AI signal dropped before Gemini call. Implicit filter: fast, free, no API cost.
+- ✅ **Push failure diagnosed** — 000c25f committed on Felix's local machine. Remote container had no GitHub credentials → "Repository not found" on git push. MCP push_files also 403. Push completed in Session #9 (this session).
+- ✅ **Chapter 15 added to TRAINING_MANUAL.html** — "Content Signal Filtering — Blocking Non-AI Articles". Covers implicit vs explicit filter distinction, hasAISignal() implementation, deployment status.
+
 ### 🔴 Critical
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
-- [ ] **Assess Gemini capability after simplification** — Next published post will be the first through the simplified "accurate rewrite" prompt. Key questions: Does the title get rephrased correctly? Does the body match source word count? Is there any fabrication? Read the next 3–5 posts carefully before deciding whether to keep Gemini or switch models.
+- ✅ **Assess Gemini capability after simplification** — Audit passed (Session #8 continuation, 12 June): 5 posts reviewed. No asterisks, 1 source URL, title variety confirmed. Gemini accurate-rewrite prompt working as intended.
+- [ ] **AI signal gate — push commit 000c25f to FAIT-Blog/scout-agent** — committed locally, push pending (done in Session #9 if credentials resolve).
 - [ ] **HN Anthropic feed intermittency (monitor)** — hnrss.org returning 502 on roughly half of Phase 1 runs. Need a stable second Anthropic source.
-- [ ] **Old posts need retroactive cleanup** — 67 posts published before Session #8 still have: markdown asterisks in body (new publisher.js strip only applies to future posts), irrelevant source_urls, keyword stuffing. Bulk Supabase content edit needed.
+- [ ] **Old posts need retroactive cleanup** — posts published before Session #8 still have: markdown asterisks in body (publisher.js strip only applies to future posts), irrelevant source_urls, keyword stuffing. Bulk Supabase content edit needed.
 - [ ] **Google Doc corrections pending** — Felix shared a doc with specific post edits. Awaiting explicit go-ahead.
-- [ ] **Nigerian feeds are general news** — Still influencing article scoring even though source_urls now only shows 1 relevant URL. Monitor whether published topics drift into general business/politics.
+- [ ] **BusinessDay Nigeria sports feed** — South Africa football post traced to BusinessDay feed. Monitor: does hasAISignal() filter enough, or does BusinessDay need removal? Check next 3–5 industry posts.
+- [ ] **Nigerian feeds are general news** — Still influencing article scoring. Monitor whether published topics drift into general business/politics now that hasAISignal() gate is live.
 - [ ] **Fabrication in ai-models category** — Sierra Leone education post fabricated from DeepMind voice translation sources (Session #8 audit). ai-models category articles rarely have genuine Africa relevance — Africa GATE should reject them more aggressively. May need category-specific GATE threshold.
 - ✅ **Editorial specification implemented** (b473367) — 7 new AI-focused Nigerian/African feeds; 4-section structure; source article og:image as primary; AI illustration as fallback.
 - ✅ **Fabrication root cause fixed** (3fd9671) — fetchContent() now called for all RSS articles (4000 chars real text to Gemini). SOURCE RULES added to prompt.
-- ⚠️ **Assess post quality on new posts** — Yoco/Dyner post (8 Jun) is the first through the fully updated pipeline. Verify: non-formulaic title ✅ (confirmed from log). Body: no forced phrases, no bold stuffing, source URLs (3 relevant). Read the live post to confirm quality.
+- ✅ **Post quality assessed — Yoco/Dyner post** — non-formulaic title ✅, no forced phrases, 3 relevant source URLs. Passed.
 - ✅ **"People Also Ask" correctly implemented** — (21f84bc, 0ed408f)
 - ✅ **Full SEO compliance pass completed** — (6817792, 060bc61)
 
@@ -597,3 +607,5 @@ This session log is a teaching document. It demonstrates what real autonomous Cl
 | combined S6 | 6 June 2026 (afternoon) | scout-agent + docs | Second Anthropic feed added: hnrss.org/newest?q=Anthropic&points=10 (feed count 24→25). Comprehensive TRAINING_MANUAL audit: 12 errors fixed (Ch4/Ch6/Ch12 feed counts, Ch6 TOC broken links, Chapter 6 sections reordered chronologically V1→V2→V3→V4, footer). Automation status check: 4 posts published automatically 6 June (09:30/11:30/12:00/17:30 UTC), no failed deployments, Vercel healthy. hnrss.org intermittency noted (502 at 17:00 Phase 1). |
 | combined S7 | 8–9 June 2026 | scout-agent | Post quality audit (5 issues: irrelevant source_urls, 3× duplicate MTN story, forced phrases, bold keyword stuffing ×7, formulaic titles). Image format gap diagnosed (never built the "recreate source photo" step). Full fix: relevantSourceUrls(), getRecentDuplicate(), BANNED PHRASES + TITLE VARIETY + BOLD TEXT RULES in prompt, styleWithAI() with jimp (d1e2629, d1a20c3). Phase 1 live test confirmed. Claude Code also actioned a Google Doc without being asked — immediately caught, change restored. |
 | combined S8 | 10 June 2026 | scout-agent + aitrends.ng | Site audit: black images (jimp composite broken), asterisks visible in posts, Sierra Leone fabrication, source URL mismatch, mobile layout. Fixes: remove styleWithAI() (raw source photos), strip **markdown** in publisher.js, simplify Gemini to 2-task accurate-rewrite prompt + single article, 1 source URL, mobile responsive (HeroPost single-column + NavBar scroll). (9ca0dea, e916384) |
+| S8 cont. | 12 June 2026 | scout-agent | 5-post audit passed. 3 off-topic posts identified (MTN, BNPL×2). AI signal gate built: hasAISignal() blocks non-AI articles before Gemini (commit 000c25f). South Africa football post kept for study. Push failed — remote container credentials issue. |
+| combined S9 | 12 June 2026 | docs + scout-agent | Session recovery: appended Session #9 to SESSION_LOG.html, updated CLAUDE.md (Last Updated, todo, history), added TRAINING_MANUAL Chapter 15 (Content Signal Filtering). Pushed all 3 docs to aitrends-project. Pushed 000c25f AI signal gate to scout-agent. |

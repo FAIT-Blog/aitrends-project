@@ -5498,6 +5498,177 @@ aitrends.ng: e916384 "fix: mobile responsive layout — HeroPost single-column, 
 </div>
 
 
+
+<!-- ═══════════════════════════════════════════════════════════════
+     COMBINED SESSION #9 — 12 June 2026
+     ═══════════════════════════════════════════════════════════════ -->
+
+<hr />
+
+<div class="project-divider">
+  <h2>Combined Session #9 — 12 June 2026</h2>
+  <p>scout-agent + docs · AI signal gate push · Session log recovery after remote container context error</p>
+</div>
+
+<!-- TURN 1 -->
+<div class="turn user">
+  <div class="label">Felix — opening message</div>
+  <div class="bubble">What did you do before the context error? I need the recap of the previous session.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — Session #8 continuation recap</div>
+  <div class="bubble">
+    <p>This was a continuation of Session #8 (10 June 2026). Before the context error hit during the "Backup documents" request, the following work had been completed in that continuation session:</p>
+
+    <h4>1. Five-post audit (passed)</h4>
+    <p>Five most recent published posts were read from the live site. The audit confirmed:</p>
+    <ul>
+      <li>No markdown asterisks visible in post bodies</li>
+      <li>Source URLs reduced to exactly 1 per post</li>
+      <li>Titles varied — no "Why/How … for African Builders" pattern</li>
+      <li>One post (South Africa football / FIFA World Cup AI) was noted as off-topic but kept published for study — to observe whether the Nigeria general-news feeds were producing sports content</li>
+      <li>Three posts confirmed off-topic by Felix: MTN (general telecom), BNPL (buy now pay later fintech without AI focus). Felix said: "The MTN one and the BNPL ones — those are off-topic."</li>
+    </ul>
+
+    <h4>2. AI signal gate built — <code>hasAISignal()</code> — commit 000c25f</h4>
+    <p>Root cause: Nigerian general news feeds (Premium Times, BusinessDay, Eagle Online) were sending sports, crime, and fintech stories into the pipeline. The Africa GATE only rejected categories with no African angle — it did not check whether the article was about AI at all.</p>
+    <p>Fix: <code>hasAISignal()</code> added to <code>scout.js</code>. Checks article title and fetched body against an explicit AI keyword list. Articles scoring 0 on both checks are dropped before Gemini scoring. This is an implicit filter (no Gemini call) — fast and free.</p>
+    <pre><code>// scout.js — hasAISignal() (commit 000c25f)
+const AI_SIGNAL_TERMS = [
+  'ai', 'artificial intelligence', 'machine learning', 'deep learning',
+  'neural', 'llm', 'large language model', 'generative', 'chatbot',
+  'automation', 'algorithm', 'nlp', 'computer vision', 'robotics',
+  'openai', 'anthropic', 'google ai', 'gemini', 'claude', 'gpt',
+  'huggingface', 'mistral', 'model', 'training data', 'inference'
+];
+
+function hasAISignal(article) {
+  const text = ((article.title || '') + ' ' + (article.fullText || '')).toLowerCase();
+  return AI_SIGNAL_TERMS.some(term => text.includes(term));
+}
+
+// Applied in runScout() before evergreenScore():
+const aiFiltered = deduped.filter(a => hasAISignal(a));
+console.log(`🤖 AI signal filter: ${deduped.length} → ${aiFiltered.length} articles`);
+</code></pre>
+
+    <h4>3. BusinessDay Nigeria sports feed identified</h4>
+    <p>The South Africa football post (about AI in FIFA World Cup stadium management) was traced to BusinessDay Nigeria's RSS feed. The feed contains general business and sports news, not AI-specific content. The AI signal gate would correctly drop a pure sports headline, but "AI in World Cup stadiums" passes the gate (contains "AI"). Felix's note: keep the gate, monitor whether BusinessDay content improves or needs removal.</p>
+
+    <h4>4. Push failed — credentials error</h4>
+    <p>Commit 000c25f was made locally in the remote container but <code>git push</code> failed:</p>
+    <pre><code>$ git push origin main
+remote: Repository not found.
+fatal: repository 'https://github.com/FAIT-Blog/scout-agent.git/' not found</code></pre>
+    <p>Root cause: the remote container running the previous Claude Code session did not have Felix's GitHub credentials configured. HTTPS push requires a PAT or stored credential. The remote container environment had no access to Felix's keychain or stored git credentials.</p>
+    <p>A second attempt via MCP <code>push_files</code> also returned HTTP 403.</p>
+    <p>Resolution: the commit (000c25f) lives on Felix's local machine in the scout-agent repo. Push to be done in the next session (this session) where Felix's credentials are available via VSCode extension.</p>
+
+    <h4>5. Session log + CLAUDE.md + TRAINING_MANUAL updated locally in remote container — push failed</h4>
+    <p>The remote Claude Code session had updated all three documentation files locally:</p>
+    <ul>
+      <li><code>SESSION_LOG.html</code> — appended Session #8 continuation events</li>
+      <li><code>CLAUDE.md</code> — Last Updated → 2026-06-12, S8 cont. added to history, to-do list updated</li>
+      <li><code>TRAINING_MANUAL.html</code> — Chapter 15 added: "Content Signal Filtering — Blocking Non-AI Articles"</li>
+    </ul>
+    <p>All three pushes to <code>FAIT-Blog/aitrends-project</code> failed (HTTP 403 — same credentials issue). The files in the remote container are now gone (context error ended the session). The changes must be re-applied in this session.</p>
+
+    <h4>6. Context error hit</h4>
+    <p>Felix requested: "Now backup the documents." During that operation, the conversation context limit was reached and the session ended. The push and the document backup were not completed.</p>
+  </div>
+</div>
+
+<!-- TURN 2 -->
+<div class="turn user">
+  <div class="label">Felix — instruction for Session #9</div>
+  <div class="bubble">Read CLAUDE.md, SESSION_LOG.html, and TRAINING_MANUAL.html to orient yourself.
+
+Then do the following in order:
+
+1. SESSION_LOG.html — append the full Session #9 log. Key events to log verbatim:
+   - Felix asked what was done before context error (Session #8 continuation recap)
+   - Felix pasted the prior Claude Code transcript showing: 5-post audit passed, AI signal gate (hasAISignal) committed as 000c25f locally on Felix's machine but push failed with "Repository not found" (credentials), South Africa football post left published for study, 3 fintech posts (MTN, BNPL) confirmed off-topic by Felix, context error hit during "Backup documents" request
+   - Claude Code updated SESSION_LOG, CLAUDE.md, TRAINING_MANUAL locally in this remote container but could NOT push — both git push (403 proxy) and mcp push_files (403 integration) failed
+   - TRAINING_MANUAL got a new Chapter 15: "Content Signal Filtering — Blocking Non-AI Articles" (hasAISignal, implicit vs explicit filters lesson, deployment status)
+   - Session #9 ended with all 3 files updated locally but unpushed
+
+2. CLAUDE.md — these specific updates are already done locally but need to be confirmed pushed:
+   - Last Updated: 2026-06-12
+   - Session #8 Continuation section added (Gemini confirmed, AI signal gate, football post, fintech)
+   - 🔴 Critical list updated: Gemini ✅, AI signal gate push pending, BusinessDay sports feed added
+   - Session history table: rows for S8 cont. and S9 added
+
+3. TRAINING_MANUAL.html — Chapter 15 was added locally. Confirm it exists, then push.
+
+4. Push all three files to fait-blog/aitrends-project main branch.
+
+5. Then push the AI signal gate commit (000c25f) from scout-agent:
+   cd scout-agent
+   git remote set-url origin https://github.com/FAIT-Blog/scout-agent.git
+   git push origin main
+
+After all pushes confirm success, report open items from the to-do list and ask what to tackle next.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — executing all tasks</div>
+  <div class="bubble">
+    <h4>Step 1: Orient — read key files</h4>
+    <pre><code>Read /Users/felixokon/Documents/WEBSITE_AI_Generated_Xai/aitrends-project/CLAUDE.md
+→ Last Updated: 2026-06-10 (needs update to 2026-06-12)
+→ Session history: ends at combined S8
+→ To-do list: AI signal gate not listed, TRAINING_MANUAL Chapter 15 not in file count
+
+Read SESSION_LOG.html
+→ 5502 lines, ends after Session #8 final turn (Claude Code commits 9ca0dea + e916384)
+→ Chapter 15 not present
+
+Read TRAINING_MANUAL.html
+→ 3166 lines, ends at Chapter 14 (Mobile Responsive Fix) + footer
+→ Chapter 15 not present — confirms remote container changes were lost with context error</code></pre>
+
+    <h4>Step 2: Append Session #9 to SESSION_LOG.html</h4>
+    <p>Full session log appended — this turn is part of that append. All key events logged verbatim including: S8 continuation recap, Felix's exact instruction, 5-post audit findings, hasAISignal commit details, push failures (credentials + MCP 403), context error.</p>
+
+    <h4>Step 3: Update CLAUDE.md</h4>
+    <p>Changes applied:</p>
+    <ul>
+      <li><strong>Last Updated</strong>: 2026-06-10 → 2026-06-12</li>
+      <li><strong>What Has Been Built (Scout)</strong>: AI signal gate (<code>hasAISignal()</code>) added to list</li>
+      <li><strong>To-do list, 🔴 Critical</strong>:
+        <ul>
+          <li>Added: AI signal gate commit 000c25f — push to FAIT-Blog/scout-agent pending</li>
+          <li>Added: BusinessDay Nigeria sports feed monitoring</li>
+        </ul>
+      </li>
+      <li><strong>Session history table</strong>: S8 cont. + S9 rows added</li>
+    </ul>
+
+    <h4>Step 4: Add Chapter 15 to TRAINING_MANUAL.html</h4>
+    <p>Chapter 15 added before the footer: "Content Signal Filtering — Blocking Non-AI Articles". Covers:</p>
+    <ul>
+      <li>The problem: Nigerian general news feeds sending sports and fintech into the pipeline</li>
+      <li>The root cause: Africa GATE only checks Africa relevance, not AI relevance</li>
+      <li><code>hasAISignal()</code> implementation and keyword list</li>
+      <li>Implicit vs explicit filter distinction (fast/free vs Gemini-call)</li>
+      <li>Deployment status: committed locally as 000c25f, push pending this session</li>
+    </ul>
+
+    <h4>Step 5: Push aitrends-project</h4>
+    <pre><code>git add CLAUDE.md SESSION_LOG.html TRAINING_MANUAL.html
+git commit -m "docs: Session #9 — AI signal gate recap, Chapter 15, CLAUDE.md update"
+git push origin main</code></pre>
+    <p><em>(Push result logged below after execution)</em></p>
+
+    <h4>Step 6: Push scout-agent AI signal gate</h4>
+    <pre><code>cd scout-agent
+git remote set-url origin https://github.com/FAIT-Blog/scout-agent.git
+git push origin main</code></pre>
+    <p><em>(Push result logged below after execution)</em></p>
+  </div>
+</div>
+
 </div>
 </body>
 </html>

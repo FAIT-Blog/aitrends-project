@@ -3150,6 +3150,178 @@ YOUR TASK:
   .site-nav a   { white-space: nowrap; }
 }</code></pre>
 
+<!-- ═══════════════════ CHAPTER 15 ═══════════════════ -->
+
+<div class="chapter-header" id="chapter-15">
+  <div class="chapter-number">Chapter 15</div>
+  <h2>Content Signal Filtering — Blocking Non-AI Articles</h2>
+  <p class="chapter-date">Session #8 Continuation + Session #9 · 12 June 2026</p>
+</div>
+
+<h3 id="ch15-problem">The Problem: General News Infiltrating the AI Pipeline</h3>
+
+<p>
+  After the Session #8 simplification (Gemini accurate-rewrite prompt + single article), a 5-post
+  audit revealed that the content quality had improved significantly — but a new category of failure
+  appeared: posts about topics that had nothing to do with AI at all.
+</p>
+
+<p>
+  Felix reviewed the most recent published posts and identified three off-topic articles:
+</p>
+
+<ul>
+  <li><strong>MTN</strong> — a general telecom business update. No AI angle. MTN is a company
+    frequently mentioned in Nigerian tech news for any reason.</li>
+  <li><strong>BNPL ×2</strong> — Buy Now Pay Later fintech articles. No AI component. The Africa
+    GATE passed them because the articles had a genuine Nigerian financial technology angle — but
+    the Africa GATE only asks "Is this Africa-relevant?" not "Is this about AI?"</li>
+</ul>
+
+<p>
+  A fourth post — about South Africa and the FIFA World Cup — was flagged and left published for
+  study. It mentioned "AI in stadium management," which technically passes the AI relevance test,
+  but illustrated how thinly an AI mention can be attached to a sports story.
+</p>
+
+<h3 id="ch15-root-cause">Root Cause: The Africa GATE Does Not Check for AI</h3>
+
+<p>
+  The pipeline had two filters at this point:
+</p>
+
+<ol>
+  <li><strong>Evergreen scoring</strong> — ranks articles by how many of 40+ AI/tech vocabulary
+    terms they contain. This favours AI articles but does not exclude non-AI articles — a fintech
+    article mentioning "startups", "funding", or "Nigeria" can score high.</li>
+  <li><strong>Africa GATE (Gemini call)</strong> — asks Gemini: does this story have a genuine
+    African/Nigerian angle? If no: <code>SKIP_NO_AFRICA_RELEVANCE</code>. This correctly blocks
+    global tech news with no Africa connection — but the GATE only checks geography, not topic
+    domain.</li>
+</ol>
+
+<p>
+  The gap: an article about Nigerian football teams using spreadsheets could pass both filters.
+  It is Nigerian (passes Africa GATE), and might mention "strategy" or "data" (gets an evergreen
+  score). Nothing in the pipeline asked the question: <strong>is this about artificial
+  intelligence?</strong>
+</p>
+
+<h3 id="ch15-solution">The Fix: <code>hasAISignal()</code> — Implicit Filter</h3>
+
+<p>
+  An explicit AI keyword check was added to <code>scout.js</code> as an early filter —
+  before evergreen scoring, before the Gemini call:
+</p>
+
+<pre><code><span class="lang">scout.js — hasAISignal() (commit 000c25f)</span>
+const AI_SIGNAL_TERMS = [
+  'ai', 'artificial intelligence', 'machine learning', 'deep learning',
+  'neural', 'llm', 'large language model', 'generative', 'chatbot',
+  'automation', 'algorithm', 'nlp', 'computer vision', 'robotics',
+  'openai', 'anthropic', 'google ai', 'gemini', 'claude', 'gpt',
+  'huggingface', 'mistral', 'model', 'training data', 'inference'
+];
+
+function hasAISignal(article) {
+  const text = ((article.title || '') + ' ' + (article.fullText || '')).toLowerCase();
+  return AI_SIGNAL_TERMS.some(term => text.includes(term));
+}
+
+// Applied in runScout() before evergreenScore():
+const aiFiltered = deduped.filter(a => hasAISignal(a));
+console.log(`🤖 AI signal filter: ${deduped.length} → ${aiFiltered.length} articles`);
+</code></pre>
+
+<p>
+  Every article is checked against the list. If neither the title nor the fetched body contains
+  a single AI term, the article is dropped immediately — no Gemini call, no evergreen scoring,
+  no cost.
+</p>
+
+<h3 id="ch15-implicit-vs-explicit">Implicit vs Explicit Filters — A Framework</h3>
+
+<p>
+  This is a useful mental model for anyone building autonomous content pipelines:
+</p>
+
+<table>
+  <tr>
+    <th>Filter Type</th>
+    <th>Mechanism</th>
+    <th>Cost</th>
+    <th>Speed</th>
+    <th>Examples in AITrends pipeline</th>
+  </tr>
+  <tr>
+    <td><strong>Implicit (keyword)</strong></td>
+    <td>String match. No API call. Runs in microseconds.</td>
+    <td>Free</td>
+    <td>Instant</td>
+    <td><code>hasAISignal()</code>, <code>hasSeen()</code> dedup, evergreen score threshold</td>
+  </tr>
+  <tr>
+    <td><strong>Explicit (LLM)</strong></td>
+    <td>Sends article to Gemini. Waits for response. Uses API quota.</td>
+    <td>Token cost + latency</td>
+    <td>3–8 seconds per article</td>
+    <td>Africa GATE (<code>SKIP_NO_AFRICA_RELEVANCE</code>), digest generation</td>
+  </tr>
+</table>
+
+<div class="callout tip">
+  <div class="callout-icon">💡</div>
+  <div class="callout-body">
+    <strong>Design rule: implicit filters go first</strong>
+    <p>Always apply the cheapest, fastest filters before sending anything to an LLM. A Gemini call
+    on a sports article wastes quota, adds latency, and risks the Africa GATE returning "yes" on a
+    thin AI mention. <code>hasAISignal()</code> runs before any of that — it's the bouncer at the
+    door.</p>
+  </div>
+</div>
+
+<h3 id="ch15-deployment">Deployment Status</h3>
+
+<p>
+  Commit <code>000c25f</code> — "fix: AI signal gate — block non-AI articles before Gemini" — was
+  made on Felix's local machine during the Session #8 continuation. The push to
+  <code>FAIT-Blog/scout-agent</code> failed in the remote container (no GitHub credentials — HTTP
+  403 "Repository not found"). The commit was successfully pushed in Session #9 from Felix's
+  local VSCode environment where credentials are stored.
+</p>
+
+<div class="callout warning">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>Lesson: remote containers don't have your credentials</strong>
+    <p>When Claude Code runs in a remote (cloud) container, it does not have access to your local
+    git credential store, keychain, or SSH keys. Any <code>git push</code> over HTTPS to a private
+    repo will fail unless a Personal Access Token is explicitly passed in the remote URL or
+    configured as an environment variable. The safe pattern: let Claude Code write the commit, then
+    push yourself from your local terminal or VSCode — which already has credentials stored.</p>
+  </div>
+</div>
+
+<h3 id="ch15-monitoring">What to Monitor Next</h3>
+
+<p>
+  The AI signal gate is a new filter and its calibration matters:
+</p>
+
+<ul>
+  <li><strong>False negatives</strong> (misses that should be caught): An article about
+    "Nigerian fintech innovation" with no AI keywords will now be blocked — correct. But if a
+    genuine AI story uses unusual terminology not in the 40-term list, it gets blocked too.
+    If good stories start disappearing, expand the keyword list.</li>
+  <li><strong>False positives</strong> (non-AI articles passing the gate): "AI in FIFA stadium
+    management" passes because it contains the word "AI". This is a thin AI mention — the article
+    is primarily a football story. The gate cannot detect thin mentions — that is the Africa GATE's
+    job on a second pass.</li>
+  <li><strong>BusinessDay Nigeria feed</strong>: The South Africa football post was traced to
+    BusinessDay. If off-topic posts from BusinessDay continue appearing, the feed may need removal.
+    Track the next 3–5 industry posts for their source.</li>
+</ul>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -3158,7 +3330,7 @@ YOUR TASK:
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 10 June 2026 — Session #8.
+    Last updated: 12 June 2026 — Session #9.
   </p>
 </div>
 
