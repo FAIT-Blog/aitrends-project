@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-12
+**Last Updated:** 2026-06-12 (Session #9 continued)
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -369,10 +369,11 @@ BLOG_API_URL=https://aitrends-ng.vercel.app/api/posts/create
 SCOUT_API_KEY=[REDACTED]          ← Must match Vercel and aitrends.ng .env.local
 SLACK_WEBHOOK_URL=[REDACTED]      ← Outgoing webhook to #aitrends-feed
 SLACK_BOT_TOKEN=[REDACTED]        ← Bot token to READ #scout-editor
+TAVILY_API_KEY=[REDACTED]         ← Web search for same-story cross-referencing (tavily.com)
 ```
 
 **GitHub Actions Secrets required:**
-`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY`, `BLOG_API_URL`, `SCOUT_API_KEY`, `SLACK_WEBHOOK_URL`, `SLACK_BOT_TOKEN`
+`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY`, `BLOG_API_URL`, `SCOUT_API_KEY`, `SLACK_WEBHOOK_URL`, `SLACK_BOT_TOKEN`, `TAVILY_API_KEY`
 
 **Slack app scopes required for `SLACK_BOT_TOKEN`:**
 `channels:read`, `channels:history`, `groups:read`, `groups:history`
@@ -418,7 +419,9 @@ npm start   # runs index.js
 - process.exit(0) — clean 78–122s runs
 - markSeen() 2-attempt retry on Supabase failure
 - Slack success notification + GHA failure alert
-- AI signal gate (`hasAISignal()`) — blocks non-AI articles before Gemini (commit 000c25f, push pending)
+- AI signal gate (`hasAISignal()`) — blocks non-AI articles before Gemini (commit 000c25f)
+- Search-aggregate pipeline — `search.js` (Tavily), `verify.js` (named entity overlap), blend mode (commit 47a0c8c)
+- Self-learning priority sources — `source_reputation` table, promote at 5 hits, demote after 7 silent days
 
 ---
 
@@ -507,6 +510,11 @@ npm start   # runs index.js
 - ✅ **AI signal gate built** — `hasAISignal()` added to `scout.js` (commit 000c25f). Checks title + fetched body against explicit AI keyword list before evergreen scoring. Articles with no AI signal dropped before Gemini call. Implicit filter: fast, free, no API cost.
 - ✅ **Push failure diagnosed** — 000c25f committed on Felix's local machine. Remote container had no GitHub credentials → "Repository not found" on git push. MCP push_files also 403. Push completed in Session #9 (this session).
 - ✅ **Chapter 15 added to TRAINING_MANUAL.html** — "Content Signal Filtering — Blocking Non-AI Articles". Covers implicit vs explicit filter distinction, hasAISignal() implementation, deployment status.
+- ✅ **Sidebar spacing fixed** — Latest Posts titles no longer overlap. `gap: 2` → 0, padding `8px` → `14px`, lineHeight `1.45` → `1.65`. (22b44db)
+- ✅ **Hover effects added site-wide** — blue glow on post titles, hero headline, sidebar links, nav links, logo. CSS classes in globals.css + classNames on components. (be48564)
+- ✅ **Search-aggregate pipeline built** — `search.js` (Tavily API), `verify.js` (named entity same-story check), `generateBlendedDigest()` in gemini.js, self-learning `source_reputation` table (promote at 5, demote after 7 days). (47a0c8c)
+- ✅ **Tavily API key added** — `.env` updated. Key verified: 3 results for MTN/Alipay query confirmed working.
+- ⏳ **Pending manual steps**: (1) Run `supabase/add-source-reputation.sql` in Supabase SQL editor. (2) Add `TAVILY_API_KEY` to GitHub Actions Secrets.
 
 ### 🔴 Critical
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
@@ -608,4 +616,4 @@ This session log is a teaching document. It demonstrates what real autonomous Cl
 | combined S7 | 8–9 June 2026 | scout-agent | Post quality audit (5 issues: irrelevant source_urls, 3× duplicate MTN story, forced phrases, bold keyword stuffing ×7, formulaic titles). Image format gap diagnosed (never built the "recreate source photo" step). Full fix: relevantSourceUrls(), getRecentDuplicate(), BANNED PHRASES + TITLE VARIETY + BOLD TEXT RULES in prompt, styleWithAI() with jimp (d1e2629, d1a20c3). Phase 1 live test confirmed. Claude Code also actioned a Google Doc without being asked — immediately caught, change restored. |
 | combined S8 | 10 June 2026 | scout-agent + aitrends.ng | Site audit: black images (jimp composite broken), asterisks visible in posts, Sierra Leone fabrication, source URL mismatch, mobile layout. Fixes: remove styleWithAI() (raw source photos), strip **markdown** in publisher.js, simplify Gemini to 2-task accurate-rewrite prompt + single article, 1 source URL, mobile responsive (HeroPost single-column + NavBar scroll). (9ca0dea, e916384) |
 | S8 cont. | 12 June 2026 | scout-agent | 5-post audit passed. 3 off-topic posts identified (MTN, BNPL×2). AI signal gate built: hasAISignal() blocks non-AI articles before Gemini (commit 000c25f). South Africa football post kept for study. Push failed — remote container credentials issue. |
-| combined S9 | 12 June 2026 | docs + scout-agent | Session recovery: appended Session #9 to SESSION_LOG.html, updated CLAUDE.md (Last Updated, todo, history), added TRAINING_MANUAL Chapter 15 (Content Signal Filtering). Pushed all 3 docs to aitrends-project. Pushed 000c25f AI signal gate to scout-agent. |
+| combined S9 | 12 June 2026 | docs + scout-agent + aitrends.ng | Session recovery + major build: pushed 000c25f AI signal gate; sidebar spacing fix (22b44db); hover effects site-wide (be48564); search-aggregate pipeline built — search.js (Tavily), verify.js (named entity), generateBlendedDigest(), self-learning source_reputation table, promote/demote lifecycle (47a0c8c); Tavily key verified. Chapters 15 + 16 added to TRAINING_MANUAL. |

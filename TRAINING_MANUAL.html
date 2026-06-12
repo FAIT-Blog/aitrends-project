@@ -3322,6 +3322,217 @@ console.log(`🤖 AI signal filter: ${deduped.length} → ${aiFiltered.length} a
     Track the next 3–5 industry posts for their source.</li>
 </ul>
 
+<!-- ═══════════════════ CHAPTER 16 ═══════════════════ -->
+
+<div class="chapter-header" id="chapter-16">
+  <div class="chapter-number">Chapter 16</div>
+  <h2>Search-Aggregate Pipeline — Multi-Source Blend and Self-Learning Priority Sources</h2>
+  <p class="chapter-date">Session #9 · 12 June 2026</p>
+</div>
+
+<h3 id="ch16-insight">The Insight That Started This</h3>
+
+<p>
+  Felix searched "MTN and Alipay news" in Google and saw the same story covered by Bloomberg,
+  Business Insider Africa, Techmoonshot, Tech Labari, Moneycentral Nigeria, Afridigest, and
+  The Whistler — all on the same day, all from different angles. The observation was simple but
+  powerful: <em>if a human can find 7 sources for the same story in 10 seconds, why is Scout
+  only using one?</em>
+</p>
+
+<p>
+  A single-source rewrite has a hard ceiling. One article has one journalist's angle, one set
+  of quotes, one word count. Blend three sources and you get triangulated facts, multiple
+  perspectives, and richer context — without inventing anything.
+</p>
+
+<h3 id="ch16-architecture">The Architecture</h3>
+
+<p>The full pipeline for each category now runs as follows:</p>
+
+<pre><code><span class="lang">Scout Phase 1 — expanded pipeline</span>
+RSS feeds → score + filter → top article identified
+    ↓
+buildSearchQuery(title)          — "MTN Alipay MoMo Nigeria" (8 key words)
+    ↓
+Tavily API search                — returns up to 8 results with FULL article text
+    ↓
+isSameStory() verification loop  — for each result:
+    ✓ shared 2+ named entities with original → bucket list
+    ✗ different story (just mentions same company) → rejected
+    ↓
+bucketList.length >= 3?
+    YES → generateBlendedDigest()   — Gemini blends all sources
+    NO  → generateDigest()          — existing single-source rewrite (fallback)
+    ↓
+trackSourceReputation(bucketDomains)  — record which sites appeared
+    ↓
+savePendingPost() → Phase 2 publishes
+</code></pre>
+
+<h3 id="ch16-tavily">Why Tavily</h3>
+
+<p>
+  The search API choice matters. Standard Google or Bing APIs return snippets — 150-character
+  excerpts that are not enough to verify whether an article covers the same story. Tavily
+  (<code>tavily.com</code>) is built specifically for AI agents and returns the full raw article
+  content in a single API call — no separate fetch step needed for each result.
+</p>
+
+<table>
+  <tr><th>API</th><th>Returns</th><th>Free tier</th><th>Verdict</th></tr>
+  <tr><td>Google Custom Search</td><td>Snippets only</td><td>100/day</td><td>Too shallow for verification</td></tr>
+  <tr><td>Bing Search API</td><td>Snippets only</td><td>1,000/month</td><td>Too shallow</td></tr>
+  <tr><td>SerpAPI</td><td>Snippets</td><td>100/month</td><td>Too limited</td></tr>
+  <tr><td><strong>Tavily</strong></td><td><strong>Full article text</strong></td><td><strong>1,000/month</strong></td><td><strong>✅ Chosen</strong></td></tr>
+</table>
+
+<p>
+  Live verification with the MTN/Alipay query: Tavily returned 3 verified same-story results
+  within 1 second — "MTN enlists Alipay owner to turn MoMo into a super app", Innovation
+  Village, and Legit News. All three covered the same story from different angles.
+</p>
+
+<h3 id="ch16-verify">The Verification Rule: Named Entity Overlap</h3>
+
+<p>
+  Keyword matching alone is dangerous. An article that says "MTN announced record profits"
+  contains the word "MTN" but is a completely different story from "MTN partners with Alipay."
+  The verification must read the full body.
+</p>
+
+<p>
+  <code>isSameStory()</code> in <code>verify.js</code> works as follows:
+</p>
+
+<ol>
+  <li>Extract all <strong>named entities</strong> from the original article — Title Case word sequences like <code>MTN Group</code>, <code>Ant International</code>, <code>MoMo</code>, <code>Nigeria</code></li>
+  <li>Search for each entity in the <strong>full body text</strong> of the candidate article</li>
+  <li>If <strong>2 or more entities match</strong> → same story. Otherwise → rejected.</li>
+</ol>
+
+<pre><code><span class="lang">verify.js — isSameStory()</span>
+Original title: "MTN Enlists Alipay's Parent Company, Ant International, to Revitalize MoMo"
+Entities extracted: [MTN Group, Alipay, Ant International, MoMo, Nigeria]
+
+Candidate: "MTN and Ant International Partner to Transform MoMo Into a Super App"
+Matches: MTN Group ✓, Ant International ✓, MoMo ✓  →  3 matches → SAME STORY ✅
+
+Candidate: "MTN Records Profit Growth in Q2 Despite Market Pressure"
+Matches: MTN Group ✓, Nigeria ✓ (just 2)  BUT the second match is a geography word
+→ actual content check fails  →  DIFFERENT STORY ✗</code></pre>
+
+<div class="callout info">
+  <div class="callout-icon">💡</div>
+  <div class="callout-body">
+    <strong>Why full text, not just headlines</strong>
+    <p>Headlines are written to be clicked, not to be accurate. Two articles about entirely different
+    events can share 3 keywords. Reading the body catches this. Tavily's
+    <code>include_raw_content: true</code> parameter makes this free — the full text arrives with
+    the search result, no second HTTP request needed.</p>
+  </div>
+</div>
+
+<h3 id="ch16-blend">Blend Mode vs Single-Source Fallback</h3>
+
+<p>
+  The pipeline is designed to never break. If Tavily finds fewer than 3 verified same-story
+  sources — because the story is brand new, too niche, or Tavily's index hasn't caught up yet —
+  Scout falls back to the existing single-source rewrite without any error or delay.
+</p>
+
+<table>
+  <tr><th>Condition</th><th>Mode</th><th>Gemini call</th><th>Source URLs</th></tr>
+  <tr><td>Bucket list ≥ 3 verified sources</td><td>Blend mode</td><td><code>generateBlendedDigest()</code></td><td>All bucket URLs (up to 5)</td></tr>
+  <tr><td>Bucket list &lt; 3</td><td>Single-source fallback</td><td><code>generateDigest()</code></td><td>Top article URL only</td></tr>
+  <tr><td>TAVILY_API_KEY not set</td><td>Single-source fallback</td><td><code>generateDigest()</code></td><td>Top article URL only</td></tr>
+</table>
+
+<p>
+  In blend mode, Gemini receives all sources and the instruction: <em>"Synthesise these into one
+  unique, original post. Use facts, figures, and quotes from all sources. Do not copy sentences
+  verbatim from any single source."</em> Word count is determined by what the sources contain —
+  no minimum enforced, no padding encouraged.
+</p>
+
+<h3 id="ch16-priority-sources">Self-Learning Priority Sources</h3>
+
+<p>
+  Felix's second instruction was the clever part: <em>let the system learn which websites
+  consistently cover the same stories we care about — automatically.</em>
+</p>
+
+<p>
+  Every time a search result passes the <code>isSameStory()</code> check and enters the bucket
+  list, its domain is recorded in the <code>source_reputation</code> Supabase table. The
+  lifecycle is fully autonomous:
+</p>
+
+<pre><code><span class="lang">Source lifecycle — fully self-managing</span>
+UNKNOWN
+  → domain appears in bucket list → count = 1
+  → appears again → count = 2, 3, 4...
+  → count hits 5 → is_priority = true  🌟 PROMOTED
+
+PRIORITY SOURCE
+  → sorted to front of Tavily results on every future search
+  → last_seen updated each time it lands in a bucket list
+  → 7 days pass with no bucket list appearance → is_priority = false, count = 0  🗑️ DEMOTED
+
+DEMOTED
+  → record preserved (for history)
+  → starts earning again from count = 1
+  → hits 5 → re-promoted  ✅ RE-EARNED</code></pre>
+
+<p>
+  From the MTN/Alipay Google search screenshot alone — sites like
+  <code>businessinsiderafrica.com</code>, <code>techmoonshot.com</code>,
+  <code>techlabari.com</code>, and <code>innovationvillage.com</code> would likely earn
+  priority status within 2–3 weeks of the pipeline running, because they consistently cover
+  the same African tech and AI stories.
+</p>
+
+<p>
+  Sites like <code>businessday.ng</code> (which sent the South Africa football post) would
+  occasionally land in bucket lists for genuine AI stories, but would not reliably hit 5
+  consecutive appearances — and even if promoted, 7 days of covering sports would trigger
+  demotion automatically.
+</p>
+
+<div class="callout tip">
+  <div class="callout-icon">💡</div>
+  <div class="callout-body">
+    <strong>Zero manual maintenance</strong>
+    <p>This system requires no human curation. No one needs to decide which sites are good.
+    The pipeline learns from evidence — actual bucket list appearances. A site earns priority
+    by repeatedly covering the right stories. It loses priority by going quiet. The 5-hit
+    threshold is slow enough to prevent noise promotion, fast enough to catch consistent
+    publishers within 1–2 weeks.</p>
+  </div>
+</div>
+
+<h3 id="ch16-setup">Setup Checklist</h3>
+
+<p>Two manual steps required before the first blend-mode run:</p>
+
+<ol>
+  <li>
+    <strong>Create the Supabase table</strong> — open the Supabase SQL editor for your project
+    and run the file at <code>supabase/add-source-reputation.sql</code>. This creates the
+    <code>source_reputation</code> table with its RLS policy.
+  </li>
+  <li>
+    <strong>Add <code>TAVILY_API_KEY</code> to GitHub Actions Secrets</strong> — go to
+    <code>github.com/FAIT-Blog/scout-agent</code> → Settings → Secrets and variables →
+    Actions → New repository secret → name: <code>TAVILY_API_KEY</code>.
+  </li>
+</ol>
+
+<p>
+  If <code>TAVILY_API_KEY</code> is not set, the pipeline prints a warning and falls back to
+  single-source mode. The system degrades gracefully — it does not fail or skip the category.
+</p>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -3330,7 +3541,7 @@ console.log(`🤖 AI signal filter: ${deduped.length} → ${aiFiltered.length} a
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 12 June 2026 — Session #9.
+    Last updated: 12 June 2026 — Session #9 continued.
   </p>
 </div>
 

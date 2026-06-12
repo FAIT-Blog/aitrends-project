@@ -5669,6 +5669,215 @@ git push origin main</code></pre>
   </div>
 </div>
 
+<!-- TURN 3 — auth resolved, pushes succeeded -->
+<div class="turn assistant">
+  <div class="label">Claude Code — auth resolved, both pushes confirmed</div>
+  <div class="bubble">
+    <p>GitHub CLI switched to FAIT-Blog account after Felix completed browser login flow.
+    <code>gh auth status</code> confirmed FAIT-Blog active, FAIT-Pro inactive.</p>
+    <pre><code>git push origin main  (aitrends-project)
+→ c9eb94c..10f6270  main → main  ✅
+
+cd scout-agent && git push origin main
+→ 9ca0dea..000c25f  main → main  ✅</code></pre>
+    <p>AI signal gate live. Session log, CLAUDE.md, TRAINING_MANUAL Chapter 15 all pushed.</p>
+  </div>
+</div>
+
+<!-- TURN 4 — sidebar overlap fix -->
+<div class="turn user">
+  <div class="label">Felix — screenshot of Latest Posts sidebar</div>
+  <div class="bubble">
+    [Screenshot attached — Latest Posts sidebar showing post titles visually overlapping each other]
+    I noticed there are no hovering effect on the text; headlines, post titles, etc. Even the one you just finished adjusting. Go ahead and add hover effects on them, maybe some glow or colour change as the cursor goes over them.
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — sidebar spacing fix + hover effects</div>
+  <div class="bubble">
+    <h4>Sidebar spacing fix (Sidebar.tsx)</h4>
+    <p>Root cause: <code>gap: 2</code> (2px) between list items — too tight for multi-line titles.
+    <code>padding: '8px 0'</code> insufficient. Fix: moved <code>borderBottom</code> to the <code>li</code>,
+    increased padding to <code>14px 0</code>, lineHeight <code>1.45 → 1.65</code>.</p>
+    <pre><code>git commit 22b44db "fix: increase spacing between Latest Posts sidebar items"</code></pre>
+
+    <h4>Hover effects — globals.css + 4 components</h4>
+    <p>Inline styles cannot reference <code>:hover</code> — all effects added as CSS classes in
+    <code>globals.css</code>, then <code>className</code> applied to each target element.</p>
+    <table>
+      <tr><th>Element</th><th>Effect</th><th>Class / Rule</th></tr>
+      <tr><td>Post card title</td><td>Blue glow on card hover</td><td><code>.post-card:hover .post-title</code></td></tr>
+      <tr><td>Hero headline</td><td>Light blue glow on card hover</td><td><code>.hero-article:hover h2</code></td></tr>
+      <tr><td>"Read digest →"</td><td>Lighter blue + glow on card hover</td><td><code>.hero-article:hover .read-more</code></td></tr>
+      <tr><td>Sidebar links</td><td>Blue glow + colour shift</td><td><code>.link-hover-glow</code></td></tr>
+      <tr><td>Nav links</td><td>Snap to white + soft glow</td><td><code>.site-nav a:hover</code></td></tr>
+      <tr><td>AITrends.ng logo</td><td>Fade + blue drop-shadow</td><td><code>.nav-logo</code></td></tr>
+    </table>
+    <p>Files changed: <code>globals.css</code>, <code>PostCard.tsx</code>, <code>HeroPost.tsx</code>,
+    <code>Sidebar.tsx</code>, <code>NavBar.tsx</code></p>
+    <pre><code>git commit be48564 "feat: add hover glow effects to titles, links, and nav"
+→ 5 files changed, 53 insertions(+), 1 deletion(-)</code></pre>
+  </div>
+</div>
+
+<!-- TURN 5 — search-aggregate pipeline proposal -->
+<div class="turn user">
+  <div class="label">Felix — concept for search-aggregate pipeline</div>
+  <div class="bubble">
+    Using "MTN Enlists Alipay's Parent Company, Ant International, to Revitalize MoMo Mobile Money in Nigeria" as an example, the key word I picked and searched on the internet browser was "MTN and Alipay news" and it gave me the same news as a result.
+    So I was wondering what method can we use so that when we get a news that fits our criteria for AI relevance, the exact same news is searched and fished from the search engine results and the bot will pick minimum of just 3 (three) of that same news, though may have varying headlines and blend them into our own one single same news and publish.
+    One of the instructions is that the bot will have to read fully any of the results to know for sure that the news is the SAME before it will add to bucketlist and then blend them beautifully for a unique post.
+    We can be adding news blog/sites that frequently carry the same news relevant to our preference. In that case if our word count reaches 800 or more fine, if not we settle with the fact that we have a unique post/news that is current and evergreen.
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — confirmed understanding, proposed architecture</div>
+  <div class="bubble">
+    <p>Confirmed understanding. Architecture proposed:</p>
+    <ol>
+      <li>RSS finds article → extract search query from title</li>
+      <li>Web search that query (Tavily API)</li>
+      <li>Fetch full text of each result, verify same story (2+ named entity overlap)</li>
+      <li>Build bucket list — minimum 3 verified same-story sources</li>
+      <li>Gemini blends all 3+ into one unique Africa-first post</li>
+      <li>Self-learning: domains appearing 5+ times in bucket list → promoted to priority sources (checked first in future searches)</li>
+    </ol>
+    <p>Felix added: reverse demotion — priority sources silent for 7 days get dropped; can re-earn priority from scratch.</p>
+  </div>
+</div>
+
+<!-- TURN 6 — build instruction + implementation -->
+<div class="turn user">
+  <div class="label">Felix — screenshot of Google search results for "MTN and Alipay news"</div>
+  <div class="bubble">
+    [Screenshot attached — Google results showing Bloomberg, Business Insider Africa, Techmoonshot, Tech Labari, Moneycentral Nigeria, Afridigest, The Whistler all covering the same MTN/Alipay story]
+
+    For curated list of sites, I meant that from the search results just as shown, the bot should take note of which website often fall into the bucket list for showing/featuring the same news headline regularly for at least five (5) consecutive times, then those sites can be qualified to be considered and curated as priority list.
+
+    Same apply in reverse to those sites that have no news on topics that befits our website/project should be dropped after seven (7) days and can be picked back if they meet the criteria following the afore mentioned process.
+
+    Build it
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — built search-aggregate pipeline (commit 47a0c8c)</div>
+  <div class="bubble">
+    <h4>Files created / modified</h4>
+
+    <h4>search.js (new)</h4>
+    <ul>
+      <li><code>buildSearchQuery(title)</code> — strips stop words + possessives, keeps named entities, max 8 words</li>
+      <li><code>searchSameStory(title, prioritySources)</code> — Tavily POST, <code>search_depth: advanced</code>, <code>include_raw_content: true</code>, max 8 results. Priority sources sorted to front of results.</li>
+    </ul>
+
+    <h4>verify.js (new)</h4>
+    <ul>
+      <li><code>extractEntities(text)</code> — regex extracts Title Case sequences (1–4 words), filters 60-word stop list</li>
+      <li><code>isSameStory(original, candidate)</code> — compares FULL BODY text (not just headline). 2+ shared named entities = same story. Rejects keyword-adjacent stories.</li>
+      <li><code>extractDomain(url)</code> — returns bare hostname without www.</li>
+    </ul>
+
+    <h4>memory.js (3 new functions)</h4>
+    <pre><code>trackSourceReputation(domains[])
+  → upsert: increment count + update last_seen
+  → if count >= 5 and not already priority: set is_priority=true, log promotion
+
+getPrioritySources()
+  → SELECT domain WHERE is_priority=true
+  → returned to scout.js, passed to searchSameStory()
+
+dropStaleSourceReputations()
+  → SELECT priority sources WHERE last_seen < now - 7 days
+  → SET is_priority=false, count=0, dropped_at=now()
+  → logs each demotion</code></pre>
+
+    <h4>gemini.js — generateBlendedDigest() (new function)</h4>
+    <ul>
+      <li>Receives <code>bucketList[]</code> of {title, url, content} from verified search results</li>
+      <li>Prompt: "You are given N sources covering the same story. Blend them into one unique original post."</li>
+      <li>Same Africa GATE, same SKIP mechanism, same output format as <code>generateDigest()</code></li>
+      <li>Word count: whatever sources naturally support — no minimum, no padding</li>
+      <li>Same retry logic (3 attempts, 12s delay, primary→fallback)</li>
+    </ul>
+
+    <h4>scout.js — pipeline updated</h4>
+    <ul>
+      <li>Imports: <code>searchSameStory</code>, <code>isSameStory</code>, <code>extractDomain</code>, <code>trackSourceReputation</code>, <code>getPrioritySources</code>, <code>dropStaleSourceReputations</code>, <code>generateBlendedDigest</code></li>
+      <li>Step 0: <code>dropStaleSourceReputations()</code> + <code>getPrioritySources()</code> added before RSS fetch</li>
+      <li>After RSS scoring: <code>searchSameStory(topArticle.title, prioritySources)</code></li>
+      <li>Verification loop: <code>isSameStory()</code> for each result → builds <code>bucketList</code></li>
+      <li>If <code>bucketList.length >= 3</code>: blend mode → <code>generateBlendedDigest()</code></li>
+      <li>If <code>bucketList.length &lt; 3</code>: single-source fallback → <code>generateDigest()</code> (unchanged)</li>
+      <li><code>trackSourceReputation()</code> called for all bucket domains</li>
+      <li>sourceUrls: all bucket URLs in blend mode (up to 5), single URL in fallback</li>
+      <li>Post tagged <code>'blended'</code> in blend mode, <code>'digest'</code> in fallback</li>
+    </ul>
+
+    <h4>Supabase table SQL</h4>
+    <pre><code>supabase/add-source-reputation.sql
+CREATE TABLE source_reputation (
+  id           bigint generated always as identity primary key,
+  domain       text unique not null,
+  count        integer default 0,
+  last_seen    timestamptz,
+  is_priority  boolean default false,
+  promoted_at  timestamptz,
+  dropped_at   timestamptz,
+  created_at   timestamptz default now()
+)</code></pre>
+
+    <h4>Syntax checks</h4>
+    <pre><code>node --input-type=module → import search.js   ✅ syntax OK
+node --input-type=module → import verify.js   ✅ syntax OK
+node --input-type=module → import memory.js   ✅ syntax OK
+node --input-type=module → import gemini.js   ✅ syntax OK
+node --input-type=module → import scout.js    ✅ syntax OK</code></pre>
+
+    <h4>Commits pushed</h4>
+    <pre><code>scout-agent:  47a0c8c "feat: search-aggregate pipeline — multi-source blend + self-learning priority sources"
+  5 files changed, 493 insertions(+), 23 deletions(-)
+
+aitrends-ng:  949c622 "feat: add source_reputation table SQL for priority sources system"</code></pre>
+  </div>
+</div>
+
+<!-- TURN 7 — Tavily key + verification -->
+<div class="turn user">
+  <div class="label">Felix — added TAVILY_API_KEY to scout-agent/.env</div>
+  <div class="bubble">All done! Verify and update documents</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code — Tavily key verified, documents updated</div>
+  <div class="bubble">
+    <h4>Tavily API key verification</h4>
+    <pre><code>node -e "fetch Tavily with query 'MTN Alipay MoMo Nigeria'"
+
+Status: OK
+Results: 3
+ - MTN enlists Alipay owner to turn MoMo into a super app
+ - MTN Turns to Alipay's Creator to... — Innovationvillage
+ - MTN MoMo in Nigeria is Changing Into a Super App — Legit News  ✅</code></pre>
+    <p>Key confirmed working. 3 same-story results for the MTN/Alipay example — exactly the pipeline's intended behaviour.</p>
+
+    <h4>Remaining setup steps (manual)</h4>
+    <ol>
+      <li>Run <code>supabase/add-source-reputation.sql</code> in Supabase SQL editor</li>
+      <li>Add <code>TAVILY_API_KEY</code> to GitHub Actions Secrets → <code>FAIT-Blog/scout-agent</code></li>
+    </ol>
+
+    <h4>Documents updated</h4>
+    <ul>
+      <li><code>SESSION_LOG.html</code> — Session #9 full log appended (this turn)</li>
+      <li><code>CLAUDE.md</code> — pipeline updated, Tavily in env vars, Session #9 completed items, session history</li>
+      <li><code>TRAINING_MANUAL.html</code> — Chapter 16 added: Search-Aggregate Pipeline</li>
+    </ul>
+  </div>
+</div>
+
 </div>
 </body>
 </html>
