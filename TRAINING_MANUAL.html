@@ -3725,6 +3725,39 @@ if (replyRows.length > 0) {
     flow direction.
   </p>
 
+  <h3>Immediate Dispatch — No More 6-Hour Wait</h3>
+  <p>
+    After the editorial system was built, Felix asked the right follow-up question: why
+    should an editorial input wait up to 6 hours for the next Phase 1 cron tick? The
+    whole point of the system is to act on a signal NOW.
+  </p>
+  <p>
+    The fix was one addition to the webhook endpoint: after saving the DB row, fire a
+    <code>workflow_dispatch</code> to <code>scout.yml</code> via the GitHub Actions API.
+    Phase 1 runs within seconds. The dispatch is non-blocking — the <code>200 OK</code>
+    is returned to Slack immediately, and the GitHub API call runs in the background.
+    A dispatch failure is logged but never breaks the webhook; the row is already safely
+    in Supabase and the scheduled 6-hour run will pick it up at worst.
+  </p>
+  <p>
+    This requires one env var in Vercel: <code>GITHUB_PAT</code> — a fine-grained personal
+    access token with <strong>Actions: read and write</strong> scope on
+    <code>FAIT-Blog/scout-agent</code>. The existing <code>aitrends-cron-trigger</code>
+    token already had exactly these permissions, so it was regenerated and reused.
+  </p>
+  <p>
+    <strong>Verified</strong> (12 June 2026, 21:29 UTC): Felix redeployed Vercel with the new
+    PAT, posted to <code>#scout-editor</code>, and Phase 1 fired within seconds.
+    The run found 2 pending editorial inputs, passed them to Gemini, but all categories
+    were skipped by the Africa GATE (no RSS articles had genuine Africa relevance that run).
+    The editorial rows stayed <code>pending</code> — correct behaviour. They carry forward
+    to the next run when Africa-relevant content is available.
+  </p>
+  <p>
+    End-to-end path when everything aligns: <strong>~7 minutes</strong> from Felix posting
+    to post published.
+  </p>
+
   <h3>Setup Required (One-Time)</h3>
   <ol>
     <li>Run <code>supabase/add-editorial-queue.sql</code> in the Supabase SQL editor.</li>
@@ -3746,6 +3779,12 @@ if (replyRows.length > 0) {
       The <code>channels:read</code> and <code>channels:history</code> scopes are no longer
       needed by Scout, but leave them in place (removing scopes from a production bot is risky).
     </li>
+    <li>
+      Add <code>GITHUB_PAT</code> to Vercel environment variables — fine-grained token,
+      Actions: read and write on <code>FAIT-Blog/scout-agent</code>. After adding, redeploy
+      Vercel. Also update cron-job.org with the new token value if regenerated (cron-job.org
+      uses the same PAT to dispatch Phase 2 every 30 minutes).
+    </li>
   </ol>
 </div>
 
@@ -3757,7 +3796,7 @@ if (replyRows.length > 0) {
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 12 June 2026 — Session #9 completed.
+    Last updated: 12 June 2026 — Session #9 + editorial dispatch verified.
   </p>
 </div>
 
