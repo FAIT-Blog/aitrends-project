@@ -294,7 +294,7 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 3. Deduplicate against scout_memory — skip already-seen articles
 4. Score each article by evergreen potential (vocab match count)
 5. Group by category, sort by score, cap at MAX_ARTICLES=5
-6. Skip categories with < MIN_ARTICLES=2 fresh articles
+6. Skip categories with < MIN_ARTICLES=1 fresh articles
 7. Generate Africa-first 800-word digest via Gemini 3.5 Flash
    (fallback: gemini-2.5-flash on 503; retry up to 3 times, 12s delay)
 8. Validate output: title + content >= 400 chars before proceeding
@@ -508,6 +508,13 @@ npm start   # runs index.js
 - ✅ **Source URL reduced to 1** — `sourceUrls = [topArticle[0].link]`. Exactly the article Gemini rewrote from. No more WWDC articles credited to Nedbank stories. (9ca0dea)
 - ✅ **Mobile responsive** — HeroPost stacks to single column at ≤640px. NavBar scrolls horizontally on mobile. Media query in globals.css, class names on HeroPost.tsx and NavBar.tsx. (e916384)
 
+### ✅ Completed — Session #10 (13 June 2026)
+- ✅ **Slug truncation fixed** — `lib/slugify.ts` now trims at last complete word boundary before 80 chars. No trailing hyphens. Affects all future posts. Commit 1370f92 on aitrends-ng.
+- ✅ **Editorial override (Africa GATE exemption)** — `generateEditorialDigest()` added to `gemini.js`. `scout.js` Step 0.5 now generates a dedicated post from Felix's editorial sources BEFORE the RSS loop — Africa GATE suspended, editorial authority applies. If `felixInputs.sources.length > 0`, a post is always queued from Felix's content. Commit 221154e on scout-agent.
+- ✅ **AI_SIGNAL expanded** — Added compound forms (`ai-powered`, `ai-driven`, `ai-enabled`, `ai-based`, `ai-generated`, `ai-assisted`) and domain terms (`chatbot`, `natural language`, `computer vision`, `predictive analytics`, `speech recognition`, `language model`, `multimodal`, `robotics`). The hyphenated form gap was the main reason articles like "AI-powered fintech" were failing the gate. Commit 221154e.
+- ✅ **MIN_ARTICLES lowered 2 → 1** — The Africa GATE is the quality guard, not article count. Requiring 2 AI-signal articles was too restrictive for categories where dedicated AI portals publish infrequently. 1 strong AI article is sufficient for Gemini to evaluate. Commit 221154e.
+- ✅ **TRAINING_MANUAL web session explained** — The web Claude was correct: TRAINING_MANUAL.html lives in `FAIT-Blog/aitrends-project`, not `aitrends-ng`. Web sessions only see the repo they're given. Claude Code (VSCode extension) has full local filesystem access so can always reach it. No fix needed — file is in the right place.
+
 ### ✅ Completed — Session #8 Continuation + Session #9 (12 June 2026)
 - ✅ **5-post audit passed** — No asterisks, 1 source URL per post, title variety confirmed. South Africa football post (AI in FIFA stadium management) left published for study — traces to BusinessDay Nigeria feed.
 - ✅ **3 off-topic posts confirmed by Felix** — MTN (general telecom), BNPL ×2 (buy now pay later fintech — no AI angle). Felix: "The MTN one and the BNPL ones — those are off-topic."
@@ -545,7 +552,10 @@ npm start   # runs index.js
 
 ### 🟡 Medium
 - [ ] **Verify OG meta tags** — open a published post in Twitter Card Validator or Facebook Debugger to confirm og:image and title render correctly on social shares.
-- [ ] **anthropic / ai-models categories rarely publishing** — anthropic: hnrss.org intermittent + Africa GATE correctly rejects Anthropic IPO news. ai-models: OpenAI/Google/HF don't produce enough Africa-relevant articles. May need category-specific MIN_ARTICLES or a dedicated Africa AI models feed.
+- [ ] **anthropic / ai-models categories rarely publishing** — anthropic: hnrss.org intermittent + Africa GATE correctly rejects Anthropic IPO news. ai-models: OpenAI/Google/HF don't produce enough Africa-relevant articles. Now that MIN_ARTICLES=1 this should improve — monitor next 5 Phase 1 runs.
+- ✅ **Issue 2 (SKIP rate)** — Addressed via MIN_ARTICLES 2→1 + expanded AI_SIGNAL (compound forms + domain terms). Monitor whether industry now publishes on runs where previously it was skipping.
+- ✅ **Issue 3 (editorial inputs not consumed)** — Fixed via Step 0.5 editorial override in scout.js. Felix's URL submissions now bypass the Africa GATE and always produce a post.
+- ✅ **Issue 4 (slug truncation)** — Fixed in slugify.ts. Trims at last word boundary, no trailing hyphens.
 
 ### 🔵 Later (after system is perfected)
 - [ ] Email newsletter / subscriber form (Buttondown or Beehiiv — free)
@@ -632,3 +642,4 @@ All 16 missing turns were retroactively written in full (943 lines, commit 906e7
 | combined S8 | 10 June 2026 | scout-agent + aitrends.ng | Site audit: black images (jimp composite broken), asterisks visible in posts, Sierra Leone fabrication, source URL mismatch, mobile layout. Fixes: remove styleWithAI() (raw source photos), strip **markdown** in publisher.js, simplify Gemini to 2-task accurate-rewrite prompt + single article, 1 source URL, mobile responsive (HeroPost single-column + NavBar scroll). (9ca0dea, e916384) |
 | S8 cont. | 12 June 2026 | scout-agent | 5-post audit passed. 3 off-topic posts identified (MTN, BNPL×2). AI signal gate built: hasAISignal() blocks non-AI articles before Gemini (commit 000c25f). South Africa football post kept for study. Push failed — remote container credentials issue. |
 | combined S9 | 12 June 2026 | docs + scout-agent + aitrends.ng | Session recovery + major build: pushed 000c25f AI signal gate; sidebar spacing fix (22b44db); hover effects site-wide (be48564); search-aggregate pipeline built — search.js (Tavily), verify.js (named entity), generateBlendedDigest(), self-learning source_reputation table, promote/demote lifecycle (47a0c8c); Tavily key verified. Chapters 15 + 16 added to TRAINING_MANUAL. Editorial system redesigned: Slack polling replaced with Events API push → aitrends.ng /api/slack/editorial webhook → editorial_queue Supabase table → felix.js reads from DB (30 lines). Slack threaded reply added to complete.js after publish (a422cb8, 7d375b3). Chapter 17 added to TRAINING_MANUAL. Immediate Phase 1 dispatch on editorial input via GITHUB_PAT workflow_dispatch (c42f6f1) — verified working, 7-minute end-to-end path from Felix posting to post live. |
+| S10 | 13 June 2026 | scout-agent + aitrends.ng + docs | Pipeline reliability + editorial bypass: slug truncation fixed — slugify.ts now trims at last word boundary before 80 chars (1370f92 aitrends-ng); generateEditorialDigest() added to gemini.js — Africa GATE suspended, editor authority applies; Step 0.5 editorial override block in scout.js generates post from Felix's URL submissions before RSS loop runs (221154e scout-agent); AI_SIGNAL expanded (ai-powered/driven/enabled/based/generated/assisted + chatbot/natural language/computer vision/predictive analytics/speech recognition/multimodal/robotics); MIN_ARTICLES lowered 2→1. CLAUDE.md + SESSION_LOG updated. TRAINING_MANUAL Chapter 18 added. |

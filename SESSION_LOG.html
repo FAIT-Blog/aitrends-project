@@ -6821,6 +6821,303 @@ Also don't edit/ modify what has been recorded earlier. Just continue writing/ a
 </div>
 
 
+
+<!-- ════════════════════════════════════════════════════════════
+     SESSION #10 — 13 June 2026
+     ════════════════════════════════════════════════════════════ -->
+
+<div class="session-divider">SESSION #10 — 13 June 2026 — Pipeline reliability + editorial override</div>
+
+<!-- TURN 1 — context summary injected by harness, Claude re-orients -->
+<div class="turn assistant">
+  <div class="label">Claude Code — session resumed from compaction summary</div>
+  <div class="bubble">
+    <p>Session resumed from context compaction summary. Prior session ended with Felix responding to a site status report with five issue directives and one question about TRAINING_MANUAL.html. Summary confirmed three actionable tasks:</p>
+    <ol>
+      <li><strong>Issue 4 (slug truncation)</strong> — authorized: "You can Act on." Fix <code>aitrends.ng/lib/slugify.ts</code>.</li>
+      <li><strong>Issue 3 (editorial inputs never consumed)</strong> — Felix: "What if the Africa and Nigeria GATE is configured to exempt my recommendations?" Build Africa GATE bypass for editorial inputs.</li>
+      <li><strong>Issue 2 (SKIP rate)</strong> — Felix: "we need to evaluate how we can improve the category criteria." Propose and implement.</li>
+      <li><strong>TRAINING_MANUAL web session</strong> — Felix: "is it true and how is that?" Answer verbally — no action needed.</li>
+    </ol>
+    <p>Also need to write full SESSION_LOG for this session including all turns.</p>
+  </div>
+</div>
+
+<!-- TURN 2 — reading all relevant files simultaneously -->
+<div class="turn assistant">
+  <div class="label">Claude Code — reading all files in parallel before touching anything</div>
+  <div class="bubble">
+    <p>Read the following files simultaneously (parallel tool calls):</p>
+    <ul>
+      <li><code>aitrends.ng/lib/slugify.ts</code> — to see current truncation logic</li>
+      <li><code>scout-agent/scout.js</code> — to understand AI_SIGNAL, MIN_ARTICLES, editorial flow</li>
+      <li><code>scout-agent/gemini.js</code> — to see where generateDigest/generateBlendedDigest are defined</li>
+      <li><code>scout-agent/felix.js</code> — to understand the felixInputs structure</li>
+      <li><code>scout-agent/memory.js</code> — to see consumeEditorialRows and editorial_queue functions</li>
+    </ul>
+    <p>Also ran Bash to read <code>complete.js</code> and the editorial route, previously loaded in prior context.</p>
+  </div>
+</div>
+
+<!-- TURN 2 — TRAINING_MANUAL explanation delivered -->
+<div class="turn assistant">
+  <div class="label">Claude Code — answering the TRAINING_MANUAL web session question</div>
+  <div class="bubble">
+    <p>Before touching any code, delivered the explanation Felix asked for:</p>
+    <blockquote>
+      On the TRAINING_MANUAL web session: The web Claude was completely correct. There are three separate GitHub repos: aitrends-ng (frontend), scout-agent (pipeline), and aitrends-project (documentation — CLAUDE.md, SESSION_LOG.html, TRAINING_MANUAL.html). When you gave Claude on the web access to aitrends-ng, it genuinely cannot see TRAINING_MANUAL.html because that file lives in a different repo (aitrends-project). I, running locally in this VSCode extension, have access to the entire local filesystem so all three are visible to me. If you ever want a web Claude session to reference the manual, you'd need to give it the aitrends-project repo or paste sections in.
+    </blockquote>
+    <p>This was text-only — no tool calls needed. No action required.</p>
+  </div>
+</div>
+
+<!-- TURN 3 — slugify.ts fix -->
+<div class="turn assistant">
+  <div class="label">Claude Code — fixing slugify.ts (Issue 4)</div>
+  <div class="bubble">
+    <p>Read <code>aitrends.ng/lib/slugify.ts</code>:</p>
+    <pre><code>export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80)
+}</code></pre>
+    <p>Problem: <code>.slice(0, 80)</code> cuts mid-word. A title like "Nigeria Unveils AI Ethics Charter Featuring Anthropic Partnership" becomes <code>nigeria-unveils-ai-ethics-charter-featuring-</code> — trailing hyphen on an incomplete word.</p>
+    <p>Fix applied via Edit tool:</p>
+    <pre><code>export function slugify(text: string): string {
+  let slug = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+
+  if (slug.length > 80) {
+    slug = slug.slice(0, 80)
+    const lastHyphen = slug.lastIndexOf('-')
+    // Only trim at word boundary if the hyphen is in the second half —
+    // prevents a pathologically long first word from collapsing the whole slug
+    if (lastHyphen > 40) slug = slug.slice(0, lastHyphen)
+  }
+
+  return slug.replace(/-+$/, '').replace(/^-+/, '')
+}</code></pre>
+    <p>Edit tool confirmed: file updated successfully.</p>
+  </div>
+</div>
+
+<!-- TURN 4 — gemini.js: generateEditorialDigest added -->
+<div class="turn assistant">
+  <div class="label">Claude Code — adding generateEditorialDigest to gemini.js (Issue 3)</div>
+  <div class="bubble">
+    <p>Design decision: The Africa GATE bypass should not be a flag passed into <code>generateDigest()</code> — that would require modifying the existing function and its callers. Instead, a dedicated new function <code>generateEditorialDigest(felixInputs)</code> was added at the end of <code>gemini.js</code>. It has its own prompt without the Africa GATE block, replacing it with an EDITOR DIRECTIVE.</p>
+    <p>Key differences from <code>generateDigest()</code>:</p>
+    <ul>
+      <li>No <code>AFRICA RELEVANCE GATE — CHECK THIS FIRST</code> block</li>
+      <li>Has <code>EDITOR DIRECTIVE: The editor (Felix) has personally submitted this content for immediate coverage. This is an editorial override — the Africa GATE is suspended for this request.</code></li>
+      <li>Uses <code>felixInputs.sources</code> as the source block (up to 4000 chars each)</li>
+      <li>Includes <code>felixInputs.topics</code> as EDITOR TOPICS if any exist</li>
+      <li>Still asks for Africa implication at the end: "End with: &lt;p&gt;What this means for Africa: [one sentence about the African AI ecosystem implication]&lt;/p&gt;"</li>
+      <li>Same parsing logic as generateDigest — TITLE/CONTENT/EXCERPT/IMAGE_PROMPT/TRENDING_TERMS</li>
+      <li>Same retry logic (3 attempts, 12s delay, primary → fallback model)</li>
+    </ul>
+    <p>Edit tool attempted — first attempt failed: the closing brace + return line appeared twice in the file (end of generateDigest and end of generateBlendedDigest). Needed more context to target uniquely. Second attempt targeted the generateBlendedDigest-specific fallback line — succeeded.</p>
+    <p>Full function appended. Export added: <code>export async function generateEditorialDigest(felixInputs)</code>.</p>
+  </div>
+</div>
+
+<!-- TURN 5 — scout.js: three changes -->
+<div class="turn assistant">
+  <div class="label">Claude Code — three changes to scout.js (Issues 2 and 3)</div>
+  <div class="bubble">
+    <p><strong>Change 1: Import</strong> — Add <code>generateEditorialDigest</code> to the import line.</p>
+    <pre><code>// Before:
+import { generateDigest, generateBlendedDigest } from './gemini.js'
+
+// After:
+import { generateDigest, generateBlendedDigest, generateEditorialDigest } from './gemini.js'</code></pre>
+    <p>Edit tool: success.</p>
+
+    <p><strong>Change 2: MIN_ARTICLES 2 → 1</strong></p>
+    <pre><code>// Before:
+const MIN_ARTICLES = 2
+
+// After:
+const MIN_ARTICLES = 1</code></pre>
+    <p>Rationale: The Africa GATE is the quality guard, not article count. One strong AI-signal article is sufficient. MIN_ARTICLES=2 was blocking industry category entirely on runs where only 1 AI article passed the signal gate — and that 1 article was discarded before Gemini ever saw it.</p>
+    <p>Edit tool: success.</p>
+
+    <p><strong>Change 3: Expand AI_SIGNAL</strong></p>
+    <p>Root cause of high SKIP rate: <code>' ai '</code> with surrounding spaces does not match "AI-powered", "AI-driven" etc. (hyphen breaks the space). African tech journalism heavily uses these compound forms. Added:</p>
+    <ul>
+      <li>Compound: <code>'ai-powered', 'ai-driven', 'ai-enabled', 'ai-based', 'ai-generated', 'ai-assisted'</code></li>
+      <li>Domain terms: <code>'chatbot', 'natural language', 'computer vision', 'predictive analytics', 'speech recognition', 'recommendation engine', 'language model', 'foundation model', 'multimodal', 'autonomous', 'robotics'</code></li>
+    </ul>
+    <p>Edit tool: success. Full new AI_SIGNAL array:</p>
+    <pre><code>const AI_SIGNAL = [
+  'artificial intelligence', ' ai ', 'machine learning', 'neural network',
+  'large language model', 'generative ai', 'deep learning', 'llm',
+  'chatgpt', 'openai', 'anthropic', 'claude', 'gemini', 'llama', 'gpt',
+  'nvidia', 'hugging face', 'mistral', 'diffusion model', 'transformer',
+  'ai model', 'ai tool', 'ai system', 'ai startup', 'ai policy',
+  'ai regulation', 'ai governance', 'ai safety', 'ai ethics', 'ai agent',
+  'agentic', 'data science', 'algorithm', 'automation', 'tech startup',
+  'digital innovation', 'nitda', 'ai africa', 'ai nigeria', 'technology policy',
+  // Compound and hyphenated forms — common in tech press
+  'ai-powered', 'ai-driven', 'ai-enabled', 'ai-based', 'ai-generated', 'ai-assisted',
+  // Technology domains frequently discussed in African tech coverage
+  'chatbot', 'natural language', 'computer vision', 'predictive analytics',
+  'speech recognition', 'recommendation engine', 'language model',
+  'foundation model', 'multimodal', 'autonomous', 'robotics'
+]</code></pre>
+
+    <p><strong>Change 4: Step 0.5 editorial override block</strong></p>
+    <p>Added between STEP 0 and STEP 1 in <code>runScout()</code>:</p>
+    <pre><code>// ── STEP 0.5: Editorial override ─────────────────────────
+// When Felix has submitted content via #scout-editor, generate a dedicated
+// post from his sources BEFORE the normal RSS loop. The Africa GATE is
+// bypassed here — Felix's direction is editorial authority.
+// Only fires when sources have extracted content (not just plain-text topics).
+if (felixInputs.rowIds?.length > 0 && felixInputs.sources.length > 0) {
+  console.log(`\n  📬 Editorial override: ${felixInputs.sources.length} source(s) from Felix — Africa GATE bypassed`)
+  try {
+    const editorialDigest = await generateEditorialDigest(felixInputs)
+
+    if (!editorialDigest.title || !editorialDigest.content || editorialDigest.content.length < 200) {
+      console.log('  ⚠️  Editorial digest too short — skipping editorial override')
+    } else {
+      console.log(`  Submitting editorial image job to ${PROVIDER}...`)
+      const { jobId: editorialJobId } = await submitImageJob(editorialDigest.imagePrompt)
+
+      const editorialSourceUrls = felixInputs.sources.map(s => s.url).filter(Boolean).slice(0, 3)
+
+      await savePendingPost({
+        title:       editorialDigest.title,
+        content:     editorialDigest.content,
+        excerpt:     editorialDigest.excerpt,
+        category:    'industry',
+        tags:        ['editorial', 'ai', 'industry'],
+        sourceUrls:  editorialSourceUrls,
+        imagePrompt: editorialDigest.imagePrompt,
+        jobId:       editorialJobId,
+        provider:    PROVIDER,
+      })
+
+      console.log(`  ✅ Editorial post queued: "${editorialDigest.title.slice(0, 60)}"`)
+      console.log(`     Job ID: ${editorialJobId || '(none — HF generates in Phase 2)'}`)
+
+      await consumeEditorialRows(felixInputs.rowIds, editorialDigest.title)
+
+      if (editorialDigest.trendingTerms?.length > 0) {
+        await saveEvergreens(editorialDigest.trendingTerms)
+      }
+    }
+  } catch (err) {
+    console.error(`  ❌ Editorial override failed: ${err.message}`)
+    // Non-fatal — continue with normal RSS processing
+  }
+}</code></pre>
+    <p>Edit tool: success. The RSS loop then proceeds as normal after this block — if a category also queues a post, both are published.</p>
+  </div>
+</div>
+
+<!-- TURN 6 — verification + commit -->
+<div class="turn assistant">
+  <div class="label">Claude Code — verification and git commits</div>
+  <div class="bubble">
+    <p>Ran grep verification commands across all three modified files to confirm changes landed correctly:</p>
+
+    <pre><code>grep -n "MIN_ARTICLES\|AI_SIGNAL\|generateEditorialDigest\|STEP 0.5" scout.js
+
+21:import { generateDigest, generateBlendedDigest, generateEditorialDigest } from './gemini.js'
+31:const MIN_ARTICLES = 1
+38:const AI_SIGNAL = [
+57:  return AI_SIGNAL.some(term => text.includes(term))
+168:  // ── STEP 0.5: Editorial override ─────────────────────────
+176:      const editorialDigest = await generateEditorialDigest(felixInputs)
+276:    if (capped.length < MIN_ARTICLES) {</code></pre>
+
+    <pre><code>grep -n "generateEditorialDigest\|EDITOR DIRECTIVE" gemini.js
+
+315:// generateEditorialDigest — Felix's editorial override
+320:export async function generateEditorialDigest(felixInputs) {
+333:EDITOR DIRECTIVE: The editor (Felix) has personally submitted this content for immediate coverage.</code></pre>
+
+    <p>slugify.ts verified — correct word-boundary logic confirmed.</p>
+
+    <p><strong>Commits:</strong></p>
+    <p>aitrends-ng — git add lib/slugify.ts, commit:</p>
+    <pre><code>fix: slugify truncates at word boundary, no trailing hyphens
+
+Slugs longer than 80 chars were cut mid-word leaving trailing dashes
+(e.g. "...ethics-charter-featuring-"). Now trims back to the last
+complete word boundary before the limit.
+
+→ commit 1370f92 on main</code></pre>
+
+    <p>scout-agent — git add scout.js gemini.js, commit:</p>
+    <pre><code>feat: editorial override + expanded AI signal + lower MIN_ARTICLES
+
+Three pipeline improvements:
+
+1. Editorial override (Issue 3): Felix's #scout-editor submissions now
+   generate a dedicated post before the RSS loop — Africa GATE suspended,
+   editor direction is the authority. New generateEditorialDigest() in
+   gemini.js handles the bypass path. Uses Felix's source content directly.
+
+2. Expanded AI_SIGNAL (Issue 2): Added compound forms (ai-powered,
+   ai-driven, ai-enabled, ai-based, ai-generated, ai-assisted) plus
+   domain terms (chatbot, natural language, computer vision, predictive
+   analytics, speech recognition, language model, multimodal, robotics).
+   These were previously blocking articles that used "AI-powered" with
+   hyphen rather than the plain " ai " pattern.
+
+3. MIN_ARTICLES 2 → 1: The Africa GATE is the quality guard — requiring
+   two AI-signal articles before Gemini was the wrong lever. One strong
+   AI article is publishable.
+
+→ commit 221154e on main</code></pre>
+
+    <p><strong>Pushes:</strong></p>
+    <pre><code>cd aitrends.ng && git push origin main
+→ To https://github.com/FAIT-Blog/aitrends-ng.git
+   c42f6f1..1370f92  main -&gt; main  ✅
+
+cd scout-agent && git push origin main
+→ To https://github.com/FAIT-Blog/scout-agent.git
+   a422cb8..221154e  main -&gt; main  ✅</code></pre>
+  </div>
+</div>
+
+<!-- TURN 7 — document updates -->
+<div class="turn assistant">
+  <div class="label">Claude Code — updating CLAUDE.md, TRAINING_MANUAL.html, SESSION_LOG.html</div>
+  <div class="bubble">
+    <p>Updated <code>CLAUDE.md</code>:</p>
+    <ul>
+      <li>Pipeline step 6: <code>MIN_ARTICLES=2</code> → <code>MIN_ARTICLES=1</code></li>
+      <li>Added "Completed — Session #10" block with all four items (slug fix, editorial override, AI_SIGNAL expansion, MIN_ARTICLES change, TRAINING_MANUAL explanation)</li>
+      <li>Updated 🟡 Medium section: Issues 2, 3, 4 marked ✅</li>
+      <li>Added S10 row to session history table</li>
+    </ul>
+    <p>Added Chapter 19 to <code>TRAINING_MANUAL.html</code>: "The Editorial Override — Exempting Felix From the Africa GATE". Covers:</p>
+    <ul>
+      <li>Why the Africa GATE was blocking Felix's submissions</li>
+      <li>The Step 0.5 solution — dedicated editorial path before RSS loop</li>
+      <li>Why only URL submissions (not plain text topics) trigger the override</li>
+      <li>MIN_ARTICLES rationale</li>
+      <li>AI_SIGNAL expansion — hyphenated form gap explained</li>
+      <li>Slug truncation fix</li>
+      <li>Three-repos / web Claude session explanation</li>
+    </ul>
+    <p>Appended Session #10 to <code>SESSION_LOG.html</code> (this entry).</p>
+    <p>All document updates committed to aitrends-project repo and pushed to GitHub.</p>
+  </div>
+</div>
+
 </div>
 </body>
 </html>

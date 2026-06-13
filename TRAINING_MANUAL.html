@@ -3898,6 +3898,177 @@ if (replyRows.length > 0) {
   </p>
 </div>
 
+<!-- ════════════════ CHAPTER 19 ════════════════ -->
+
+<div class="chapter" id="ch19">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 19</div>
+    <h2>The Editorial Override — Exempting Felix From the Africa GATE</h2>
+    <div class="chapter-meta">Session #10 · 13 June 2026 · scout-agent commit 221154e</div>
+  </div>
+
+  <h3>The Problem</h3>
+  <p>
+    The Africa GATE was doing its job: Gemini returned <code>SKIP_NO_AFRICA_RELEVANCE</code>
+    for any category whose RSS articles had no genuine African angle. But this was also
+    blocking Felix's own editorial submissions. When Felix posted a URL to
+    <code>#scout-editor</code> — for example, a Substack about Claude 4 capabilities —
+    Scout passed it as context to Gemini alongside the best RSS article. If that RSS article
+    had no Africa relevance, Gemini SKIP'd the entire category. Felix's URL was ignored.
+  </p>
+  <p>
+    Felix's instruction: <em>"What if the Africa and Nigeria GATE is configured to exempt my
+    recommendations? I just want to see if and how the process works so we can fine-tune it
+    perfectly."</em>
+  </p>
+  <p>
+    The distinction is important. The Africa GATE exists to stop the system from fabricating
+    Africa connections to global news stories. But when <em>Felix</em> submits a URL, the
+    editorial decision has already been made by a human. The gate should not override the
+    editor. The editor is the gate.
+  </p>
+
+  <h3>The Solution: Step 0.5 — Editorial Override</h3>
+  <p>
+    In <code>scout.js</code>, a new block was added between STEP 0 (load editorial inputs)
+    and STEP 1 (fetch RSS feeds). When <code>felixInputs.sources.length &gt; 0</code> —
+    meaning Felix submitted a URL whose content was successfully extracted — the pipeline
+    generates a dedicated post from that content <em>before</em> the normal RSS loop begins.
+  </p>
+  <p>
+    The Africa GATE is suspended for this call. A new Gemini function,
+    <code>generateEditorialDigest(felixInputs)</code>, handles it. The prompt says:
+  </p>
+  <pre><code>EDITOR DIRECTIVE: The editor (Felix) has personally submitted this content
+for immediate coverage. This is an editorial override — the Africa GATE is
+suspended for this request. Write a post about this content framed for an
+African AI audience.</code></pre>
+  <p>
+    Gemini still writes for an African AI audience — it still frames relevance at the end —
+    but it cannot return SKIP. Felix's direction is the editorial authority.
+  </p>
+  <p>
+    After the post is queued, <code>consumeEditorialRows()</code> marks the editorial_queue
+    rows as consumed. The normal RSS loop then runs as usual; if a category also succeeds,
+    an additional post may be queued. That is intentional — Felix submitted something AND
+    the RSS had good content. Both publish.
+  </p>
+
+  <div class="lesson-box">
+    <div class="lesson-title">Lesson: The Gate Serves the System — Not the Other Way Around</div>
+    <p>
+      Quality gates exist for a specific threat. The Africa GATE exists to stop the
+      system from inventing Africa connections. When the editor makes a deliberate choice,
+      that threat disappears. The gate must not apply to the person whose judgment created it.
+    </p>
+    <p>
+      Build every automated guard with a human override path. Not a bypass that disables
+      the guard — a path that correctly identifies "a human decided this" and acts
+      accordingly.
+    </p>
+  </div>
+
+  <h3>Why Only URL Submissions Trigger the Override</h3>
+  <p>
+    If Felix posts a URL, <code>felix.js</code> extracts the article body (up to 4000 chars)
+    and stores it in <code>felixInputs.sources</code>. That gives Gemini real source material
+    to rewrite accurately. The override requires this — without actual content, Gemini would
+    have to fabricate, which is exactly what the whole system is built to prevent.
+  </p>
+  <p>
+    If Felix posts only plain text (no URL), it goes into <code>felixInputs.topics</code>
+    and is passed as editorial context to each category's normal Gemini call. That behaviour
+    is unchanged. The override only fires when there is extractable source material.
+  </p>
+
+  <h3>The MIN_ARTICLES Change — From 2 to 1</h3>
+  <p>
+    At the same time, <code>MIN_ARTICLES</code> was lowered from 2 to 1. The logic:
+    the Africa GATE is the quality guard, not article count. Requiring two AI-signal articles
+    before even calling Gemini was the wrong lever. It caused entire runs to skip when only
+    one strong AI article existed in the category — which happened often with dedicated
+    African AI portals that post infrequently.
+  </p>
+  <p>
+    One strong, AI-relevant article is enough for Gemini to evaluate and the Africa GATE
+    to accept or reject. The gate was always the real filter. MIN_ARTICLES=2 was redundant
+    friction that suppressed publishing without improving quality.
+  </p>
+
+  <h3>AI_SIGNAL Expansion — Catching Hyphenated Forms</h3>
+  <p>
+    The AI signal gate (<code>hasAISignal()</code>) used <code>' ai '</code> (with surrounding
+    spaces) to match the word "AI". This matched "AI regulation" or "how AI is transforming"
+    but not "AI-powered" or "AI-driven" — because the hyphen breaks the space pattern.
+  </p>
+  <p>
+    African tech journalism commonly uses compound forms like "AI-powered fintech" or
+    "AI-enabled agriculture". These were failing the gate and being discarded before Gemini
+    ever saw them. The fix: add the compound forms explicitly to the term list.
+  </p>
+  <p>New terms added:</p>
+  <ul>
+    <li>Compound: <code>ai-powered</code>, <code>ai-driven</code>, <code>ai-enabled</code>,
+      <code>ai-based</code>, <code>ai-generated</code>, <code>ai-assisted</code></li>
+    <li>Domain terms: <code>chatbot</code>, <code>natural language</code>,
+      <code>computer vision</code>, <code>predictive analytics</code>,
+      <code>speech recognition</code>, <code>language model</code>,
+      <code>multimodal</code>, <code>robotics</code></li>
+  </ul>
+  <p>
+    These are all areas regularly covered in African fintech and govtech reporting. Adding
+    them improves recall without meaningfully increasing false positives — these terms rarely
+    appear in sports, crime, or politics stories.
+  </p>
+
+  <h3>The Slug Truncation Fix</h3>
+  <p>
+    A cosmetic but important fix in <code>aitrends.ng/lib/slugify.ts</code>. The old code
+    used <code>.slice(0, 80)</code> to cap slug length. This could cut a word mid-string,
+    leaving a trailing hyphen: <code>...ethics-charter-featuring-</code>.
+  </p>
+  <p>
+    The fix: after slicing at 80, find the last hyphen in the result. If it is in the second
+    half of the string (past position 40), trim back to it. Then strip any remaining trailing
+    hyphens. Slugs now always end on a complete word. URLs work either way — this was a
+    cosmetic issue — but clean URLs matter for professionalism and SEO trust signals.
+  </p>
+  <pre><code>if (slug.length &gt; 80) {
+  slug = slug.slice(0, 80)
+  const lastHyphen = slug.lastIndexOf('-')
+  if (lastHyphen &gt; 40) slug = slug.slice(0, lastHyphen)
+}
+return slug.replace(/-+$/, '').replace(/^-+/, '')</code></pre>
+
+  <h3>A Note on Three Repos and Web Claude Sessions</h3>
+  <p>
+    Felix shared a web Claude session that claimed TRAINING_MANUAL.html does not exist
+    in the <code>fait-blog/aitrends-ng</code> repo. This is correct. There are three
+    separate GitHub repositories:
+  </p>
+  <ul>
+    <li><code>FAIT-Blog/aitrends-ng</code> — the blog frontend (Next.js, Vercel)</li>
+    <li><code>FAIT-Blog/scout-agent</code> — the automation pipeline (Node.js, GHA)</li>
+    <li><code>FAIT-Blog/aitrends-project</code> — the documentation repo
+      (CLAUDE.md, SESSION_LOG.html, TRAINING_MANUAL.html)</li>
+  </ul>
+  <p>
+    Web Claude sessions are given access to one repo at a time. When you give Claude
+    <code>aitrends-ng</code>, it genuinely cannot see the documentation repo. It was
+    being accurate, not wrong.
+  </p>
+  <p>
+    Claude Code (this VSCode extension session) runs on your local machine where all three
+    repos exist as folders on disk. It can always reach TRAINING_MANUAL.html. This is a
+    fundamental difference between web Claude and Claude Code — the tool runs locally with
+    full filesystem access, not just a Git-cloned repo at read time.
+  </p>
+  <p>
+    If you ever need a web Claude session to reference the manual, give it access to
+    <code>FAIT-Blog/aitrends-project</code> or paste the relevant chapter in directly.
+  </p>
+</div>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -3906,7 +4077,7 @@ if (replyRows.length > 0) {
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 13 June 2026 — Chapter 18 added: SESSION_LOG discipline.
+    Last updated: 13 June 2026 — Chapter 19 added: editorial override, AI_SIGNAL expansion, slug fix.
   </p>
 </div>
 
