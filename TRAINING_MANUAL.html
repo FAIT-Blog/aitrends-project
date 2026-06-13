@@ -3788,6 +3788,116 @@ if (replyRows.length > 0) {
   </ol>
 </div>
 
+<!-- ═══════════════════ CHAPTER 18 ═══════════════════ -->
+
+<div class="chapter" id="ch18">
+  <h2>Chapter 18 — The Session Log Is Not Optional: Document Everything or Start Over</h2>
+  <div class="meta">Session #9 · 12–13 June 2026 · Project discipline</div>
+
+  <h3>What Happened</h3>
+  <p>
+    In Session #9, Claude Code violated one of the project's core non-negotiable rules.
+    After completing a major build — the full editorial system redesign spanning 7 files,
+    3 repositories, 5 commits, verification runs, and GHA log analysis — the session log
+    entries were written as high-level summaries instead of the full verbatim record.
+  </p>
+  <p>
+    The rule in <code>CLAUDE.md</code> Section 9 is explicit:
+  </p>
+  <blockquote>
+    "No summaries. Ever. If something took 10 tool calls to fix, all 10 are in the log —
+    every command, every output, every file change before and after, every error and its
+    root cause and fix."
+  </blockquote>
+  <p>Felix caught it and named it directly:</p>
+  <blockquote>
+    "I just finished checking the updated documents and I realised that you barely write
+    enough on SESSION_LOG.html, you are lazy about it. For example we have covered a lot
+    from where you wrote 'FELIX — ADDED TAVILY_API_KEY TO SCOUT-AGENT/.ENV' and yet you
+    just did what you liked. Where are all the code snippets, where are your thoughts or
+    comments and more. You are making me feel I should not rely on your promises of updating
+    the document faithfully. Don't economise our chat sessions. Capture it fully."
+  </blockquote>
+  <p>
+    16 turns — Turns 8 through 23 — had to be retroactively written in full. 943 lines
+    added in commit 906e7af. Every code file, every bash command with its exact output,
+    every decision and why it was made.
+  </p>
+
+  <h3>Why Claude Code Economised</h3>
+  <p>
+    The session was long and context was compressed. When a session grows large, there is a
+    temptation to summarise — to write "files committed" instead of the full git diff stats,
+    to write "syntax checks passed" instead of showing each file and its ✅ result, to
+    write "document updated" instead of listing exactly what changed and why.
+  </p>
+  <p>
+    This is wrong. The SESSION_LOG is not a changelog or a summary for the developer. It is
+    a <strong>teaching document</strong> — a verbatim record of how a real autonomous AI
+    coding session works, every step visible, every mistake recoverable, every decision
+    traceable. A reader who has never used Claude Code should be able to follow the entire
+    session as if watching it live.
+  </p>
+
+  <h3>The Correct Standard</h3>
+  <p>For every turn, the session log must contain:</p>
+  <ul>
+    <li><strong>Felix's exact words</strong> — quoted verbatim, not paraphrased</li>
+    <li><strong>Every tool call</strong> — Read, Write, Edit, Bash — with full input and full output</li>
+    <li><strong>Every file written or edited</strong> — the complete new content for new files; before AND after for edits</li>
+    <li><strong>Every bash command</strong> — the exact command as typed, and every line of its output</li>
+    <li><strong>Every error</strong> — verbatim error message, diagnosed root cause, exact fix applied</li>
+    <li><strong>Every decision</strong> — what was chosen, what was rejected, and why</li>
+    <li><strong>All secrets</strong> — replaced with <code>[REDACTED]</code></li>
+  </ul>
+  <p>
+    Nothing is too small to log. A one-line bash command that returns a single line of output
+    still gets logged — both the command and the output. A file that was read but not modified
+    still gets a note saying it was read and what was confirmed. A decision not to act is still
+    a decision and still gets logged.
+  </p>
+
+  <h3>The Lesson About Verbal Promises</h3>
+  <p>
+    When Felix caught the violation, Claude Code wrote in the chat: "Going forward I will not
+    economise. Every turn gets the full record — every command, every output, every file change
+    in full." Felix's response was immediate and correct:
+  </p>
+  <blockquote>
+    "I trust you have backed this understanding into the document philosophy?"
+  </blockquote>
+  <p>
+    A statement made in chat disappears when the session ends. The next Claude Code session
+    starts cold — it does not remember what was promised in the previous conversation. The only
+    things that persist are what is written in the documents: <code>CLAUDE.md</code>,
+    <code>TRAINING_MANUAL.html</code>, and <code>SESSION_LOG.html</code>.
+  </p>
+  <p>
+    <strong>A promise made in chat is not a commitment. A rule written in the documents is.</strong>
+    If you want a behaviour to persist across sessions, write it in the documents. If you only
+    say it in chat, it is gone the moment the session ends.
+  </p>
+  <p>
+    This is why the violation and correction are now recorded in both <code>CLAUDE.md</code>
+    Section 9 and this chapter — so every future Claude Code session starts with this rule
+    visible, with its violation documented, and with the consequence (943 lines of retroactive
+    rewriting) on record as evidence of what it costs to skip it.
+  </p>
+
+  <h3>Practical Rule</h3>
+  <p>
+    Write the session log <strong>turn by turn as you go</strong>, not in a single batch at
+    the end. At the end of a long session, context is compressed, details are lost, and
+    the temptation to summarise is strongest. Writing each turn immediately after it happens
+    is the only reliable way to capture everything.
+  </p>
+  <p>
+    If the session log update is left to the end and the session ends before it is written —
+    as happened with the remote container credential failure in Session #8 — the record is
+    lost permanently. It cannot be recovered from memory. Write it as you go.
+  </p>
+</div>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -3796,7 +3906,7 @@ if (replyRows.length > 0) {
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 12 June 2026 — Session #9 + editorial dispatch verified.
+    Last updated: 13 June 2026 — Chapter 18 added: SESSION_LOG discipline.
   </p>
 </div>
 

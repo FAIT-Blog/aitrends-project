@@ -604,6 +604,15 @@ aitrends-project/SESSION_LOG.html
 
 This session log is a teaching document. It demonstrates what real autonomous Claude Code sessions look like — the thought process, the mistakes, the fixes, the decisions. Show everything. A reader who has never used Claude Code should be able to follow every step.
 
+**Violation and correction — Session #9 (12 June 2026):**
+Claude Code wrote summary-level entries for Turns 8–22 instead of the full verbatim record. Felix caught it:
+> "I just finished checking the updated documents and I realised that you barely write enough on
+> SESSION_LOG.html, you are lazy about it. Where are all the code snippets, where are your thoughts
+> or comments and more. You are making me feel I should not rely on your promises of updating the
+> document faithfully. Don't economise our chat sessions. Capture it fully."
+
+All 16 missing turns were retroactively written in full (943 lines, commit 906e7af). The lesson: stating "I will do better" in chat is meaningless — the understanding must be baked into the documents so every future session starts with this rule visible and non-negotiable. Do not economise. Do not defer the log to the end. Do not assume a summary is acceptable because the session is long.
+
 ---
 
 ## 10. SESSION HISTORY
