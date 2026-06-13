@@ -4069,6 +4069,198 @@ return slug.replace(/-+$/, '').replace(/^-+/, '')</code></pre>
   </p>
 </div>
 
+<!-- ═══════════════════ CHAPTER 20 ═══════════════════ -->
+
+<div class="chapter" id="ch20">
+  <div class="chapter-header">
+    <span class="chapter-number">Chapter 20</span>
+    <h2>The Editorial Consumption Bug — When consumeEditorialRows() Fires With the Wrong Post</h2>
+    <p class="chapter-meta">Session #11 · 13 June 2026 · scout-agent pipeline</p>
+  </div>
+
+  <h3>What Happened</h3>
+  <p>
+    Felix submitted three Substack URLs to <code>#scout-editor</code> on June 12–13. The editorial
+    system was supposed to generate a post from each submission. Instead, nothing appeared on the site
+    and Felix received no feedback. The question came in as: <em>"None of the three links from
+    Substacks I posted is responded to. What can you say about that?"</em>
+  </p>
+  <p>
+    Investigation revealed two separate failure modes — one already fixed, one still latent.
+  </p>
+
+  <h3>The Root Cause: consumeEditorialRows() In the Wrong Place</h3>
+  <p>
+    In the old code (commit <code>a422cb8</code>, before Session #10's <code>221154e</code>), the
+    <code>consumeEditorialRows()</code> call lived inside the RSS category loop. Every time any
+    category successfully queued a post, the code ran:
+  </p>
+  <pre><code>// OLD behaviour (pre-221154e) — WRONG
+for (const category of categories) {
+  const digest = await generateDigest(articles, felixInputs)   // ← felixInputs passed as context
+  if (digest) {
+    await savePendingPost(digest, category)
+    await consumeEditorialRows(felixInputs.rowIds, digest.title)   // ← FIRES HERE
+    // ...
+  }
+}</code></pre>
+  <p>
+    Felix's editorial inputs were passed to <code>generateDigest()</code> as "context hints" alongside
+    the RSS articles — but Gemini was free to use or ignore them. In this case, the deepfake article
+    from aibase.ng scored highest and Gemini wrote about it. Felix's Substack content about LLM
+    writing techniques was irrelevant to the deepfake story and Gemini ignored it.
+  </p>
+  <p>
+    After the deepfake post was queued, <code>consumeEditorialRows([1, 2], "Fact Check Confirms
+    Viral Video of Ibrahim Traoré...")</code> fired — marking Felix's two Substack rows as
+    "consumed by the deepfake post." Felix's Substack content was never passed as the primary
+    source to Gemini. It was just administratively discarded.
+  </p>
+
+  <h3>How the Fix Was Supposed to Work (Step 0.5)</h3>
+  <p>
+    Session #10 added Step 0.5 to <code>scout.js</code> — a dedicated editorial post generation
+    block that runs <em>before</em> the RSS category loop:
+  </p>
+  <pre><code>// NEW behaviour (221154e) — CORRECT
+// STEP 0.5 — editorial override
+if (felixInputs.rowIds?.length &gt; 0 &amp;&amp; felixInputs.sources.length &gt; 0) {
+  const editorialDigest = await generateEditorialDigest(felixInputs)  // Africa GATE bypassed
+  await savePendingPost(editorialDigest, 'industry')
+  await consumeEditorialRows(felixInputs.rowIds, editorialDigest.title)  // ← fires with CORRECT title
+}
+
+// STEP 1 — RSS loop (editorial rows already consumed, no interference)
+for (const category of categories) { ... }</code></pre>
+  <p>
+    This is the correct pattern. Editorial consumption happens exactly once, immediately after the
+    editorial post is generated, with the right title. The RSS loop never touches editorial rows.
+  </p>
+  <p>
+    The problem: rows 1 and 2 were submitted June 12 evening and consumed June 13 at 10:15 UTC.
+    Commit <code>221154e</code> was pushed at the end of Session #10 — which was also June 13 —
+    but later in the day. The 10:15 UTC Phase 1 run was still on the old code. Rows 1 and 2 were
+    casualties of the window between when Felix submitted them and when the fix was live.
+  </p>
+
+  <h3>Diagnosing From the Database</h3>
+  <p>
+    To confirm the root cause, query <code>pending_posts</code> for what Phase 1 produced at
+    10:15 UTC:
+  </p>
+  <pre><code>GET /rest/v1/pending_posts
+  ?select=id,title,created_at,status,source_urls
+  &amp;created_at=gte.2026-06-13T10:00:00
+  &amp;order=created_at.asc
+
+RESULT — only 1 row:
+{
+  "id": 80,
+  "title": "Fact Check Confirms Viral Video of Ibrahim Traoré Addressing Nigeria's Insecurity is a Deepfake",
+  "created_at": "2026-06-13T10:15:17",
+  "status": "published",
+  "source_urls": ["https://aibase.ng/fact-checked/..."]
+}</code></pre>
+  <p>
+    One post. The deepfake. No editorial post. Diagnosis confirmed: Felix's Substacks were never
+    turned into a post. They were consumed as a side-effect of the deepfake post being queued.
+  </p>
+
+  <h3>The Database Repair</h3>
+  <p>
+    Three fields needed resetting on rows 1 and 2. Two separate PATCH calls because it's cleaner
+    to catch <code>posted_at</code> as a separate concern (easy to miss):
+  </p>
+  <pre><code>-- Reset status and consumption fields
+PATCH /rest/v1/editorial_queue?id=in.(1,2)
+Body: {"status":"pending","consumed_at":null,"used_in_post":null}
+
+-- Clear stale posted_at (set when deepfake Phase 2 attempted replyToFelix())
+PATCH /rest/v1/editorial_queue?id=in.(1,2)
+Body: {"posted_at":null}</code></pre>
+  <p>
+    Why clear <code>posted_at</code>? The <code>getPendingEditorialReplies()</code> function in
+    <code>complete.js</code> queries: <code>status='consumed' AND posted_at IS NULL AND
+    used_in_post=&lt;title&gt;</code>. When Phase 2 publishes the editorial post, it matches rows
+    by comparing <code>used_in_post</code> to the post title and then checks <code>posted_at IS NULL</code>
+    to decide whether to send a Slack reply. If <code>posted_at</code> still had the stale June 13
+    10:30 UTC value, Phase 2 would silently skip the Slack reply to Felix — meaning he'd get his
+    editorial post published but no notification. Clearing it ensures the reply fires correctly.
+  </p>
+
+  <h3>Final State After Repair</h3>
+  <table>
+    <tr><th>id</th><th>status</th><th>used_in_post</th><th>consumed_at</th><th>posted_at</th></tr>
+    <tr><td>1</td><td>pending</td><td>null</td><td>null</td><td>null</td></tr>
+    <tr><td>2</td><td>pending</td><td>null</td><td>null</td><td>null</td></tr>
+    <tr><td>3</td><td>pending</td><td>null</td><td>null</td><td>null</td></tr>
+  </table>
+  <p>
+    On the next Phase 1 run, Step 0.5 will find all three pending rows, extract content from all
+    three Substack URLs (4,019 chars confirmed readable for each), and generate a single editorial
+    post covering all three sources — bypassing the Africa GATE. The Substack topics (Claude skills,
+    LLM writing techniques) will be framed for African AI practitioners.
+  </p>
+
+  <h3>The Residual Risk Still In the Code</h3>
+  <p>
+    Step 0.5 fixed the primary failure mode. But the old <code>consumeEditorialRows()</code> call
+    inside the RSS category loop was not removed — it still exists as a fallback in <code>scout.js</code>.
+    This means:
+  </p>
+  <ul>
+    <li>If Step 0.5 runs first and succeeds → editorial rows consumed correctly → category loop finds no pending rows → old call is a no-op (safe, rows already consumed)</li>
+    <li>If Step 0.5 <em>fails</em> (network error on URL fetch, Gemini timeout) → no editorial post generated → RSS loop runs → first category that succeeds calls the old <code>consumeEditorialRows()</code> → Felix's rows consumed with wrong title AGAIN</li>
+  </ul>
+  <p>
+    The fix is to remove <code>consumeEditorialRows()</code> entirely from the RSS category loop.
+    Step 0.5 must be the sole authoritative consumption path. As of Session #11 this has been
+    identified but not yet implemented — tracked in CLAUDE.md as a 🔴 Critical item.
+  </p>
+
+  <h3>What Substack Content Looks Like After Extraction</h3>
+  <p>
+    One concern before the repair was whether Substack blocks automated fetches. It does not.
+    All three URLs returned 4,019 chars (the <code>MAX_CONTENT_CHARS</code> cap in <code>fetcher.js</code>)
+    of real readable prose. The <code>fetchArticleText()</code> path handles Substack correctly
+    via the standard CONTENT_SELECTORS cascade. No special handling needed.
+  </p>
+
+  <h3>Lessons</h3>
+  <ol>
+    <li>
+      <strong>Pipeline ordering matters enormously.</strong> A function called in the right place
+      (Step 0.5 before the RSS loop) is correct. The same function called in the wrong place
+      (inside the category loop) causes data corruption. The code was logically correct but
+      architecturally wrong.
+    </li>
+    <li>
+      <strong>Always verify the deployed version before assuming a fix is live.</strong> Session #10
+      built the Step 0.5 fix and pushed it. But the Phase 1 run at 10:15 UTC on the same day
+      (June 13) consumed rows 1 and 2 before the fix ran. "We fixed it" and "the fix is running"
+      are two different states.
+    </li>
+    <li>
+      <strong>Database repair is always available when pipeline logic is wrong.</strong> The
+      Supabase REST API PATCH operation let us directly correct the state of the affected rows —
+      no code change needed, no redeployment. This is why storing state in a database rather than
+      in-memory or in files gives you recovery options.
+    </li>
+    <li>
+      <strong>Check all related fields when resetting state.</strong> Resetting <code>status</code>
+      and <code>used_in_post</code> was the obvious repair. The <code>posted_at</code> field
+      was less obvious but equally important — missing it would have silently broken the Slack reply
+      on the next successful publish.
+    </li>
+    <li>
+      <strong>Content extractability should be verified separately from pipeline logic.</strong>
+      Before concluding the problem was in the pipeline, confirm that the content itself
+      is fetchable. All three Substacks returned content — this ruled out a fetching problem and
+      pointed clearly at the pipeline as the culprit.
+    </li>
+  </ol>
+</div>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -4077,7 +4269,7 @@ return slug.replace(/-+$/, '').replace(/^-+/, '')</code></pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 13 June 2026 — Chapter 19 added: editorial override, AI_SIGNAL expansion, slug fix.
+    Last updated: 13 June 2026 — Chapter 20 added: editorial consumption bug, database repair, residual risk.
   </p>
 </div>
 
