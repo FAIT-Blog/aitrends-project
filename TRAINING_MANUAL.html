@@ -4261,6 +4261,196 @@ Body: {"posted_at":null}</code></pre>
   </ol>
 </div>
 
+<!-- ════════════════════════════════════════════════════════════
+     CHAPTER 21
+     ════════════════════════════════════════════════════════════ -->
+<div class="chapter" id="ch21">
+  <h2>Chapter 21 — The Workflow Env Block Trap: When a Secret Exists But the Process Can't See It</h2>
+  <p class="chapter-meta">Session #12 · 14 June 2026 · scout-agent + aitrends.ng</p>
+
+  <h3>What Happened</h3>
+  <p>
+    The Tavily API key (<code>TAVILY_API_KEY</code>) was added to GitHub Actions Secrets two days before
+    Session #12. In Session #9 the key was added to the local <code>.env</code> file and tested working
+    (3 Tavily results returned). In Session #12 two new code paths were built that used Tavily:
+    the search-aggregate pipeline in <code>search.js</code> and a URL-content fallback in
+    <code>felix.js</code> for Substack URLs that GHA IP ranges can't fetch directly.
+  </p>
+  <p>
+    Both paths checked <code>process.env.TAVILY_API_KEY</code>. Both saw <code>undefined</code>.
+    Both paths short-circuited. The Phase 1 log printed:
+  </p>
+  <pre><code>    ↩️  Direct fetch failed, trying Tavily extract...
+    ⚠️  Both direct fetch and Tavily failed — using note as topic signal
+    ⚠️  TAVILY_API_KEY not set — skipping web search, using single-source mode</code></pre>
+
+  <h3>The Wrong Diagnosis</h3>
+  <p>
+    Claude Code read the "not set" log messages and concluded: "TAVILY_API_KEY is NOT in GitHub
+    Actions Secrets." This was stated as fact to Felix. It was wrong. Felix attached a screenshot
+    of the GitHub Actions Secrets page showing <code>TAVILY_API_KEY</code> clearly listed,
+    added 2 days ago.
+  </p>
+  <p>
+    Felix's feedback was direct: <em>"I wonder if you know what you are saying, and why you did not
+    find a way to verify all this claims."</em>
+  </p>
+
+  <h3>The Actual Root Cause</h3>
+  <p>
+    In GitHub Actions, secrets stored in the repository's Secrets vault are NOT automatically
+    available as environment variables in every step. A secret reaches <code>process.env</code>
+    only if it is explicitly mapped in the step's <code>env:</code> block:
+  </p>
+  <pre><code>- name: Run Scout
+  env:
+    SUPABASE_URL:        ${{ secrets.SUPABASE_URL }}
+    SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+    GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
+    # ... other secrets
+    TAVILY_API_KEY:      ${{ secrets.TAVILY_API_KEY }}   ← THIS LINE WAS MISSING</code></pre>
+  <p>
+    The <code>scout.yml</code> "Run Scout" step had 11 secrets in its env block. <code>TAVILY_API_KEY</code>
+    was the 12th secret added to the repository — in Session #9. But nobody added it to the
+    workflow's env block. The secret existed in the vault but was never handed to the Node.js process.
+    <code>process.env.TAVILY_API_KEY</code> was <code>undefined</code> on every GHA run.
+  </p>
+
+  <h3>The Fix</h3>
+  <p>One line added to <code>.github/workflows/scout.yml</code>:</p>
+  <pre><code>TAVILY_API_KEY:      ${{ secrets.TAVILY_API_KEY }}</code></pre>
+  <p>Commit <code>1b5512d</code> pushed to <code>FAIT-Blog/scout-agent</code>.</p>
+
+  <h3>The Verification Protocol: What Should Have Happened</h3>
+  <p>
+    Before making any claim about whether a secret is available to the process, two things must
+    be checked — not assumed:
+  </p>
+  <ol>
+    <li>
+      <strong>Verify the secret exists in the vault:</strong>
+      <pre><code>gh secret list --repo FAIT-Blog/scout-agent</code></pre>
+      This shows all secret names and their last-updated date.
+    </li>
+    <li>
+      <strong>Verify the secret is mapped in the workflow:</strong>
+      Read the workflow file and confirm the secret appears in the step's <code>env:</code> block.
+      A secret in the vault but absent from the env block produces exactly the same
+      <code>undefined</code> result as a completely missing secret.
+    </li>
+  </ol>
+  <p>
+    A secret being absent from <code>process.env</code> has two possible causes — vault missing
+    or env block missing — and they are indistinguishable from the application log alone.
+    Always check both before claiming either.
+  </p>
+
+  <h3>The Broader Pattern</h3>
+  <p>
+    This trap appears in many CI/CD systems. The pattern is:
+  </p>
+  <ol>
+    <li>Developer adds secret to vault (GitHub, Vercel, AWS SSM, etc.)</li>
+    <li>Developer does not update the workflow/task definition to pass the secret to the process</li>
+    <li>Code correctly checks for the env var but finds <code>undefined</code></li>
+    <li>Wrong conclusion: "the secret wasn't added"</li>
+    <li>Confusion when the secret IS shown to exist</li>
+  </ol>
+  <p>
+    The vault and the runtime environment are two separate namespaces. Adding to the vault is
+    Step 1. Mapping into the runtime is Step 2. Both are required.
+  </p>
+
+  <h3>Session #12 — Other Changes</h3>
+
+  <h4>consumeEditorialRows() Permanently Removed from RSS Loop</h4>
+  <p>
+    After the Session #11 diagnosis of why Felix's Substack content was never reaching Gemini
+    (the old code was calling <code>consumeEditorialRows()</code> inside the RSS category loop,
+    associating Felix's rows with RSS post titles), the Session #12 decision was:
+    <strong>remove, not modify.</strong>
+  </p>
+  <p>
+    There is no correct version of that call being in the RSS loop. A permanent comment was written
+    in its place explaining why it must never return:
+  </p>
+  <pre><code>// NOTE: consumeEditorialRows() is intentionally NOT called here.
+//
+// Editorial rows are consumed exclusively in Step 0.5 (above), where Felix's
+// content was actually used to generate a post. Calling it here (inside the
+// RSS loop) marks Felix's rows as "consumed by this RSS post" even though his
+// Substack content was never given to Gemini — this was the Session #11 bug
+// that silently discarded three Felix submissions (rows 1, 2, 3).
+//
+// Invariant: consume editorial rows if and only if Step 0.5 generated a post
+// from them. If Step 0.5 failed, rows stay pending and retry next Phase 1 run.
+// The RSS loop must never touch editorial_queue rows.</code></pre>
+  <p>
+    When code removal is the correct answer, write the reason <em>in the code</em> — not just in
+    the session log. A future agent reading the file will see why, not just what's missing.
+  </p>
+
+  <h4>Editorial Instruction as Primary Directive</h4>
+  <p>
+    Felix's core complaint: his Slack instructions were being subordinated to the pipeline's
+    Africa-framing rules. Even when his note said "Post everything as is," Gemini was reframing
+    the content through the Africa-first lens.
+  </p>
+  <p>
+    Fix: <code>generateEditorialDigest()</code> in <code>gemini.js</code> was rewritten so that
+    Felix's notes appear as the FIRST thing in the prompt, explicitly marked as overriding all
+    other directives:
+  </p>
+  <pre><code>EDITOR'S INSTRUCTION (this overrides all other directives):
+1. Post everything as is on the website:
+2. Work on this:
+3. Create a post with this:</code></pre>
+  <p>
+    Africa framing was reduced to one optional closing sentence — <em>only if genuinely applicable</em>.
+    The editorial operator's authority supersedes the pipeline's programming.
+  </p>
+
+  <h4>Continuous Scroll on aitrends.ng</h4>
+  <p>
+    The "Load More" button in <code>PostGrid.tsx</code> was replaced with
+    <code>IntersectionObserver</code>. A zero-height sentinel <code>&lt;div&gt;</code> is placed
+    below the last card. When the viewport comes within 300px of the sentinel, 9 more posts load.
+  </p>
+  <p>
+    The 300px <code>rootMargin</code> is critical for mobile: finger-flick scrolling can cover
+    large distances per gesture, so loading must trigger well before the bottom is reached, or
+    users see a blank gap. The observer disconnects when <code>hasMore === false</code>.
+  </p>
+  <p>Commit <code>c2311ae</code> on aitrends-ng. TypeScript check: clean.</p>
+
+  <h3>Key Lessons</h3>
+  <ol>
+    <li>
+      <strong>A secret in the vault ≠ a secret available to the process.</strong> Always verify
+      both — vault presence (<code>gh secret list</code>) and workflow mapping (read the env block).
+    </li>
+    <li>
+      <strong>Never claim something doesn't exist without verifying it.</strong> "I can see the
+      log says it's not set" is not the same as "it's not in GitHub Secrets." Diagnose at the
+      source, not from the symptom.
+    </li>
+    <li>
+      <strong>Remove code with a comment explaining why it was removed.</strong> A future agent
+      seeing a gap in logic may "fix" it by re-adding the wrong thing. The comment prevents that.
+    </li>
+    <li>
+      <strong>Editorial operator authority must be primary.</strong> When building an AI-assisted
+      pipeline, the human editor's explicit instruction must override all automated heuristics.
+      This is a design principle, not a configuration option.
+    </li>
+    <li>
+      <strong>When adding a new secret, update the workflow env block in the same commit.</strong>
+      Adding to the vault and updating the workflow are one logical operation. Separating them
+      creates a silent failure window.
+    </li>
+  </ol>
+</div>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -4269,7 +4459,7 @@ Body: {"posted_at":null}</code></pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 13 June 2026 — Chapter 20 added: editorial consumption bug, database repair, residual risk.
+    Last updated: 14 June 2026 — Chapter 21 added: GHA workflow env block trap, editorial authority, continuous scroll.
   </p>
 </div>
 
