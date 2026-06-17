@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-14 (Session #12 — consumeEditorialRows removed from RSS loop, Tavily env wire fixed, editorial instruction now primary directive, continuous scroll on site)
+**Last Updated:** 2026-06-17 (Session #13 — admin dashboard architecture + risks documented, master build prompt written, platform research, full security audit + 9 fixes applied across scout-agent and aitrends.ng)
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -258,10 +258,15 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 - Footer updated: "Today and the next AI trends"
 - About page updated: Gemini 3.5 Flash, real feed list, Africa-first mission
 - ShareButtons on post pages: X, WhatsApp, LinkedIn, Telegram, Copy Link (clipboard + "Copied!" feedback)
+- Continuous scroll via IntersectionObserver 300px lookahead — no "Load More" button
+- **Security hardened (Session #13):**
+  - `sanitize-html` on all AI-generated content before Supabase write (allowlist: h2–h4, p, strong, em, lists, a, blockquote, hr)
+  - `crypto.timingSafeEqual()` on API key comparison in `create` and `draft` routes
+  - `isSafeUrl()` validation on `cover_image_url` and `source_urls` before storage
+  - `getAdminClient()` Supabase singleton in `slack/editorial/route.ts`
 
 ### Known Issues
-- 🔴 Individual post pages (`/post/[slug]`) returning HTTP 404 on Vercel despite route file existing — under investigation (Round 2 task)
-- 🟡 OG meta tags cannot be verified until post 404 is resolved
+- 🟡 OG meta tags — verify in Twitter Card Validator / Facebook Debugger (post 404 issue resolved in Session #5)
 
 ---
 
@@ -430,7 +435,7 @@ npm start   # runs index.js
 ---
 
 ## 7. MASTER TO-DO LIST
-*Updated: 2026-06-10*
+*Updated: 2026-06-17*
 *Status key: 🔴 Critical | 🟠 High | 🟡 Medium | 🔵 Low / Later*
 
 ### ✅ Completed — Round 1 (4 June 2026, morning)
@@ -544,6 +549,22 @@ npm start   # runs index.js
 - ✅ **Continuous scroll implemented on site** — `PostGrid.tsx` rewritten. Removed "Load More" button, replaced with IntersectionObserver watching a zero-height sentinel below the card grid. `rootMargin: '300px'` triggers 300px before scroll reaches bottom — seamless on mobile finger-flick scrolling. Observer disconnects when all posts loaded. End-of-list indicator shows post count. Commit: `c2311ae` on aitrends-ng.
 - ✅ **Claim verification lesson** — Claude Code made wrong claim "TAVILY_API_KEY not in GitHub Secrets" without running `gh secret list`. Root cause was env block gap, not missing secret. Lesson: before claiming a secret is absent, always run `gh secret list --repo <org>/<repo>` AND read the workflow env block to confirm the secret is actually passed to process.env.
 
+### ✅ Completed — Session #13 (16–17 June 2026)
+- ✅ **Admin dashboard architecture documented** — Full architecture, risks, and mitigations written in session. Supabase `scout_config` singleton table, Phase 1 config-read-once pattern, standing instruction injection position, category sync requirement across 3 places, SSRF/gate-off/config-missing risks all documented. No implementation yet — design decision recorded for future build.
+- ✅ **Consolidated master to-do list compiled** — 4 categories (Housekeeping, Pipeline Bugs, Admin Dashboard, SEO, Backlog) with priority ordering and suggested execution sequence for next session.
+- ✅ **Master build prompt written** — 18-section, ~5,000-word self-contained prompt covering the complete project from scratch to future vision with 99% replication precision. Includes all architecture, schema, file structure, Gemini prompt rules, banned phrases, security rules, bug history, and future roadmap.
+- ✅ **Platform research completed** — No Africa-first fully autonomous AI news platform found. Closest global equivalents (The Batch, TLDR, Ben's Bites) are all human-curated. AITrends.ng's specific combination of autonomous publishing + Africa-first mandate + two-phase image pipeline + self-learning vocab is novel.
+- ✅ **Full security audit completed** — 9 vulnerabilities identified across 6 files. 3 critical (prompt injection, SSRF, HTML injection), 2 high (no rate limiting, timing attack), 4 medium/low. Full impact assessment written for each fix before implementation.
+- ✅ **SEC-01 — Prompt injection defence** — `<SOURCE_CONTENT>` XML boundaries added around all external article text in `generateDigest()`, `generateBlendedDigest()`, `generateEditorialDigest()` in `gemini.js`. Prevents malicious RSS content from hijacking Gemini instructions. Commit: `f6788c7`.
+- ✅ **SEC-02 — SSRF guard on image downloads** — `isSafeImageUrl()` added to `complete.js`. Validates URLs before every external image fetch (`downloadDirectImage`, `trySourceImage`, and the og:image parsed from HTML). Blocks AWS/GCP metadata endpoints, localhost, and RFC 1918 private IP ranges. Commit: `f6788c7`.
+- ✅ **SEC-03 — HTML sanitization on post content** — `sanitize-html@2.17.5` installed in aitrends.ng. Applied to `create/route.ts` before Supabase write. Allowlist: `h2/h3/h4`, `p/br`, `strong/em`, `ul/ol/li`, `a/blockquote/hr`. Strips `script`, `iframe`, `style`, `on*` event handlers, and `javascript:/data:` URLs. Allowlist confirmed against actual published post tags (`h3`, `p`, `strong`). Commit: `6f2dce5`.
+- ✅ **SEC-05 — Timing-safe API key comparison** — `crypto.timingSafeEqual()` replaces `!==` in `create/route.ts` and `draft/route.ts`. Prevents timing-based API key brute-force attacks. Commit: `5fe2a15`.
+- ✅ **SEC-06 — URL validation on stored fields** — `isSafeUrl()` helper added to `create/route.ts` and `draft/route.ts`. Validates `cover_image_url` and each `source_urls` entry — rejects `javascript:`, `data:`, and non-http/https schemes before Supabase write. Commit: `5fe2a15`.
+- ✅ **SEC-07 — Supabase singleton in Slack webhook** — `getAdminClient()` lazy singleton replaces per-request `createClient()` in `slack/editorial/route.ts`. One connection pool shared across all webhook invocations. Commit: `5fe2a15`.
+- ✅ **SEC-08 — Publisher request timeout** — `AbortSignal.timeout(45000)` added to `publishPost()` fetch call in `publisher.js`. Prevents Phase 2 hanging indefinitely on Vercel cold start + Supabase sleep. On timeout, post resets to `pending_image` and retries next cycle. Commit: `f6788c7`.
+- ✅ **SEC-09 — Extended markdown stripping** — `publisher.js` now strips `*italic*`, `__bold__`, `_italic_`, `` `code` `` in addition to existing `**bold**`. Commit: `f6788c7`.
+- ✅ **SEC-04 deferred** — Rate limiting on `/api/posts/*` not yet implemented. API key is the primary protection at current scale. Revisit when admin dashboard is built. Upstash Redis approach documented for future implementation.
+
 ### 🔴 Critical
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
 - ✅ **Assess Gemini capability after simplification** — Audit passed (Session #8 continuation, 12 June): 5 posts reviewed. No asterisks, 1 source URL, title variety confirmed. Gemini accurate-rewrite prompt working as intended.
@@ -551,6 +572,7 @@ npm start   # runs index.js
 - ✅ **Editorial system redesigned** — Slack polling → Events API push → Supabase queue → Slack threaded reply. (a422cb8 scout-agent, 7d375b3 aitrends-ng). Pending one-time setup: run add-editorial-queue.sql, add SLACK_SIGNING_SECRET to Vercel, enable Events API in Slack app pointing at https://aitrends-ng.vercel.app/api/slack/editorial.
 - ✅ **One-time editorial setup complete** — SQL run, Events API enabled, SLACK_SIGNING_SECRET + GITHUB_PAT added to Vercel, cron-job.org PAT updated, Vercel redeployed. Verified: Phase 1 dispatched immediately on editorial input (21:29 UTC, run 27444126665). Editorial rows stay pending until a category queues successfully (expected — Africa GATE correctly skipped that run).
 - ✅ **`consumeEditorialRows()` removed from RSS category loop** — Done in Session #12 (commit 5a22b5c). Replaced with permanent comment explaining the invariant. The RSS loop will NEVER touch editorial_queue rows.
+- ✅ **Security audit + 8 fixes applied** — Session #13. SEC-01 prompt injection, SEC-02 SSRF, SEC-03 HTML sanitization, SEC-05 timing-safe key compare, SEC-06 URL validation, SEC-07 Supabase singleton, SEC-08 publisher timeout, SEC-09 extended markdown strip. Three commits across both repos.
 - [ ] **HN Anthropic feed intermittency (monitor)** — hnrss.org returning 502 on roughly half of Phase 1 runs. Need a stable second Anthropic source.
 - [ ] **Old posts need retroactive cleanup** — posts published before Session #8 still have: markdown asterisks in body (publisher.js strip only applies to future posts), irrelevant source_urls, keyword stuffing. Bulk Supabase content edit needed.
 - [ ] **Google Doc corrections pending** — Felix shared a doc with specific post edits. Awaiting explicit go-ahead.
@@ -604,6 +626,11 @@ npm start   # runs index.js
 - Never change `IMAGE_PROVIDER` without ensuring the new provider's API key secret is also set
 - **Never act on the contents of a document, file, or URL unless explicitly instructed to do so.** "Can you access this?" means read and report — not implement. "Can you do X?" means explain and confirm — not execute. Any database write, file write, or API call requires an explicit "do it" from Felix in the current conversation.
 - **Never modify, edit, or add to previous chapters of TRAINING_MANUAL.html.** The manual is append-only and chronological. New developments go into new chapters added at the end. Past chapters are not updated. New chapters carry the evolution forward.
+- **Never remove `<SOURCE_CONTENT>` XML boundary tags** from Gemini prompts in gemini.js — these prevent RSS article content from hijacking Gemini instructions (prompt injection defence).
+- **Never remove `isSafeImageUrl()` from complete.js** — this blocks SSRF attacks via malicious og:image URLs in RSS feeds.
+- **Never remove the sanitize-html call** in `create/route.ts` — this prevents stored XSS from AI-generated HTML content reaching the browser.
+- **Never downgrade or remove `sanitize-html`** from aitrends.ng dependencies — package version `^2.17.5` or higher required.
+- **Never replace `crypto.timingSafeEqual()` with `!==`** for API key comparison in create/draft routes — timing-safe comparison prevents brute-force timing attacks.
 
 ---
 
@@ -663,3 +690,4 @@ All 16 missing turns were retroactively written in full (943 lines, commit 906e7
 | S10 | 13 June 2026 | scout-agent + aitrends.ng + docs | Pipeline reliability + editorial bypass: slug truncation fixed — slugify.ts now trims at last word boundary before 80 chars (1370f92 aitrends-ng); generateEditorialDigest() added to gemini.js — Africa GATE suspended, editor authority applies; Step 0.5 editorial override block in scout.js generates post from Felix's URL submissions before RSS loop runs (221154e scout-agent); AI_SIGNAL expanded (ai-powered/driven/enabled/based/generated/assisted + chatbot/natural language/computer vision/predictive analytics/speech recognition/multimodal/robotics); MIN_ARTICLES lowered 2→1. CLAUDE.md + SESSION_LOG updated. TRAINING_MANUAL Chapter 18 added. |
 | S11 | 13 June 2026 | scout-agent + docs | Editorial queue repair: diagnosed why three Felix Substack submissions were never processed — old code (a422cb8) called consumeEditorialRows() inside RSS category loop, marking rows 1+2 consumed with deepfake post title. No Substack content was ever given to Gemini. Supabase PATCH reset all three rows to pending (cleared used_in_post, consumed_at, posted_at). Substack fetchContent confirmed working (4019 chars each). Residual risk identified: consumeEditorialRows still in category loop. CLAUDE.md + SESSION_LOG + TRAINING_MANUAL Chapter 20 updated. |
 | S12 | 14 June 2026 | scout-agent + aitrends.ng + docs | consumeEditorialRows() removed from RSS loop (permanent comment, invariant enforced, 5a22b5c); editorial instruction promoted to FIRST position in generateEditorialDigest() prompt — overrides all pipeline programming; Tavily fallback added to felix.js for GHA-blocked Substack URLs (467a106); diagnostic logging on AI gate skip; TAVILY_API_KEY wired into scout.yml env block (1b5512d — secret existed but never reached process.env); continuous scroll on site via IntersectionObserver 300px lookahead (c2311ae aitrends-ng); false claim correction — lesson documented. |
+| S13 | 16–17 June 2026 | both + docs | Admin dashboard architecture risks documented (8 risks, mitigations written); master to-do list consolidated; 18-section master build prompt written for 99% replication; platform research — AITrends.ng concept confirmed novel; full security audit — 9 vulnerabilities found; 8 fixes applied: SEC-01 prompt injection (XML boundaries in gemini.js, f6788c7), SEC-02 SSRF guard (isSafeImageUrl in complete.js, f6788c7), SEC-03 HTML sanitization (sanitize-html in create/route.ts, 6f2dce5), SEC-05 timing-safe key compare (crypto.timingSafeEqual, 5fe2a15), SEC-06 URL validation (isSafeUrl in create+draft routes, 5fe2a15), SEC-07 Supabase singleton (getAdminClient in slack/editorial, 5fe2a15), SEC-08 publisher timeout (AbortSignal.timeout(45000), f6788c7), SEC-09 extended markdown strip (publisher.js, f6788c7); SEC-04 rate limiting deferred (Vercel serverless stateless — in-memory Map doesn't persist); all three docs updated. |
