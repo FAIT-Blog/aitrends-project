@@ -8277,6 +8277,265 @@ git push origin main</pre>
 
 </div><!-- end session-13 -->
 
+<div id="session-14" style="margin-bottom:60px">
+  <h2 style="font-family:monospace;color:#f59e0b;border-bottom:2px solid #f59e0b;padding-bottom:8px">
+    Session #14 — 17 June 2026 — Site Evaluation + SEO Pass
+  </h2>
+  <p style="color:#9ca3af;font-size:0.9em">Projects: aitrends.ng + scout-agent + docs | Duration: multi-turn (resumed after context compaction)</p>
+
+  <div class="turn">
+    <h3>Context note</h3>
+    <p>This session was resumed after context compaction. The first portion of the session (site evaluation, og-default.png fix, AI signal gate, Africa GATE, DNS setup, Markhack post analysis) ran in the previous context window and is summarised below from the compaction record. The SEO improvements and document updates were completed in the second context window (this one).</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 1 — Felix: "Check the site and evaluate what is not working since the last you checked and made modifications. Let's get your honest criticism."</h3>
+
+    <h4>Site audit findings</h4>
+    <p>Read PostCard.tsx, HeroPost.tsx, post/[slug]/page.tsx, and layout.tsx. Identified 6 issues:</p>
+    <ol>
+      <li><strong>og-default.png 404</strong> — layout.tsx references <code>/og-default.png</code> as fallback OG image but the file doesn't exist in <code>public/</code></li>
+      <li><strong>AI signal gate too broad</strong> — <code>algorithm</code>, <code>automation</code>, <code>autonomous</code> appear in any business restructuring article. Canal+ split news passing the gate, producing posts with zero AI content.</li>
+      <li><strong>Africa GATE fabricating connections</strong> — Gemini generating "What this means for Africa" sentences even when sources have no African entities. Fabricated closing on every post.</li>
+      <li><strong>About page stale</strong> — Step 01 still lists Mistral AI and Simon Willison (both removed); Step 03 says "Pollinations generates the cover image" (Pollinations is dead — we've used HF FLUX since Session #2).</li>
+      <li><strong>DNS not configured</strong> — aitrends.ng domain purchased but no A record set. Root domain returning 404.</li>
+      <li><strong>www.aitrends.ng broken</strong> — www subdomain CNAME pointing to wrong target.</li>
+    </ol>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2 — Felix: "Yes, fix from 2 to 4." (og-default.png, AI signal gate, Africa GATE)</h3>
+
+    <h4>Fix 1: og-default.png</h4>
+    <p>Generated a 1200×630 PNG using Python PIL with brand colours:</p>
+    <pre>python3 &lt;&lt;'ENDOFSCRIPT'
+from PIL import Image, ImageDraw
+img = Image.new('RGB', (1200, 630), '#0a0a0f')
+draw = ImageDraw.Draw(img)
+# blue bar across top-third
+draw.rectangle([0, 0, 1200, 210], fill='#0a0a0f')
+# gold accent line
+draw.rectangle([80, 280, 1120, 284], fill='#f59e0b')
+# "AITrends.ng" text block placeholder
+draw.rectangle([80, 220, 680, 340], fill='#2563eb')
+img.save('aitrends.ng/public/og-default.png', 'PNG')
+ENDOFSCRIPT</pre>
+    <p>Committed as <code>ae87f97</code>. Verified HTTP 200 on live domain at <code>https://aitrends.ng/og-default.png</code>.</p>
+
+    <h4>Fix 2: AI signal gate — weak terms list</h4>
+    <p>Read <code>scout-agent/scout.js</code>. The <code>AI_SIGNAL_STRONG</code> list included broad terms that pass any business article. Split the list:</p>
+    <pre>// Before — all terms treated identically
+const AI_SIGNAL = [
+  'algorithm', 'automation', 'autonomous', ...
+]
+
+// After — weak terms require title presence OR 3+ body occurrences
+const AI_SIGNAL_STRONG = [
+  'artificial intelligence', ' ai ', 'machine learning', ... (40 explicit AI terms)
+]
+const AI_SIGNAL_WEAK = [
+  'algorithm', 'automation', 'autonomous', 'digital innovation', 'technology policy', 'tech startup',
+]
+
+function hasAISignal(article) {
+  const title = ` ${article.title} `.toLowerCase()
+  const body = ` ${article.summary} ${article.fullText || ''} `.toLowerCase()
+  const full = `${title}${body}`
+  if (AI_SIGNAL_STRONG.some(term =&gt; full.includes(term))) return true
+  for (const term of AI_SIGNAL_WEAK) {
+    if (title.includes(term)) return true
+    const count = (body.match(new RegExp(term, 'g')) || []).length
+    if (count &gt;= 3) return true
+  }
+  return false
+}</pre>
+
+    <h4>Fix 3: Africa GATE — substitution test + conditional sentence</h4>
+    <p>Added to both <code>generateDigest()</code> and <code>generateBlendedDigest()</code> in <code>gemini.js</code>:</p>
+    <pre>AUTOMATIC SKIP — output SKIP_NO_AFRICA_RELEVANCE if the only Africa connection is:
+- "African developers could use this" (applies to developers everywhere)
+- "This could benefit Nigerian startups" without a named Nigerian entity in the source
+- "X positions itself as a partner for Africa" — marketing language, not a news event
+- A global product launch that names Africa once in a list of countries
+- Any connection you are inferring rather than reporting directly from the sources
+
+THE TEST: Could you substitute "European developers" or "Asian builders" and the sentence
+would be equally true? If yes → SKIP_NO_AFRICA_RELEVANCE.</pre>
+    <p>Also changed the "What this means for Africa" rule:</p>
+    <pre>ONLY if the source article explicitly names an African country, city, company, or person:
+end with &lt;p&gt;What this means for Africa: [one factual sentence drawn directly from the
+source text]&lt;/p&gt;. If the source does not explicitly mention Africa, DO NOT write this
+sentence at all — not even a generic version.</pre>
+    <p>Committed both scout.js and gemini.js changes as <code>8301fc3</code> on FAIT-Blog/scout-agent.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3 — Markhack post source verification</h3>
+    <p>Felix: "Look into this post and cross check it with the source link. Make sure you visit those links to know if they make sense to the post."</p>
+    <p>Post reviewed: <em>"Markhack 5.0 Launches in Lagos to Address AI Personalisation and the Culture"</em></p>
+    <p>Findings:</p>
+    <ul>
+      <li>Post states: "64 percent of consumers are motivated to support brands that sponsor multicultural events" — attributed to "Association for Integrated Marketing and Communications". Searched web — no such statistic found. <strong>Fabricated by Gemini.</strong></li>
+      <li>Actual verifiable statistic: "70% of event attendees say they are more likely to purchase from a brand after an event" (confirmed on markhack.tech). The real stat exists; Gemini invented a different number from a different source.</li>
+      <li>Post is temporally wrong — written as if the event is upcoming. Event ran June 5, 2026. Post is now outdated.</li>
+      <li>The Africa relevance is genuine — Markhack is a Lagos event. GATE correctly let it through.</li>
+    </ul>
+    <p>Verdict: Post has fabricated stat + stale temporal framing. Flagged for future cleanup. Not unpublished in this session (Felix did not give the go-ahead to modify it).</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4 — Felix: "Guide me to add the domain name so it runs on aitrends.ng" → "aitrends.ng is active as a domain. Visit it and fix number 1 issue (DNS)"</h3>
+
+    <h4>DNS configuration steps provided to Felix (Vercel + Whogohost)</h4>
+    <p>Vercel instructions: Go to Project → Settings → Domains → Add Domain → type <code>aitrends.ng</code> → choose "A record" option. Vercel shows the IP: <code>76.76.21.21</code>.</p>
+    <p>Whogohost instructions:</p>
+    <ol>
+      <li>Login → My Domains → Manage → DNS Management</li>
+      <li>A record: Host = <code>@</code>, Points To = <code>76.76.21.21</code>, TTL = 3600</li>
+      <li>CNAME record: Host = <code>www</code>, Points To = <code>cname.vercel-dns.com</code></li>
+    </ol>
+    <p>Felix confirmed the A record was set. Verified: <code>https://aitrends.ng</code> returns HTTP 200.</p>
+    <p><strong>Outstanding issue:</strong> Whogohost CNAME for www still points to <code>aitrends.ng</code> (the root) instead of <code>cname.vercel-dns.com</code>. Also, <code>www.aitrends.ng</code> not yet added to the Vercel domain list. SSL cert mismatch on www. Fix requires: (1) change Whogohost CNAME value to <code>cname.vercel-dns.com</code>, (2) add <code>www.aitrends.ng</code> in Vercel Domains.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 5 — Felix: SEO improvements + Backup documents</h3>
+    <p>Felix listed 5 SEO tasks:</p>
+    <ol>
+      <li>Image SEO — descriptive alt text, WebP</li>
+      <li>External Link Policy — rel="noopener noreferrer" + nofollow for sources</li>
+      <li>Date Transparency — "Last updated" on posts</li>
+      <li>Content Expansion — AI Glossary (future)</li>
+      <li>Performance Monitoring — PageSpeed Insights (no code change)</li>
+    </ol>
+    <p>Plus: "Backup documents"</p>
+
+    <h4>File audit before changes</h4>
+    <pre>Read: aitrends.ng/next.config.ts
+Result:
+  remotePatterns: [
+    { protocol: 'https', hostname: 'image.pollinations.ai' },
+    { protocol: 'https', hostname: '*.supabase.co' },
+  ]
+→ Supabase domain already in remotePatterns. Removing `unoptimized` will enable WebP.
+
+Read: aitrends.ng/components/ShareButtons.tsx
+Result: All 4 external links (X, WhatsApp, LinkedIn, Telegram) have rel="noopener noreferrer" ✅
+
+Read: aitrends.ng/components/Sidebar.tsx
+Result: All Next.js &lt;Link&gt; components (internal only) ✅
+
+Read: aitrends.ng/components/NavBar.tsx
+Result: All Next.js &lt;Link&gt; components (internal only) ✅
+
+Read: aitrends.ng/components/Footer.tsx
+Result: &lt;a href="/feed.xml"&gt; — relative internal link, no rel needed ✅
+
+Read: aitrends.ng/app/post/[slug]/page.tsx (lines 123–228)
+Result: Cover image uses &lt;Image unoptimized alt={post.title}&gt;
+        Source URLs: rel="noopener noreferrer" (missing nofollow)
+
+Read: aitrends.ng/lib/types.ts
+Result: Post interface has cover_image_prompt: string ✅ (safe to use as alt)
+        No updated_at field — not in Supabase schema either
+
+Read: aitrends.ng/components/PostCard.tsx
+Result: &lt;img alt={post.title} loading="lazy"&gt; — alt text is title only
+
+Read: aitrends.ng/components/HeroPost.tsx
+Result: &lt;img alt={post.title}&gt; — alt text is title only</pre>
+
+    <h4>Change 1: Post page cover image — remove unoptimized, use cover_image_prompt as alt</h4>
+    <p>Before:</p>
+    <pre>&lt;Image
+  src={post.cover_image_url}
+  alt={post.title}
+  fill
+  priority
+  unoptimized
+  style={{ objectFit: 'cover' }}
+  sizes="(max-width: 800px) 100vw, 800px"
+/&gt;</pre>
+    <p>After:</p>
+    <pre>&lt;Image
+  src={post.cover_image_url}
+  alt={post.cover_image_prompt || post.title}
+  fill
+  priority
+  style={{ objectFit: 'cover' }}
+  sizes="(max-width: 800px) 100vw, 800px"
+/&gt;</pre>
+    <p>Why: <code>unoptimized</code> was added originally for Pollinations URLs (which changed each render). Now all images are stable Supabase Storage URLs — Next.js can optimize and serve WebP. <code>cover_image_prompt</code> is a visual description of the image (e.g. "watercolour painting of fintech transaction flows with naira symbols") — much better for screen readers and Google Image Search than repeating the article headline.</p>
+
+    <h4>Change 2: Source URLs — add nofollow</h4>
+    <p>Before:</p>
+    <pre>&lt;a href={url} target="_blank" rel="noopener noreferrer" ...&gt;</pre>
+    <p>After:</p>
+    <pre>&lt;a href={url} target="_blank" rel="noopener noreferrer nofollow" ...&gt;</pre>
+    <p>Why: Source attribution links are external references. <code>nofollow</code> prevents PageRank from flowing to those domains. Important for SEO — Google should credit AITrends.ng for the content, not the sources it references.</p>
+
+    <h4>Change 3: PostCard alt text</h4>
+    <p>Before: <code>alt={post.title}</code></p>
+    <p>After: <code>alt={post.cover_image_prompt || post.title}</code></p>
+
+    <h4>Change 4: HeroPost alt text</h4>
+    <p>Before: <code>alt={post.title}</code></p>
+    <p>After: <code>alt={post.cover_image_prompt || post.title}</code></p>
+
+    <h4>Change 5: About page — fix stale content</h4>
+    <p>Step 01 before: "...TechCabal, Techpoint Africa, Disrupt Africa, Hacker News, VentureBeat, TechCrunch, Anthropic, OpenAI, Google AI, HuggingFace, Google DeepMind, Mistral AI, and Simon Willison's blog."</p>
+    <p>Step 01 after: "...TechCabal, Techpoint Africa, Disrupt Africa, Premium Times Nigeria, BusinessDay Nigeria, Hacker News, VentureBeat, TechCrunch, Anthropic, OpenAI, Google AI, HuggingFace, Google DeepMind, and more — 25 feeds across Africa and globally."</p>
+    <p>Step 03 before: "Pollinations generates the cover image — sent to Pollinations.ai, which renders a clean tech illustration..."</p>
+    <p>Step 03 after: "FLUX generates the cover image — sent to HuggingFace FLUX.1-schnell, which generates a story-specific editorial illustration — watercolour, vector, ink sketch, or risograph. The image is permanently stored in Supabase Storage..."</p>
+
+    <h4>Build verification</h4>
+    <pre>cd aitrends.ng && npm run build
+✓ Compiled successfully in 1753ms
+✓ TypeScript passed
+✓ 10/10 static pages generated</pre>
+
+    <h4>Date transparency — updated_at deferred</h4>
+    <p>Checked <code>supabase/schema.sql</code> — no <code>updated_at</code> column in the posts table. TypeScript Post interface also has no <code>updated_at</code> field. Adding "Last Updated" display would require: (1) ALTER TABLE posts ADD COLUMN updated_at timestamptz; (2) trigger to update it on row changes; (3) add to lib/types.ts; (4) display on post page. Deferred — requires manual SQL in Supabase console.</p>
+
+    <h4>Commit</h4>
+    <pre>git add app/about/page.tsx app/post/[slug]/page.tsx components/HeroPost.tsx components/PostCard.tsx
+git commit -m "seo: improve image alt text, enable WebP, nofollow sources, fix About page"
+[main 5856ea6] seo: improve image alt text, enable WebP, nofollow sources, fix About page
+ 4 files changed, 7 insertions(+), 8 deletions(-)
+
+git push origin main
+To https://github.com/FAIT-Blog/aitrends-ng.git
+   ae87f97..5856ea6  main -> main</pre>
+    <p>Vercel auto-deploy triggered. Changes live within ~2 minutes.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 6 — Document updates (this turn)</h3>
+    <p>Updated CLAUDE.md: Last Updated header → S14, new SEO items in "What Has Been Built", Known Issues updated to reflect www.aitrends.ng status, S14 Completed section in to-do list, S14 row in session history table.</p>
+    <p>SESSION_LOG.html: This block appended.</p>
+    <p>TRAINING_MANUAL.html: Chapter 23 appended — "SEO for an Autonomous AI Blog".</p>
+
+    <h4>Outstanding items from this session</h4>
+    <ul>
+      <li>www.aitrends.ng CNAME fix — Felix needs to change Whogohost CNAME for www from <code>aitrends.ng</code> to <code>cname.vercel-dns.com</code>, then add <code>www.aitrends.ng</code> in Vercel → Settings → Domains</li>
+      <li>updated_at column — add to Supabase posts table, lib/types.ts, and post page for "Last Updated" display</li>
+      <li>Google Search Console sitemap submission — aitrends.ng/sitemap.xml has 100+ posts, deferred by Felix</li>
+      <li>Old posts cleanup (Markhack fabricated stat, Canal+ no-AI post) — deferred, needs Felix go-ahead</li>
+    </ul>
+  </div>
+
+  <div class="turn">
+    <h3>Session #14 Summary — What was learned</h3>
+    <ul>
+      <li>Removing <code>unoptimized</code> from Next.js Image is safe once all image URLs are stable (Supabase Storage) — it was only needed for the unpredictable Pollinations lazy-generation URLs</li>
+      <li><code>cover_image_prompt</code> is the best alt text for AI-generated cover images — it describes the visual, not just the headline</li>
+      <li>The Africa GATE substitution test ("Could you substitute 'European developers'?") is the most reliable heuristic for detecting fabricated Africa connections — simpler than trying to enumerate all forbidden patterns</li>
+      <li>DNS propagation from Whogohost to Vercel takes minutes to hours for A records; CNAME for www is a separate step that many domain registrars make confusingly difficult</li>
+      <li>Session log compaction is not the same as data loss — all tool calls before compaction are preserved in the jsonl transcript; the compaction summary gives Claude enough context to continue precisely</li>
+    </ul>
+  </div>
+</div><!-- end session-14 -->
+
 </div>
 </body>
 </html>

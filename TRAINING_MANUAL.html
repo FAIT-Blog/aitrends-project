@@ -4796,6 +4796,88 @@ node -e "require('sanitize-html'); console.log('OK')"</pre>
   </ul>
 </div>
 
+<!-- ═══════════════════ CHAPTER 23 ═══════════════════ -->
+
+<div class="chapter" id="chapter-23">
+  <div class="chapter-header">
+    <span class="chapter-number">Chapter 23</span>
+    <h2>SEO for an Autonomous AI Blog</h2>
+    <p class="chapter-subtitle">How to make a pipeline-generated site rank — and the traps to avoid</p>
+  </div>
+
+  <h3>The unique SEO challenge of autonomous content</h3>
+  <p>Most SEO guides assume a human edited the content, chose the images, and wrote the alt text. AITrends.ng generates everything programmatically — title, body HTML, cover image, image prompt, excerpt. This creates specific opportunities (structured, consistent metadata) and risks (identical alt text patterns, Gemini-fabricated facts that signal low quality to Google).</p>
+  <p>The goal is not to game Google — it is to ensure that genuinely good Africa-first AI content is correctly understood and indexed by search engines.</p>
+
+  <h3>1. Image alt text: use what you already have</h3>
+  <p>Every post in the Supabase <code>posts</code> table has a <code>cover_image_prompt</code> column — the exact text sent to HuggingFace FLUX to generate the cover image. This prompt is a precise visual description:</p>
+  <pre>"Watercolour painting of Nigerian naira banknotes dissolving into glowing data streams, map of West Africa in background. No text, no logos, cinematic composition."</pre>
+  <p>That is exactly what alt text should be: a description of what is in the image. The post title describes the story, not the image. For screen readers and Google Image Search, the visual description is far more useful.</p>
+  <p><strong>Changes made in Session #14:</strong></p>
+  <pre>// PostCard.tsx, HeroPost.tsx, post/[slug]/page.tsx
+// Before:
+alt={post.title}
+// After:
+alt={post.cover_image_prompt || post.title}</pre>
+  <p>The <code>|| post.title</code> fallback handles old posts where <code>cover_image_prompt</code> might be empty. TypeScript-safe because <code>cover_image_prompt: string</code> in the Post interface.</p>
+
+  <h3>2. WebP images: the unoptimized trap</h3>
+  <p>Next.js <code>&lt;Image&gt;</code> with <code>unoptimized</code> bypasses the entire Next.js image pipeline — no CDN caching, no format conversion, no size rewriting. The browser gets a raw JPEG (~100KB) every time.</p>
+  <p>The <code>unoptimized</code> prop was added during the Pollinations era — Pollinations generated images lazily at a URL that changed on each render, so Next.js couldn't cache or rewrite them. Once we moved to stable Supabase Storage URLs, <code>unoptimized</code> should have been removed but wasn't.</p>
+  <p><strong>Condition for safe removal:</strong> the image hostname must be in <code>remotePatterns</code> in <code>next.config.ts</code>. It was:</p>
+  <pre>remotePatterns: [
+  { protocol: 'https', hostname: '*.supabase.co' },
+]</pre>
+  <p>After removing <code>unoptimized</code>: Next.js serves WebP to supporting browsers, caches the optimized version at the CDN, and resizes to the <code>sizes</code> attribute. LCP (Largest Contentful Paint) improves. This is the single highest-impact Core Web Vitals change available to us without modifying the pipeline.</p>
+  <p><strong>Why PostCard and HeroPost still use plain &lt;img&gt;:</strong> These use <code>&lt;img&gt;</code> to preserve the <code>onError</code> fallback that hides broken images rather than showing a broken icon. The trade-off (no WebP) is accepted because image reliability is more important than image format for card-grid components.</p>
+
+  <h3>3. rel="nofollow" on attribution links</h3>
+  <p>Source attribution links at the bottom of every post pass PageRank to the destination by default. Adding <code>nofollow</code> signals to Google that these are transparency links, not endorsements.</p>
+  <pre>// Before
+rel="noopener noreferrer"
+// After
+rel="noopener noreferrer nofollow"</pre>
+  <p>Rule: always include <code>noopener noreferrer</code> on every <code>target="_blank"</code> link (security). Add <code>nofollow</code> when the link is attribution or reference, not a genuine recommendation.</p>
+
+  <h3>4. About page accuracy as an E-E-A-T signal</h3>
+  <p>Google's E-E-A-T quality framework (Experience, Expertise, Authoritativeness, Trustworthiness) increasingly rewards sites that accurately describe themselves. An About page listing defunct technology (Pollinations, removed feeds) undermines trust with both users and search quality evaluators.</p>
+  <p>The About page corrections in Session #14:</p>
+  <ul>
+    <li>Removed Mistral AI and Simon Willison from feed list (both removed in Session #5)</li>
+    <li>Step 03 updated: "Pollinations generates the cover image" → "HuggingFace FLUX.1-schnell generates the cover image, stored permanently in Supabase Storage"</li>
+    <li>Feed count updated to reflect 25 current feeds across Africa and globally</li>
+  </ul>
+  <p>Keep the About page in sync with reality. Every time a feed is added or removed, or the image pipeline changes, update the About page in the same commit.</p>
+
+  <h3>5. Date transparency — updated_at (deferred)</h3>
+  <p>Showing "Last Updated: [date]" signals freshness to Google. The Supabase <code>posts</code> table has no <code>updated_at</code> column. Adding it requires:</p>
+  <ol>
+    <li>SQL: <code>ALTER TABLE posts ADD COLUMN updated_at timestamptz DEFAULT now();</code></li>
+    <li>Trigger: set updated_at = now() on any UPDATE to the posts row</li>
+    <li>TypeScript: <code>updated_at?: string | null</code> in <code>lib/types.ts</code></li>
+    <li>Post page: show "Updated: X" only when <code>updated_at</code> is more than 1 day after <code>published_at</code></li>
+  </ol>
+  <p>Deferred — most posts are never edited (autonomous digests). The column becomes valuable when the admin dashboard is built and posts can be manually corrected.</p>
+
+  <h3>6. SEO backlog</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+    <tr style="background:#111827">
+      <th style="padding:8px;text-align:left;border:1px solid #1f2937">Task</th>
+      <th style="padding:8px;text-align:left;border:1px solid #1f2937">Priority</th>
+      <th style="padding:8px;text-align:left;border:1px solid #1f2937">Effort</th>
+    </tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">Submit sitemap.xml to Google Search Console</td><td style="padding:8px;border:1px solid #1f2937">🔴 Critical</td><td style="padding:8px;border:1px solid #1f2937">10 min manual</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">Fix www.aitrends.ng CNAME + add to Vercel</td><td style="padding:8px;border:1px solid #1f2937">🟠 High</td><td style="padding:8px;border:1px solid #1f2937">5 min Whogohost + Vercel</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">Add updated_at to Supabase + display on post page</td><td style="padding:8px;border:1px solid #1f2937">🟡 Medium</td><td style="padding:8px;border:1px solid #1f2937">SQL migration + 3 file edits</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">Verify OG meta tags in Twitter Card Validator</td><td style="padding:8px;border:1px solid #1f2937">🟡 Medium</td><td style="padding:8px;border:1px solid #1f2937">5 min check</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">AI Glossary pillar page</td><td style="padding:8px;border:1px solid #1f2937">🔵 Later</td><td style="padding:8px;border:1px solid #1f2937">New page + content</td></tr>
+  </table>
+
+  <div class="lesson-box" style="background:#0f172a;border-left:3px solid #f59e0b;padding:16px;margin-top:28px;border-radius:4px">
+    <p><strong style="color:#f59e0b">Key lesson:</strong> The best SEO improvements on an autonomous blog are structural fixes — remove broken tech, use existing metadata correctly, tell the truth on your About page. Optimising for Google starts with building a site that accurately represents what it actually is.</p>
+  </div>
+</div>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -4804,7 +4886,7 @@ node -e "require('sanitize-html'); console.log('OK')"</pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 17 June 2026 — Chapter 22 added: Security Auditing an Autonomous AI Pipeline.
+    Last updated: 17 June 2026 — Chapter 23 added: SEO for an Autonomous AI Blog.
   </p>
 </div>
 

@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-17 (Session #13 — admin dashboard architecture + risks documented, master build prompt written, platform research, full security audit + 9 fixes applied across scout-agent and aitrends.ng)
+**Last Updated:** 2026-06-17 (Session #14 — site evaluation, DNS live on aitrends.ng, AI signal gate tightened, Africa GATE hardened, og-default.png created, SEO pass: WebP images + descriptive alt text + nofollow sources + About page accuracy fix)
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -264,9 +264,16 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
   - `crypto.timingSafeEqual()` on API key comparison in `create` and `draft` routes
   - `isSafeUrl()` validation on `cover_image_url` and `source_urls` before storage
   - `getAdminClient()` Supabase singleton in `slack/editorial/route.ts`
+- **SEO hardened (Session #14):**
+  - `og-default.png` fallback OG image created (1200×630, brand colours) and deployed
+  - `unoptimized` removed from post page cover `<Image>` — Next.js now serves WebP automatically for Supabase Storage URLs
+  - `cover_image_prompt` used as alt text on all cover images (PostCard, HeroPost, post page) — describes visual content rather than repeating the headline
+  - `rel="noopener noreferrer nofollow"` on all external source_urls — prevents PageRank leakage to attribution links
+  - About page corrected: Step 01 lists accurate current feeds; Step 03 now says HF FLUX.1-schnell → Supabase Storage (not Pollinations)
+  - aitrends.ng root domain live via Whogohost A record → 76.76.21.21
 
 ### Known Issues
-- 🟡 OG meta tags — verify in Twitter Card Validator / Facebook Debugger (post 404 issue resolved in Session #5)
+- 🟡 www.aitrends.ng — Whogohost CNAME for www points to `aitrends.ng` root instead of `cname.vercel-dns.com`; www also not added to Vercel domain list. Fix: change Whogohost CNAME value to `cname.vercel-dns.com`, then add `www.aitrends.ng` to Vercel domains.
 
 ---
 
@@ -565,6 +572,15 @@ npm start   # runs index.js
 - ✅ **SEC-09 — Extended markdown stripping** — `publisher.js` now strips `*italic*`, `__bold__`, `_italic_`, `` `code` `` in addition to existing `**bold**`. Commit: `f6788c7`.
 - ✅ **SEC-04 deferred** — Rate limiting on `/api/posts/*` not yet implemented. API key is the primary protection at current scale. Revisit when admin dashboard is built. Upstash Redis approach documented for future implementation.
 
+### ✅ Completed — Session #14 (17 June 2026)
+- ✅ **Site evaluation completed** — Honest audit of aitrends.ng: og-default.png 404'd, AI signal gate too broad (general business articles passing), Africa GATE fabricating connections via banned patterns, About page had stale Pollinations reference, DNS not configured.
+- ✅ **og-default.png created** — 1200×630 PNG generated with Python PIL using brand colours (#0a0a0f background, #2563eb blue, #f59e0b gold). Committed to `aitrends.ng/public/og-default.png` (ae87f97). HTTP 200 verified on live domain.
+- ✅ **AI signal gate tightened** — Moved `algorithm`, `automation`, `autonomous`, `digital innovation`, `technology policy`, `tech startup` to WEAK list (require title presence OR 3+ body occurrences). These broad terms were allowing general business restructuring articles to pass. Committed 8301fc3.
+- ✅ **Africa GATE hardened** — Added explicit substitution test and forbidden patterns to both `generateDigest()` and `generateBlendedDigest()` in gemini.js: "Could you substitute 'European developers' and the sentence would be equally true? → SKIP." Conditional "What this means for Africa" sentence — only written when source explicitly names an African entity. Committed 8301fc3.
+- ✅ **aitrends.ng DNS configured** — A record `@` → `76.76.21.21` set on Whogohost. Root domain HTTP 200 confirmed. Custom domain active on Vercel.
+- ✅ **SEO improvements** — Post page cover image `<Image>`: removed `unoptimized` (WebP now served automatically); `cover_image_prompt` used as alt text on all cover images (PostCard, HeroPost, post page); `rel="nofollow"` added to external source_urls; About page updated with accurate feed list and image pipeline description. Build passed cleanly. Committed 5856ea6.
+- ⚠️ **www.aitrends.ng broken** — Whogohost CNAME for www points to `aitrends.ng` (root) instead of `cname.vercel-dns.com`; www also not added to Vercel domain list. Manual fix required (Whogohost + Vercel dashboard).
+
 ### 🔴 Critical
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
 - ✅ **Assess Gemini capability after simplification** — Audit passed (Session #8 continuation, 12 June): 5 posts reviewed. No asterisks, 1 source URL, title variety confirmed. Gemini accurate-rewrite prompt working as intended.
@@ -691,3 +707,4 @@ All 16 missing turns were retroactively written in full (943 lines, commit 906e7
 | S11 | 13 June 2026 | scout-agent + docs | Editorial queue repair: diagnosed why three Felix Substack submissions were never processed — old code (a422cb8) called consumeEditorialRows() inside RSS category loop, marking rows 1+2 consumed with deepfake post title. No Substack content was ever given to Gemini. Supabase PATCH reset all three rows to pending (cleared used_in_post, consumed_at, posted_at). Substack fetchContent confirmed working (4019 chars each). Residual risk identified: consumeEditorialRows still in category loop. CLAUDE.md + SESSION_LOG + TRAINING_MANUAL Chapter 20 updated. |
 | S12 | 14 June 2026 | scout-agent + aitrends.ng + docs | consumeEditorialRows() removed from RSS loop (permanent comment, invariant enforced, 5a22b5c); editorial instruction promoted to FIRST position in generateEditorialDigest() prompt — overrides all pipeline programming; Tavily fallback added to felix.js for GHA-blocked Substack URLs (467a106); diagnostic logging on AI gate skip; TAVILY_API_KEY wired into scout.yml env block (1b5512d — secret existed but never reached process.env); continuous scroll on site via IntersectionObserver 300px lookahead (c2311ae aitrends-ng); false claim correction — lesson documented. |
 | S13 | 16–17 June 2026 | both + docs | Admin dashboard architecture risks documented (8 risks, mitigations written); master to-do list consolidated; 18-section master build prompt written for 99% replication; platform research — AITrends.ng concept confirmed novel; full security audit — 9 vulnerabilities found; 8 fixes applied: SEC-01 prompt injection (XML boundaries in gemini.js, f6788c7), SEC-02 SSRF guard (isSafeImageUrl in complete.js, f6788c7), SEC-03 HTML sanitization (sanitize-html in create/route.ts, 6f2dce5), SEC-05 timing-safe key compare (crypto.timingSafeEqual, 5fe2a15), SEC-06 URL validation (isSafeUrl in create+draft routes, 5fe2a15), SEC-07 Supabase singleton (getAdminClient in slack/editorial, 5fe2a15), SEC-08 publisher timeout (AbortSignal.timeout(45000), f6788c7), SEC-09 extended markdown strip (publisher.js, f6788c7); SEC-04 rate limiting deferred (Vercel serverless stateless — in-memory Map doesn't persist); all three docs updated. |
+| S14 | 17 June 2026 | both + docs | Site evaluation + SEO pass: site audit identified 6 issues; og-default.png created and deployed (ae87f97 aitrends-ng); AI signal gate tightened — broad terms (algorithm/automation) moved to WEAK list requiring 3+ body occurrences (8301fc3 scout-agent); Africa GATE hardened with substitution test + conditional "What this means for Africa" sentence (8301fc3); aitrends.ng root domain live via Whogohost A record → 76.76.21.21; SEO improvements: WebP images (removed `unoptimized` from post cover Image), `cover_image_prompt` as descriptive alt text on all cover images, `rel="nofollow"` on external source_urls, About page accuracy fix (correct feed list + HF FLUX image pipeline description) (5856ea6 aitrends-ng); www.aitrends.ng CNAME issue documented (outstanding); docs updated. |
