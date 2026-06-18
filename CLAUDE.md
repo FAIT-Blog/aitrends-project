@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-17 (Session #14 — site evaluation, DNS live on aitrends.ng, AI signal gate tightened, Africa GATE hardened, og-default.png created, SEO pass: WebP images + descriptive alt text + nofollow sources + About page accuracy fix)
+**Last Updated:** 2026-06-18 (Session #15 — document push strategy locked: SESSION_LOG + TRAINING_MANUAL local-only; CLAUDE.md pushes to GitHub; www.aitrends.ng DNS steps re-confirmed; updated_at added to Post type + post page; S13/S14 backlog documented)
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -581,6 +581,13 @@ npm start   # runs index.js
 - ✅ **SEO improvements** — Post page cover image `<Image>`: removed `unoptimized` (WebP now served automatically); `cover_image_prompt` used as alt text on all cover images (PostCard, HeroPost, post page); `rel="nofollow"` added to external source_urls; About page updated with accurate feed list and image pipeline description. Build passed cleanly. Committed 5856ea6.
 - ⚠️ **www.aitrends.ng broken** — Whogohost CNAME for www points to `aitrends.ng` (root) instead of `cname.vercel-dns.com`; www also not added to Vercel domain list. Manual fix required (Whogohost + Vercel dashboard).
 
+### ✅ Completed — Session #15 (18 June 2026)
+- ✅ **Document push strategy locked** — Felix's explicit instruction: SESSION_LOG.html and TRAINING_MANUAL.html are committed locally only, never pushed to GitHub. CLAUDE.md is pushed to GitHub at the end of every session. Documented in Section 9 of CLAUDE.md. Files are 508KB and 257KB — well within GitHub's 100MB limit; decision is strategic, not technical.
+- ✅ **HF FLUX.1-schnell confirmed as active image provider** — `image-providers/index.js` default: `process.env.IMAGE_PROVIDER || 'huggingface'`. HuggingFace provider uses FLUX.1-schnell via HF Inference API. Active since Session #2.
+- ✅ **www.aitrends.ng verified still broken** — curl confirms no response from www subdomain. Whogohost CNAME for www still points to root domain, not `cname.vercel-dns.com`. www not in Vercel domain list.
+- ✅ **updated_at added to Post type and post page** — `updated_at?: string | null` added to `lib/types.ts`; `wasUpdated()` helper shows "Updated [date]" in post meta row when `updated_at` > `published_at` by 1+ day; JSON-LD `dateModified` now uses `updated_at` when available. Build clean. Committed 71550cf (aitrends-ng pushed). **Supabase migration still needed** — the column doesn't exist in the DB yet. Field will always be undefined until migration is run.
+- ✅ **S13 backlog explained** — 2 local commits (S13 `439431f`, S14 `e0bbcb0`) not yet on GitHub because container has 403 on aitrends-project repo. Felix must run `git push origin main` from `aitrends-project/` directory to push them. Going forward: split commits (CLAUDE.md → push to GitHub; SESSION_LOG+TRAINING_MANUAL → local only).
+
 ### 🔴 Critical
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
 - ✅ **Assess Gemini capability after simplification** — Audit passed (Session #8 continuation, 12 June): 5 posts reviewed. No asterisks, 1 source URL, title variety confirmed. Gemini accurate-rewrite prompt working as intended.
@@ -602,6 +609,9 @@ npm start   # runs index.js
 - ✅ **Full SEO compliance pass completed** — (6817792, 060bc61)
 
 ### 🟠 High
+- [ ] **Fix www.aitrends.ng** — (1) Whogohost: change CNAME for `www` from value `aitrends.ng` → `cname.vercel-dns.com`. (2) Vercel: Project → Settings → Domains → Add `www.aitrends.ng`. Both steps required. Currently: no response (timeout) on curl test.
+- [ ] **Run Supabase updated_at migration** — Code is deployed and waiting. SQL to run in Supabase console: `ALTER TABLE posts ADD COLUMN updated_at timestamptz DEFAULT now();` + trigger: `CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TRIGGER posts_updated_at BEFORE UPDATE ON posts FOR EACH ROW EXECUTE FUNCTION set_updated_at();`. After this, "Updated" will appear on post pages when posts are edited.
+- [ ] **Push S13+S14 docs to GitHub** — Run `git push origin main` from `aitrends-project/` directory on Felix's Mac. Pushes commits 439431f (S13 docs) and e0bbcb0 (S14 docs). After that, run this `cd aitrends-project && git push origin main` and from S15 onwards only CLAUDE.md will be pushed.
 - [ ] **Submit `sitemap.xml` to Google Search Console** — manual task, 10 minutes. All SEO work is invisible to Google until this is done. This is the single highest-leverage remaining action.
 - [ ] **Verify post quality on new posts** — read Yoco/Dyner post body in full. Does it cite verifiable facts? No forced phrases? Varied title structure confirmed from log but body needs human review.
 - [ ] **Monitor Nigerian general news feeds** — next 5–10 published posts should be checked: are source_urls now clean? Are post topics genuinely AI/tech or still drifting into general business news?
@@ -684,6 +694,20 @@ Claude Code wrote summary-level entries for Turns 8–22 instead of the full ver
 
 All 16 missing turns were retroactively written in full (943 lines, commit 906e7af). The lesson: stating "I will do better" in chat is meaningless — the understanding must be baked into the documents so every future session starts with this rule visible and non-negotiable. Do not economise. Do not defer the log to the end. Do not assume a summary is acceptable because the session is long.
 
+### Document push strategy — updated Session #15 (18 June 2026)
+
+Felix's explicit instruction: SESSION_LOG.html and TRAINING_MANUAL.html are committed locally but NOT pushed to GitHub until further notice. CLAUDE.md is pushed to GitHub at the end of every session.
+
+**Why not pushed:** The decision is Felix's preference for cloud storage hygiene — not a technical constraint. SESSION_LOG.html (508KB) and TRAINING_MANUAL.html (257KB) are well within GitHub's 100MB-per-file limit. They will never hit a size problem.
+
+**How to commit per session:**
+1. First commit — `CLAUDE.md` only: `git add CLAUDE.md && git commit -m "docs: ..."` → push this to GitHub
+2. Second commit — session log + manual: `git add SESSION_LOG.html TRAINING_MANUAL.html && git commit -m "docs: ..."` → local only, do NOT push
+
+**GitHub remains the source of truth for CLAUDE.md.** SESSION_LOG.html and TRAINING_MANUAL.html are backed up on Felix's local drive. Felix should keep regular Time Machine or equivalent backups of `aitrends-project/` given this is where the session history lives.
+
+**Current backlog:** Two local commits (S13 docs `439431f`, S14 docs `e0bbcb0`) exist on Felix's Mac but are not on GitHub. Both bundle all three files. Run `git push origin main` from `aitrends-project/` to push them. This is a one-time upload of existing history — from S15 onwards the split-commit rule applies.
+
 ---
 
 ## 10. SESSION HISTORY
@@ -708,3 +732,4 @@ All 16 missing turns were retroactively written in full (943 lines, commit 906e7
 | S12 | 14 June 2026 | scout-agent + aitrends.ng + docs | consumeEditorialRows() removed from RSS loop (permanent comment, invariant enforced, 5a22b5c); editorial instruction promoted to FIRST position in generateEditorialDigest() prompt — overrides all pipeline programming; Tavily fallback added to felix.js for GHA-blocked Substack URLs (467a106); diagnostic logging on AI gate skip; TAVILY_API_KEY wired into scout.yml env block (1b5512d — secret existed but never reached process.env); continuous scroll on site via IntersectionObserver 300px lookahead (c2311ae aitrends-ng); false claim correction — lesson documented. |
 | S13 | 16–17 June 2026 | both + docs | Admin dashboard architecture risks documented (8 risks, mitigations written); master to-do list consolidated; 18-section master build prompt written for 99% replication; platform research — AITrends.ng concept confirmed novel; full security audit — 9 vulnerabilities found; 8 fixes applied: SEC-01 prompt injection (XML boundaries in gemini.js, f6788c7), SEC-02 SSRF guard (isSafeImageUrl in complete.js, f6788c7), SEC-03 HTML sanitization (sanitize-html in create/route.ts, 6f2dce5), SEC-05 timing-safe key compare (crypto.timingSafeEqual, 5fe2a15), SEC-06 URL validation (isSafeUrl in create+draft routes, 5fe2a15), SEC-07 Supabase singleton (getAdminClient in slack/editorial, 5fe2a15), SEC-08 publisher timeout (AbortSignal.timeout(45000), f6788c7), SEC-09 extended markdown strip (publisher.js, f6788c7); SEC-04 rate limiting deferred (Vercel serverless stateless — in-memory Map doesn't persist); all three docs updated. |
 | S14 | 17 June 2026 | both + docs | Site evaluation + SEO pass: site audit identified 6 issues; og-default.png created and deployed (ae87f97 aitrends-ng); AI signal gate tightened — broad terms (algorithm/automation) moved to WEAK list requiring 3+ body occurrences (8301fc3 scout-agent); Africa GATE hardened with substitution test + conditional "What this means for Africa" sentence (8301fc3); aitrends.ng root domain live via Whogohost A record → 76.76.21.21; SEO improvements: WebP images (removed `unoptimized` from post cover Image), `cover_image_prompt` as descriptive alt text on all cover images, `rel="nofollow"` on external source_urls, About page accuracy fix (correct feed list + HF FLUX image pipeline description) (5856ea6 aitrends-ng); www.aitrends.ng CNAME issue documented (outstanding); docs updated. |
+| S15 | 18 June 2026 | aitrends.ng + docs | Document push strategy locked: SESSION_LOG + TRAINING_MANUAL = local-only commits; CLAUDE.md = push to GitHub. HF FLUX.1-schnell confirmed as active default image provider (image-providers/index.js). www.aitrends.ng confirmed still broken via curl (Whogohost CNAME not updated, www not in Vercel). updated_at added: Post interface `updated_at?: string | null`; `wasUpdated()` helper; "Updated [date]" in meta row; JSON-LD dateModified uses updated_at when available; Supabase migration SQL documented in to-do (71550cf aitrends-ng, pushed). |
