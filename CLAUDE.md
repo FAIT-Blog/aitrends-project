@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-18 (Session #15 — document push strategy locked: SESSION_LOG + TRAINING_MANUAL local-only; CLAUDE.md pushes to GitHub; www.aitrends.ng DNS steps re-confirmed; updated_at added to Post type + post page; S13/S14 backlog documented)
+**Last Updated:** 2026-06-18 (Session #15 — document push strategy locked; www.aitrends.ng live + canonical domain updated across all URLs; updated_at added; HF FLUX confirmed)
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -587,6 +587,8 @@ npm start   # runs index.js
 - ✅ **www.aitrends.ng verified still broken** — curl confirms no response from www subdomain. Whogohost CNAME for www still points to root domain, not `cname.vercel-dns.com`. www not in Vercel domain list.
 - ✅ **updated_at added to Post type and post page** — `updated_at?: string | null` added to `lib/types.ts`; `wasUpdated()` helper shows "Updated [date]" in post meta row when `updated_at` > `published_at` by 1+ day; JSON-LD `dateModified` now uses `updated_at` when available. Build clean. Committed 71550cf (aitrends-ng pushed). **Supabase migration still needed** — the column doesn't exist in the DB yet. Field will always be undefined until migration is run.
 - ✅ **S13 backlog explained** — 2 local commits (S13 `439431f`, S14 `e0bbcb0`) not yet on GitHub because container has 403 on aitrends-project repo. Felix must run `git push origin main` from `aitrends-project/` directory to push them. Going forward: split commits (CLAUDE.md → push to GitHub; SESSION_LOG+TRAINING_MANUAL → local only).
+- ✅ **www.aitrends.ng live — confirmed via curl** — HTTP/2 200. Vercel screenshot shows: `www.aitrends.ng` Production (✅), `aitrends.ng` 308 → www.aitrends.ng (✅), `aitrends-ng.vercel.app` Production (✅). Correct setup.
+- ✅ **Canonical domain updated to www across all URLs** — All hardcoded `https://aitrends.ng` updated to `https://www.aitrends.ng` in: layout.tsx, sitemap.ts, robots.ts, feed.xml/route.ts, post/[slug]/page.tsx, api/posts/create/route.ts. Committed 9463584 and pushed. **One manual step:** update `NEXT_PUBLIC_SITE_URL` in Vercel dashboard from `https://aitrends-ng.vercel.app` → `https://www.aitrends.ng`.
 
 ### 🔴 Critical
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
