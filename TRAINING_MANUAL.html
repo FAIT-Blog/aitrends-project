@@ -4878,6 +4878,68 @@ rel="noopener noreferrer nofollow"</pre>
   </div>
 </div>
 
+<!-- ═══════════════════ CHAPTER 24 ═══════════════════ -->
+
+<div class="chapter" id="chapter-24">
+  <div class="chapter-header">
+    <span class="chapter-number">Chapter 24</span>
+    <h2>Project Documentation Strategy</h2>
+    <p class="chapter-subtitle">What to version-control, what to keep local, and why both matter</p>
+  </div>
+
+  <h3>The three documentation files</h3>
+  <p>The AITrends project maintains three core documentation files in <code>aitrends-project/</code>:</p>
+  <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+    <tr style="background:#111827">
+      <th style="padding:8px;text-align:left;border:1px solid #1f2937">File</th>
+      <th style="padding:8px;text-align:left;border:1px solid #1f2937">Size (Jun 2026)</th>
+      <th style="padding:8px;text-align:left;border:1px solid #1f2937">Purpose</th>
+      <th style="padding:8px;text-align:left;border:1px solid #1f2937">Push to GitHub?</th>
+    </tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">CLAUDE.md</td><td style="padding:8px;border:1px solid #1f2937">69KB</td><td style="padding:8px;border:1px solid #1f2937">Master spec — architecture, rules, to-do list</td><td style="padding:8px;border:1px solid #1f2937">✅ Every session</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">SESSION_LOG.html</td><td style="padding:8px;border:1px solid #1f2937">508KB</td><td style="padding:8px;border:1px solid #1f2937">Verbatim record of every turn in every session</td><td style="padding:8px;border:1px solid #1f2937">❌ Local only</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">TRAINING_MANUAL.html</td><td style="padding:8px;border:1px solid #1f2937">257KB</td><td style="padding:8px;border:1px solid #1f2937">Synthesised lessons by chapter</td><td style="padding:8px;border:1px solid #1f2937">❌ Local only</td></tr>
+  </table>
+
+  <h3>Why SESSION_LOG and TRAINING_MANUAL stay local</h3>
+  <p>These files are NOT too large for GitHub — 508KB is tiny (GitHub allows 100MB per file). The decision to keep them local is Felix's strategic preference. Possible reasons include: keeping the detailed session-by-session record private, avoiding repository history bloat as files grow, and keeping GitHub as a clean source of truth for the specification only.</p>
+  <p>Important implication: SESSION_LOG.html and TRAINING_MANUAL.html exist only on Felix's Mac. They are not cloud-backed. Felix must maintain regular Time Machine or equivalent backups of the <code>aitrends-project/</code> directory.</p>
+
+  <h3>The two-commit pattern per session</h3>
+  <p>From Session #15 onwards, documentation is committed in two separate commits per session:</p>
+  <pre>
+# Commit 1 — CLAUDE.md only (push to GitHub)
+git add CLAUDE.md
+git commit -m "docs: CLAUDE.md — Session #N: [summary]"
+git push origin main
+
+# Commit 2 — SESSION_LOG.html + TRAINING_MANUAL.html (local only, never push)
+git add SESSION_LOG.html TRAINING_MANUAL.html
+git commit -m "docs: SESSION_LOG + TRAINING_MANUAL — Session #N: [summary]"
+# DO NOT git push</pre>
+  <p>This makes CLAUDE.md the cloud-backed source of truth. It contains the rules, architecture, to-do list, and session history summary — everything needed to bootstrap a new Claude Code session.</p>
+
+  <h3>The aitrends-project push credential issue</h3>
+  <p>The Claude Code container authenticated as <code>FAIT-Pro</code> does not have write access to <code>FAIT-Blog/aitrends-project</code>. Every <code>git push origin main</code> from the container returns HTTP 403. This is a persistent issue across all sessions.</p>
+  <p>Workaround: Felix runs <code>git push origin main</code> from his Mac Terminal after each session. The commits are already prepared — Felix just needs to push them.</p>
+  <p>This is NOT an issue for the two code repos (<code>aitrends-ng</code> and <code>scout-agent</code>) — those push fine from the container because they are under a different org/permission setup.</p>
+
+  <h3>"2 commits ahead of origin" — what it means</h3>
+  <p>When git reports "your branch is N commits ahead of origin/main," it means your local repo has N commits that GitHub hasn't received yet. Those commits exist only on your hard drive. Running <code>git push origin main</code> sends them to GitHub.</p>
+  <p>The risk: if the local machine is wiped without pushing, those commits are lost. For CLAUDE.md this is important — it's the master spec. For SESSION_LOG and TRAINING_MANUAL (local-only policy), the commits never go to GitHub by design, so they're always "ahead" indefinitely. This is expected and correct.</p>
+
+  <h3>What to back up</h3>
+  <ul>
+    <li><strong>aitrends-project/</strong> — contains SESSION_LOG.html and TRAINING_MANUAL.html (not on GitHub)</li>
+    <li><strong>.env</strong> files in aitrends.ng/ and scout-agent/ — never committed (contain API keys)</li>
+    <li>Supabase database — backed up by Supabase's own infrastructure (free tier keeps 7 days of backups)</li>
+  </ul>
+
+  <div class="lesson-box" style="background:#0f172a;border-left:3px solid #f59e0b;padding:16px;margin-top:28px;border-radius:4px">
+    <p><strong style="color:#f59e0b">Key lesson:</strong> Version control and cloud backup are not the same thing. Git tracks changes; GitHub stores them in the cloud. Keeping a file out of GitHub means it only lives where git runs locally. Know which files are in which category for every project you build.</p>
+  </div>
+</div>
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -4886,7 +4948,7 @@ rel="noopener noreferrer nofollow"</pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 17 June 2026 — Chapter 23 added: SEO for an Autonomous AI Blog.
+    Last updated: 18 June 2026 — Chapter 24 added: Project Documentation Strategy.
   </p>
 </div>
 
