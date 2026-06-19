@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-18 (Session #15 — document push strategy locked; www.aitrends.ng live + canonical domain updated across all URLs; updated_at added; HF FLUX confirmed)
+**Last Updated:** 2026-06-19 (Session #16 — YouTube podcast pipeline built + tested; 6 channels; AI signal gate; 8-min duration gate; Gemini multimodal thumbnail; HF FLUX editorial images; Supabase migration required for 'ai' category)
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -438,11 +438,44 @@ npm start   # runs index.js
 - AI signal gate (`hasAISignal()`) — blocks non-AI articles before Gemini (commit 000c25f)
 - Search-aggregate pipeline — `search.js` (Tavily), `verify.js` (named entity overlap), blend mode (commit 47a0c8c)
 - Self-learning priority sources — `source_reputation` table, promote at 5 hits, demote after 7 silent days
+- **YouTube podcast pipeline** (Session #16, commit e0f5d0b) — `scout-podcast.js`, `feeds-podcast.js`, `transcript.js`, `gemini-podcast.js`; 6 channels; SCOUT_MODE=podcast routes from scout.js; `scout-podcast.yml` GHA workflow (daily 06:00 UTC)
+
+### YouTube Podcast Pipeline — Key Details
+- **SCOUT_MODE=podcast** routes `scout.js` → `runPodcastScout()` in `scout-podcast.js`
+- **6 channels:** Ethan Mollick (UCuEvINOL2TLekZeeCk50Yug — inactive, 0 videos currently), Udacity, Sandeep Swadia | theMITmonk (UC4ZVkG3RQPzvZk7alIVjcCg — corrected ID), The Diary Of A CEO, Silicon Valley Girl, Mo Gawdat
+- **Duration gate:** 8 minutes — checks YouTube page JSON-LD (`"duration":"PT..."`); transcript length proxy (6,000 chars) as fallback
+- **AI signal gate:** Filters non-AI episodes from mixed channels (Diary of CEO, Udacity, Mo Gawdat philosophy content)
+- **Transcript:** 20,000 chars via `youtube-transcript` → Tavily extract fallback → RSS description fallback
+- **Thumbnail:** Downloads `maxresdefault.jpg` / `hqdefault.jpg` → base64 → passed to Gemini multimodal
+- **Gemini multimodal:** Thumbnail + transcript → generates 6-section post + HF FLUX image prompt
+- **6-section structure:** Overview, Key Takeaways, `<div data-youtube=""></div>` embed, Main Ideas (3–6), Notable Quotes, Practical Applications, Final Thoughts, Source attribution (plain text only)
+- **YouTube embed:** `<div data-youtube=""></div>` placeholder → replaced at render time by `injectYouTubeEmbed()` in `post/[slug]/page.tsx` using `source_urls[0]` video ID → `youtube-nocookie.com` iframe
+- **Cover image:** HF FLUX generates unique editorial illustration from Gemini's prompt (NOT raw thumbnail)
+- **Category:** hardcoded `ai` — all podcast posts go here
+- **1 post per channel per run** — prevents flooding
+- **No Africa gate** — global content
+- **complete.js change:** `isYouTubeSource` check skips `trySourceImage` for YouTube posts → HF FLUX path used
+
+### ⚠️ Supabase Migration Required (blocks podcast publishing)
+Run this SQL in Supabase console before the first podcast Phase 2 run:
+```sql
+ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_category_check;
+ALTER TABLE posts ADD CONSTRAINT posts_category_check
+  CHECK (category IN ('ai-models','anthropic','industry','tools','ai'));
+```
+
+### ⚠️ cron-job.org trigger needed for podcast pipeline
+Add a new cron-job.org job:
+- URL: `https://api.github.com/repos/FAIT-Blog/scout-agent/actions/workflows/scout-podcast.yml/dispatches`
+- Method: POST
+- Headers: `Authorization: Bearer {PAT}`, `Content-Type: application/json`
+- Body: `{"ref":"main"}`
+- Schedule: Once daily (e.g. 07:00 UTC) — or use GHA native cron (scout-podcast.yml already has `0 6 * * *`)
 
 ---
 
 ## 7. MASTER TO-DO LIST
-*Updated: 2026-06-17*
+*Updated: 2026-06-19*
 *Status key: 🔴 Critical | 🟠 High | 🟡 Medium | 🔵 Low / Later*
 
 ### ✅ Completed — Round 1 (4 June 2026, morning)
@@ -590,6 +623,17 @@ npm start   # runs index.js
 - ✅ **www.aitrends.ng live — confirmed via curl** — HTTP/2 200. Vercel screenshot shows: `www.aitrends.ng` Production (✅), `aitrends.ng` 308 → www.aitrends.ng (✅), `aitrends-ng.vercel.app` Production (✅). Correct setup.
 - ✅ **Canonical domain updated to www across all URLs** — All hardcoded `https://aitrends.ng` updated to `https://www.aitrends.ng` in: layout.tsx, sitemap.ts, robots.ts, feed.xml/route.ts, post/[slug]/page.tsx, api/posts/create/route.ts. Committed 9463584 and pushed. **One manual step:** update `NEXT_PUBLIC_SITE_URL` in Vercel dashboard from `https://aitrends-ng.vercel.app` → `https://www.aitrends.ng`.
 
+### ✅ Completed — Session #16 (19 June 2026)
+- ✅ **YouTube podcast pipeline built and tested** — 4 new scout-agent files: `feeds-podcast.js`, `transcript.js`, `gemini-podcast.js`, `scout-podcast.js`. SCOUT_MODE=podcast routing in scout.js. complete.js YouTube source detection. scout-podcast.yml GHA workflow. All syntax checks pass. Commits e0f5d0b (scout-agent), cdf7c6e + 33bffe6 (aitrends-ng).
+- ✅ **theMITmonk channel ID corrected** — Old ID `UC-5yNbJKcYrRbhocskA-6qA` returned 0 items (Sandeep Swadia's old empty channel). Correct ID `UC4ZVkG3RQPzvZk7alIVjcCg` returns 15 videos. Verified via video `IWdvG9Up8Mc` oEmbed.
+- ✅ **submitImageJob() bug fixed** — Was storing `{ jobId: null }` object as the jobId. Fixed to destructure `{ jobId }` from the result (consistent with scout.js pattern).
+- ✅ **aitrends.ng 'ai' category** — Added to VALID_CATEGORIES in create/route.ts (with sanitize-html div allowance), lib/createPost.ts, sitemap.ts, about page (Step 06), post page (YouTube embed injection). schema.sql CHECK constraint updated in code.
+- ✅ **Local test passed** — 3 posts queued: Udacity MSc in AI, Silicon Valley Girl (AI-First Playbook, guest Peter Yang), Mo Gawdat (AI skills). HF FLUX image generation confirmed for 2 of 3. AI signal gate correctly blocked JD Vance, creatine, pyramids, parenting posts from Diary of CEO.
+- ⚠️ **Supabase migration STILL NEEDED** — category CHECK constraint blocks 'ai' posts. Run in Supabase SQL console: `ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_category_check; ALTER TABLE posts ADD CONSTRAINT posts_category_check CHECK (category IN ('ai-models','anthropic','industry','tools','ai'));`
+- ⚠️ **cron-job.org trigger for podcast pipeline** — GHA `scout-podcast.yml` has native cron at 06:00 UTC daily. Add cron-job.org backup trigger pointing to workflow_dispatch for reliability.
+- ⚠️ **3 pending posts in Supabase** — IDs 108, 109, 110 in pending_posts with status pending_image. Will retry automatically once Supabase migration is run. One (Udacity) had storage upload failure — transient error, will retry.
+- ⚠️ **Ethan Mollick's channel inactive** — `UCuEvINOL2TLekZeeCk50Yug` returns 0 items. He uploads rarely. Scout skips silently. Update channel ID when Felix provides an active video URL from his channel.
+
 ### 🔴 Critical
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
 - ✅ **Assess Gemini capability after simplification** — Audit passed (Session #8 continuation, 12 June): 5 posts reviewed. No asterisks, 1 source URL, title variety confirmed. Gemini accurate-rewrite prompt working as intended.
@@ -735,3 +779,4 @@ Felix's explicit instruction: SESSION_LOG.html and TRAINING_MANUAL.html are comm
 | S13 | 16–17 June 2026 | both + docs | Admin dashboard architecture risks documented (8 risks, mitigations written); master to-do list consolidated; 18-section master build prompt written for 99% replication; platform research — AITrends.ng concept confirmed novel; full security audit — 9 vulnerabilities found; 8 fixes applied: SEC-01 prompt injection (XML boundaries in gemini.js, f6788c7), SEC-02 SSRF guard (isSafeImageUrl in complete.js, f6788c7), SEC-03 HTML sanitization (sanitize-html in create/route.ts, 6f2dce5), SEC-05 timing-safe key compare (crypto.timingSafeEqual, 5fe2a15), SEC-06 URL validation (isSafeUrl in create+draft routes, 5fe2a15), SEC-07 Supabase singleton (getAdminClient in slack/editorial, 5fe2a15), SEC-08 publisher timeout (AbortSignal.timeout(45000), f6788c7), SEC-09 extended markdown strip (publisher.js, f6788c7); SEC-04 rate limiting deferred (Vercel serverless stateless — in-memory Map doesn't persist); all three docs updated. |
 | S14 | 17 June 2026 | both + docs | Site evaluation + SEO pass: site audit identified 6 issues; og-default.png created and deployed (ae87f97 aitrends-ng); AI signal gate tightened — broad terms (algorithm/automation) moved to WEAK list requiring 3+ body occurrences (8301fc3 scout-agent); Africa GATE hardened with substitution test + conditional "What this means for Africa" sentence (8301fc3); aitrends.ng root domain live via Whogohost A record → 76.76.21.21; SEO improvements: WebP images (removed `unoptimized` from post cover Image), `cover_image_prompt` as descriptive alt text on all cover images, `rel="nofollow"` on external source_urls, About page accuracy fix (correct feed list + HF FLUX image pipeline description) (5856ea6 aitrends-ng); www.aitrends.ng CNAME issue documented (outstanding); docs updated. |
 | S15 | 18 June 2026 | aitrends.ng + docs | Document push strategy locked: SESSION_LOG + TRAINING_MANUAL = local-only commits; CLAUDE.md = push to GitHub. HF FLUX.1-schnell confirmed as active default image provider (image-providers/index.js). www.aitrends.ng confirmed still broken via curl (Whogohost CNAME not updated, www not in Vercel). updated_at added: Post interface `updated_at?: string | null`; `wasUpdated()` helper; "Updated [date]" in meta row; JSON-LD dateModified uses updated_at when available; Supabase migration SQL documented in to-do (71550cf aitrends-ng, pushed). |
+| S16 | 19 June 2026 | scout-agent + aitrends.ng + docs | YouTube podcast pipeline built and local-tested. New files: feeds-podcast.js (6 channels), transcript.js (20k chars, 8-min gate, Tavily fallback, thumbnail download), gemini-podcast.js (multimodal: thumbnail base64 + transcript → 6-section editorial post + HF FLUX prompt), scout-podcast.js (Phase 1 with AI signal gate, 1 post per channel per run). SCOUT_MODE=podcast routing added to scout.js (3 lines). complete.js: isYouTubeSource check skips og:image for YouTube posts → HF FLUX path used. scout-podcast.yml GHA workflow (daily 06:00 UTC). Fixed: theMITmonk channel ID corrected (UC4ZVkG3RQPzvZk7alIVjcCg). Fixed: submitImageJob() — destructure { jobId } not raw object. aitrends.ng: 'ai' added to VALID_CATEGORIES (create/route.ts, lib/createPost.ts, sitemap.ts, about page, post page YouTube embed). supabase/schema.sql category constraint updated. Blocked: Supabase CHECK constraint on posts.category must be migrated manually before podcast posts can publish. Local test: 3 posts queued (Udacity MSc AI, Silicon Valley Girl AI-First Playbook with Peter Yang, Mo Gawdat on AI). Phase 2 image generation confirmed working. Commits: cdf7c6e + 33bffe6 (aitrends-ng), e0f5d0b (scout-agent). |
