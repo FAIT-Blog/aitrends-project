@@ -9050,6 +9050,230 @@ ALTER TABLE posts ADD CONSTRAINT posts_category_check
   </div>
 </div><!-- end session-16 -->
 
+<div class="session" id="session-17">
+  <h2>Session #17 — 19 June 2026 (continuation)</h2>
+  <p><strong>Focus:</strong> Post-deployment diagnosis — 3 podcast posts stuck, isYouTubeSource bug, Egypt post attribution hidden, AI label cleanup, cron-job.org setup, AI Trends category wired everywhere</p>
+
+  <div class="turn">
+    <h3>Turn 1: Felix — cron-job.org setup questions</h3>
+    <p>Felix asked how to add the cron-job.org trigger for <code>scout-podcast.yml</code>. Answered with step-by-step instructions: URL, method POST, Authorization/Content-Type/Accept headers, body <code>{"ref":"main"}</code>, run-now test, expect HTTP 204. Felix confirmed all manual setup completed (Supabase migration + cron-job).</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2: Felix — "What has gone wrong since the last 24 hours?"</h3>
+    <p>Felix reported issues after Session #16 amendments. Ran GitHub Actions log audit.</p>
+
+    <h4>Tool: Bash — gh run list (20 runs)</h4>
+    <pre>All runs: ✅ success — no workflow failures visible at surface level.
+Latest Scout Phase 1 at 11:00 UTC queued 1 post (Egypt data center, post 111).
+Latest Phase 2 at 11:30 UTC published post 111 successfully.</pre>
+
+    <h4>Tool: Bash — gh run view 27821743681 (Phase 1 at 11:00 UTC) — full log</h4>
+    <p>Phase 1 log showed a blend-mode industry post being queued:</p>
+    <pre>Source URL(s) [blend]: 5 — https://www.youtube.com/watch?v=i41HOJmBqWw
+📥 Pending post saved (id: 111)
+✅ Queued: "Egypt Secures $400 Million Data Center Deal as North and West Africa Build..."</pre>
+    <p><strong>Note: source_urls[0] is a YouTube URL</strong> — Tavily search returned this as the highest-ranked result for an industry story about Egypt data centers.</p>
+
+    <h4>Tool: Bash — gh run view 27823080869 (Phase 2 at 11:30 UTC)</h4>
+    <pre>Found 1 pending post(s)
+📝 "Egypt Secures $400 Million Data Center Deal..."
+   YouTube/podcast post — using HF FLUX with Gemini-generated image prompt...
+   [HF] ✅ Image generated (120KB)
+   ✅ Published: https://www.aitrends.ng/post/egypt-secures-400-million-data-center-deal...</pre>
+    <p><strong>Bug spotted:</strong> Egypt post (an RSS industry post) is being logged as "YouTube/podcast post". This means the <code>isYouTubeSource</code> check I wrote in Session #16 is incorrectly matching it because <code>source_urls[0]</code> is a YouTube URL from Tavily blend results.</p>
+
+    <h4>Tool: Bash — check earlier Phase 2 runs for posts 108-110</h4>
+    <p>Checked runs 04:00–06:00 UTC. Finding:</p>
+    <pre>=== 27804487972 (04:00 UTC) ===
+Found 3 pending post(s)
+YouTube/podcast post — using HF FLUX...
+[HF] ✅ Image generated (92KB)
+❌ Error: Publisher error 500: {"error":"Failed to create post"}
+❌ Final attempt failed — marking as failed
+
+[same pattern repeated for posts 109 and 110]
+
+=== 27808484126 (06:00 UTC) ===
+❌ Final attempt failed — marking as failed
+[all 3 posts exhausted retries by 06:00 UTC]
+
+=== 08:30 UTC onwards ===
+No pending posts. Nothing to do.</pre>
+    <p><strong>Root cause confirmed:</strong> Posts 108, 109, 110 were retried by Phase 2 from 04:00 UTC (every 30 minutes = 5 attempts across 2.5 hours) before the Supabase migration was run. Each attempt hit the <code>posts_category_check</code> constraint violation (category 'ai' not in the allowed list) → 500 → marked failed. By the time Felix ran the migration, Phase 2 had already permanently marked all 3 as <code>failed</code>.</p>
+
+    <h4>Full diagnosis — 3 bugs found</h4>
+    <ol>
+      <li><strong>Critical:</strong> Posts 108, 109, 110 in <code>failed</code> status — need Supabase SQL reset to <code>pending_image</code></li>
+      <li><strong>Bug in complete.js:</strong> <code>isYouTubeSource = source_urls[0].match(/youtube\.com/)</code> is too broad — matches RSS industry posts where Tavily returned a YouTube URL as the first blend source. Should use <code>post.category === 'ai'</code> instead.</li>
+      <li><strong>Bug in post/[slug]/page.tsx:</strong> Egypt post's source attribution section is hidden (<code>!youtubeId</code> is false) because <code>youtubeId</code> is non-null, extracted from <code>source_urls[0]</code> which happens to be YouTube. Readers can't see source attribution for the Egypt article.</li>
+    </ol>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3: Fix isYouTubeSource bug — complete.js</h3>
+    <p><strong>Tool: Read</strong> — <code>complete.js</code> lines 130-147 to see the exact code</p>
+    <p><strong>Root cause:</strong></p>
+    <pre><code>// Bug — checks URL pattern:
+const isYouTubeSource = post.source_urls?.[0]?.match(/youtube\.com|youtu\.be/)</code></pre>
+    <p>Tavily blend search for the Egypt data center story returned <code>https://www.youtube.com/watch?v=i41HOJmBqWw</code> as its highest-ranked source. That YouTube video (Egypt power sector) was tangentially related to the story. So <code>source_urls[0]</code> was YouTube even though the post is an industry RSS post.</p>
+    <p><strong>Fix — use category:</strong></p>
+    <pre><code>// Fix — checks category stored in pending_posts:
+const isPodcastPost = post.category === 'ai'</code></pre>
+    <p>Verified that <code>pending_posts</code> has a <code>category</code> column (checked memory.js line 76: <code>category: post.category</code> in savePendingPost). Podcast posts always have <code>category: 'ai'</code>. RSS posts have <code>'industry'</code>, <code>'ai-models'</code>, etc.</p>
+    <p><strong>Also renamed the variable:</strong> <code>isYouTubeSource</code> → <code>isPodcastPost</code> and updated both the <code>if</code> and <code>else if</code> branches.</p>
+    <p><strong>Tool: Edit</strong> — complete.js lines 135-146 updated. Pushed as commit <code>29e3641</code> to FAIT-Blog/scout-agent.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4: Fix post page YouTube embed bug — post/[slug]/page.tsx</h3>
+    <p><strong>Before:</strong></p>
+    <pre><code>const youtubeId = post.source_urls.length > 0 ? extractYouTubeId(post.source_urls[0]) : null</code></pre>
+    <p>This extracted a YouTube video ID from any post where <code>source_urls[0]</code> happened to be YouTube — even regular RSS industry posts. Consequence: source attribution section hidden (<code>!youtubeId</code> false), and <code>injectYouTubeEmbed()</code> called (though it safely fails to match the non-existent <code>&lt;div data-youtube=""&gt;</code> placeholder).</p>
+    <p><strong>After:</strong></p>
+    <pre><code>const youtubeId = post.category === 'ai' &amp;&amp; post.source_urls.length > 0 ? extractYouTubeId(post.source_urls[0]) : null</code></pre>
+    <p>The embed + attribution logic now only activates for posts in the <code>'ai'</code> category (podcast posts). All other categories show their source attribution normally.</p>
+    <p><strong>Build:</strong> Passed cleanly. Pushed as commit <code>c627d01</code> to FAIT-Blog/aitrends-ng.</p>
+    <p><strong>Effect on live Egypt post (111):</strong> After Vercel redeploy (~1 min), the source URLs section will be visible again at the bottom of the Egypt data center post.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 5: Felix — SQL to reset posts 108-110</h3>
+    <p>Felix provided the SQL to reset the failed podcast posts:</p>
+    <pre><code>UPDATE pending_posts
+SET status = 'pending_image', updated_at = now()
+WHERE id IN (108, 109, 110);</code></pre>
+    <p>Felix ran this in the Supabase console. Phase 2 will pick them up on the next cycle (every 5 min). Now that the <code>posts_category_check</code> constraint has been migrated to include <code>'ai'</code>, publishing should succeed.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 6: Felix — multiple cleanup requests</h3>
+    <p>Felix's requests:</p>
+    <ol>
+      <li>Remove "AI generated" tag/badge on all posts and similar labels</li>
+      <li>Footer: remove "by FAIT · Auto-generated digests · RSS" → keep only RSS link</li>
+      <li>Remove any "authored by Claude" or "Gemini" references — SEO concern</li>
+      <li>Explain "The migration ran too late"</li>
+    </ol>
+
+    <h4>Audit — all AI/brand references in components and pages</h4>
+    <p><strong>Tool: Bash</strong> — grep for auto.generated, AI Generated, by FAIT, Claude, Gemini, Auto-generated across app/ and components/</p>
+    <p>Found:</p>
+    <ul>
+      <li><code>PostCard.tsx:80</code> — <code>{post.auto_generated &amp;&amp; &lt;span&gt;· AI digest&lt;/span&gt;}</code></li>
+      <li><code>post/[slug]/page.tsx:168</code> — <code>{post.auto_generated &amp;&amp; &lt;span&gt;AI Generated&lt;/span&gt;}</code> (amber badge)</li>
+      <li><code>Footer.tsx:16</code> — <code>by FAIT · Auto-generated digests · &lt;a&gt;RSS&lt;/a&gt;</code></li>
+      <li><code>about/page.tsx:83-84</code> — Step 02 title: "Gemini rewrites the digest"; body mentions "Gemini 3.5 Flash" twice</li>
+      <li><code>about/page.tsx:88-89</code> — Step 03 title: "FLUX generates the cover image"; body mentions "HuggingFace FLUX.1-schnell", "Supabase Storage"</li>
+      <li><code>about/page.tsx:94</code> — Step 04 body mentions "Supabase"</li>
+      <li><code>about/page.tsx:177</code> — "Every post on AITrends.ng is AI-generated and carries an AI digest badge"</li>
+    </ul>
+
+    <h4>Changes applied</h4>
+
+    <p><strong>PostCard.tsx</strong> — removed the entire <code>auto_generated</code> conditional block (lines 80-84). The "· AI digest" span is gone from all post cards.</p>
+
+    <p><strong>post/[slug]/page.tsx</strong> — removed the entire <code>auto_generated</code> amber badge block (lines 168-182). "AI Generated" tag no longer appears on any post page.</p>
+
+    <p><strong>Footer.tsx</strong> — before:</p>
+    <pre><code>by &lt;span style={{ color: 'var(--blue)' }}&gt;FAIT&lt;/span&gt; · Auto-generated digests · &lt;a href="/feed.xml"&gt;RSS&lt;/a&gt;</code></pre>
+    <p>After:</p>
+    <pre><code>&lt;a href="/feed.xml" style={{ color: 'var(--muted)' }}&gt;RSS&lt;/a&gt;</code></pre>
+
+    <p><strong>about/page.tsx Step 02</strong> — before:</p>
+    <pre><code>title: 'Gemini rewrites the digest',
+body: 'Each new story is passed to Gemini 3.5 Flash, which rewrites it through an African lens...'</code></pre>
+    <p>After:</p>
+    <pre><code>title: 'Editorial rewrite',
+body: 'Each new story is rewritten through an African lens...'</code></pre>
+
+    <p><strong>about/page.tsx Step 03</strong> — before:</p>
+    <pre><code>title: 'FLUX generates the cover image',
+body: '...sent to HuggingFace FLUX.1-schnell...stored in Supabase Storage...'</code></pre>
+    <p>After:</p>
+    <pre><code>title: 'Cover image generated',
+body: 'A story-specific editorial illustration is generated...permanently stored...'</code></pre>
+
+    <p><strong>about/page.tsx Step 04 body</strong> — removed "Supabase" reference.</p>
+
+    <p><strong>about/page.tsx automation note</strong> — before:</p>
+    <pre><code>Every post on AITrends.ng is AI-generated and carries an &lt;em&gt;AI digest&lt;/em&gt; badge.</code></pre>
+    <p>After:</p>
+    <pre><code>AITrends.ng is an autonomous news platform. Our editorial pipeline monitors 25+ feeds, selects the most relevant AI stories for the African context, and publishes continuously.</code></pre>
+
+    <p><strong>Build:</strong> Passed cleanly. Pushed as commit <code>4d7753d</code> to FAIT-Blog/aitrends-ng.</p>
+
+    <h4>Explaining "The migration ran too late"</h4>
+    <p>Phase 2 runs every 5 minutes via cron-job.org, 24 hours a day. The 3 podcast posts (108, 109, 110) were created in the test session the previous evening. Phase 2 found them at 04:00 UTC (first run of the morning), tried to publish each one, hit the Supabase CHECK constraint violation (<code>'ai'</code> not allowed), got 500, and after its final retry attempt marked all 3 as <code>failed</code>. By 06:00 UTC, all 3 were permanently dead. When Felix ran the migration later that morning, the database was fixed — but Phase 2 had already given up on the posts. The SQL reset (<code>UPDATE pending_posts SET status='pending_image' WHERE id IN (108,109,110)</code>) revived them.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 7: Felix — "Any name for it?" + AI Trends category</h3>
+    <p>Felix confirmed the 'ai' category should display as <strong>"AI Trends"</strong> across the site.</p>
+
+    <h4>Audit — all hardcoded category lists</h4>
+    <p>Found 6 places that needed updating:</p>
+    <ol>
+      <li><code>CategoryBadge.tsx</code> — COLOURS + LABELS maps</li>
+      <li><code>NavBar.tsx</code> — top nav link array</li>
+      <li><code>Sidebar.tsx</code> — sidebar category list</li>
+      <li><code>app/page.tsx</code> — homepage filter tabs array</li>
+      <li><code>category/[slug]/page.tsx</code> — CATEGORY_META map (label + SEO description)</li>
+      <li><code>api/posts/draft/route.ts</code> — TypeScript type cast (missed in Session #16)</li>
+    </ol>
+    <p><code>app/sitemap.ts</code> — already had <code>/category/ai</code> from Session #16 ✅</p>
+
+    <h4>CategoryBadge.tsx additions</h4>
+    <pre><code>// COLOURS:
+ai: { bg: '#1a1a2e', color: '#e879f9' },   // deep navy + purple text
+
+// LABELS:
+ai: 'AI Trends',</code></pre>
+
+    <h4>NavBar.tsx / Sidebar.tsx / page.tsx</h4>
+    <pre><code>{ label: 'AI Trends', href: '/category/ai' }   // added to each array</code></pre>
+
+    <h4>category/[slug]/page.tsx</h4>
+    <pre><code>ai: {
+  label: 'AI Trends',
+  description: 'Long-form AI conversations and podcast episodes — distilled into structured briefings for builders.',
+},</code></pre>
+
+    <h4>api/posts/draft/route.ts</h4>
+    <pre><code>// Before (missed in S16):
+category: category as 'ai-models' | 'anthropic' | 'industry' | 'tools'
+
+// After:
+category: category as 'ai-models' | 'anthropic' | 'industry' | 'tools' | 'ai'</code></pre>
+
+    <p><strong>Build:</strong> Passed cleanly. Pushed as commit <code>48763db</code> to FAIT-Blog/aitrends-ng.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Session #17 Summary</h3>
+    <h4>Bugs found and fixed:</h4>
+    <ul>
+      <li><strong>isYouTubeSource too broad</strong> — URL pattern matching replaced with <code>post.category === 'ai'</code> in both complete.js and post/[slug]/page.tsx (commits 29e3641, c627d01)</li>
+      <li><strong>Posts 108-110 stuck in failed</strong> — Phase 2 retried before migration; reset via SQL UPDATE</li>
+      <li><strong>Egypt post (111) source attribution hidden</strong> — fixed by category check on post page</li>
+    </ul>
+    <h4>Cleanup applied:</h4>
+    <ul>
+      <li>Removed "AI digest" / "AI Generated" badges from PostCard and post page (commit 4d7753d)</li>
+      <li>Footer: removed "by FAIT · Auto-generated digests" — RSS link kept</li>
+      <li>About page: Step 02/03/04 rewritten without Gemini/FLUX/Supabase brand names</li>
+      <li>"AI Trends" category wired into all 6 frontend locations + purple badge (commit 48763db)</li>
+    </ul>
+    <h4>Commits this session:</h4>
+    <ul>
+      <li><code>29e3641</code> — scout-agent: isYouTubeSource → isPodcastPost using category</li>
+      <li><code>c627d01</code> — aitrends-ng: post page YouTube embed gated on category=ai</li>
+      <li><code>4d7753d</code> — aitrends-ng: remove AI labels, FAIT attribution, Gemini/FLUX mentions</li>
+      <li><code>48763db</code> — aitrends-ng: AI Trends category in all nav/sidebar/badge/metadata</li>
+    </ul>
+  </div>
+</div><!-- end session-17 -->
+
 </div>
 </body>
 </html>

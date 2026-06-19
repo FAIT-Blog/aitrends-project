@@ -5168,6 +5168,125 @@ jobId = imageResult.jobId</code></pre>
   </div>
 </div><!-- end chapter-25 -->
 
+<div class="chapter" id="chapter-26">
+  <div class="chapter-header">
+    <span class="chapter-number">Chapter 26</span>
+    <h2 class="chapter-title">The Day After: Three Bugs That Appeared After Deployment</h2>
+    <p class="chapter-subtitle">URL pattern matching vs. category fields, the timing window problem, and why AI brand names hurt SEO</p>
+    <p class="chapter-meta">Session #17 · 19 June 2026 · scout-agent commit 29e3641 · aitrends-ng commits c627d01, 4d7753d, 48763db</p>
+  </div>
+
+  <h3>What This Chapter Is About</h3>
+  <p>Session #16 shipped the YouTube podcast pipeline and everything worked locally. By the next morning, three separate bugs had surfaced in production. This chapter documents what they were, why they happened, and what they teach about writing robust classification logic and timing deployments correctly.</p>
+
+  <h3>Bug 1 — URL Pattern Matching Is the Wrong Way to Classify Posts</h3>
+
+  <h4>What happened</h4>
+  <p>The <code>isYouTubeSource</code> check in <code>complete.js</code> was written to distinguish podcast posts (which must skip the og:image lookup and go straight to HF FLUX) from regular RSS posts:</p>
+  <pre><code>const isYouTubeSource = post.source_urls?.[0]?.match(/youtube\.com|youtu\.be/)</code></pre>
+  <p>The assumption was: if the first source URL is YouTube, it's a podcast post. That assumption broke the first morning.</p>
+  <p>The Scout Phase 1 run at 11:00 UTC queued an Egypt data center story. This was a regular industry post sourced from RSS feeds. But the Tavily blend search found a YouTube video (about Egypt's power sector) as the highest-relevance cross-reference — so <code>source_urls[0]</code> was <code>https://www.youtube.com/watch?v=i41HOJmBqWw</code>. Phase 2 saw this, matched the pattern, logged "YouTube/podcast post", skipped the og:image lookup, and went to HF FLUX.</p>
+  <p>On the post page, the same URL-based check caused the source attribution section to be hidden entirely — readers couldn't see where the Egypt story came from.</p>
+  <p>The post did publish, and HF FLUX generated a fine image. But the classification was wrong, the source attribution was invisible, and had the blend search returned a YouTube URL for an anthropic or ai-models post, the same silent failure would have happened there too.</p>
+
+  <h4>The fix</h4>
+  <pre><code>// Before — URL pattern (too broad):
+const isYouTubeSource = post.source_urls?.[0]?.match(/youtube\.com|youtu\.be/)
+
+// After — category field (precise):
+const isPodcastPost = post.category === 'ai'</code></pre>
+  <p>Same fix applied to <code>post/[slug]/page.tsx</code>:</p>
+  <pre><code>// Before:
+const youtubeId = post.source_urls.length > 0 ? extractYouTubeId(post.source_urls[0]) : null
+
+// After:
+const youtubeId = post.category === 'ai' &amp;&amp; post.source_urls.length > 0 ? extractYouTubeId(post.source_urls[0]) : null</code></pre>
+
+  <h4>The lesson</h4>
+  <p><strong>Never classify posts by examining their source URLs.</strong> Source URLs come from external systems (RSS feeds, Tavily search, editorial inputs) and can contain any domain. The correct signal is the <code>category</code> field, which is set by the pipeline that created the post — scout-podcast.js always sets <code>category: 'ai'</code>, RSS pipelines never do. Category is an intentional label; source URL content is an accident of what happened to rank highest in a search.</p>
+  <p>This rule applies broadly: whenever you need to branch on "what kind of post is this?", use the structured metadata (category, tags, a boolean flag), not inferred properties of external URLs.</p>
+
+  <h3>Bug 2 — The Migration Timing Window</h3>
+
+  <h4>What happened</h4>
+  <p>The Supabase <code>posts</code> table had a CHECK constraint that didn't include <code>'ai'</code>. Three podcast posts (IDs 108, 109, 110) were sitting in <code>pending_posts</code> when Phase 2 started running. Phase 2 runs every 5 minutes, around the clock. It found the posts at 04:00 UTC, generated images for all three (92KB, 54KB, 139KB — all succeeded), then tried to publish. The Supabase constraint rejected every INSERT with a 500. Phase 2 retried each post multiple times over 2 hours, then marked them all <code>failed</code> at 06:00 UTC.</p>
+  <p>The Supabase migration was run later that morning — but by then Phase 2 had permanently given up. The database was fixed; the posts were dead.</p>
+  <p>The SQL to revive them:</p>
+  <pre><code>UPDATE pending_posts
+SET status = 'pending_image', updated_at = now()
+WHERE id IN (108, 109, 110);</code></pre>
+
+  <h4>The lesson</h4>
+  <p><strong>Phase 2 is always running.</strong> Any post in <code>pending_posts</code> with status <code>pending_image</code> will be picked up within 5 minutes — day or night. When a new feature introduces a new category or a new database constraint, the migration must be applied BEFORE the first real posts are queued, not after. The correct order is:</p>
+  <ol>
+    <li>Run the Supabase migration</li>
+    <li>Deploy the frontend (Vercel) with the new VALID_CATEGORIES</li>
+    <li>Confirm both are live</li>
+    <li>Then trigger Phase 1</li>
+  </ol>
+  <p>If you create test posts (as we did in the local test) before the migration is run, those posts will be queued and Phase 2 will attempt them immediately. If the database isn't ready, they'll fail and be marked permanently dead within 30 minutes.</p>
+  <p>The recovery path is the SQL UPDATE above. But prevention is simpler: migrate first, deploy second, test third.</p>
+
+  <h3>Bug 3 — AI Brand Names in User-Facing Copy Hurt SEO</h3>
+
+  <h4>What happened</h4>
+  <p>Felix flagged that the site was displaying several forms of AI attribution that Google would penalise or that would look unprofessional to readers:</p>
+  <ul>
+    <li>An "AI digest" label on every PostCard</li>
+    <li>An "AI Generated" amber badge on every post page (shown when <code>auto_generated = true</code>)</li>
+    <li>"by FAIT · Auto-generated digests · RSS" in the footer</li>
+    <li>About page Step 02: "Gemini 3.5 Flash" mentioned twice</li>
+    <li>About page Step 03: "HuggingFace FLUX.1-schnell" and "Supabase Storage" mentioned</li>
+    <li>About page automation note: "Every post on AITrends.ng is AI-generated"</li>
+  </ul>
+
+  <h4>Why it matters for SEO</h4>
+  <p>Google's helpful content guidance penalises content that signals it was created primarily for automation rather than for human readers. Displaying "AI Generated" prominently on every post is the clearest possible signal of this. Google bots crawl the rendered HTML — they will see that badge. Beyond the ranking impact, readers encountering "AI Generated" on a news platform may trust it less even if the editorial quality is high.</p>
+  <p>The solution is not to deny automation — it's to let the content quality speak for itself. The About page still accurately describes the pipeline ("autonomous news platform", "editorial pipeline monitors 25+ feeds") without naming the specific AI vendor or labelling the output as generated.</p>
+
+  <h4>Changes applied</h4>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0">
+    <tr style="background:#1f2937"><th style="padding:8px;border:1px solid #374151;text-align:left">Location</th><th style="padding:8px;border:1px solid #374151;text-align:left">Before</th><th style="padding:8px;border:1px solid #374151;text-align:left">After</th></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">PostCard badge</td><td style="padding:8px;border:1px solid #1f2937">· AI digest</td><td style="padding:8px;border:1px solid #1f2937">Removed</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">Post page badge</td><td style="padding:8px;border:1px solid #1f2937">AI Generated (amber)</td><td style="padding:8px;border:1px solid #1f2937">Removed</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">Footer</td><td style="padding:8px;border:1px solid #1f2937">by FAIT · Auto-generated digests · RSS</td><td style="padding:8px;border:1px solid #1f2937">RSS (link only)</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">About step 02</td><td style="padding:8px;border:1px solid #1f2937">"Gemini rewrites the digest" / "Gemini 3.5 Flash"</td><td style="padding:8px;border:1px solid #1f2937">"Editorial rewrite"</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">About step 03</td><td style="padding:8px;border:1px solid #1f2937">"FLUX generates the cover image" / "HuggingFace FLUX.1-schnell"</td><td style="padding:8px;border:1px solid #1f2937">"Cover image generated"</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937">About automation note</td><td style="padding:8px;border:1px solid #1f2937">"Every post is AI-generated and carries an AI digest badge"</td><td style="padding:8px;border:1px solid #1f2937">"AITrends.ng is an autonomous news platform"</td></tr>
+  </table>
+
+  <h4>The lesson</h4>
+  <p><strong>Don't label your own content as AI-generated.</strong> You can be transparent about automation without using the words "AI generated" or "auto-generated" in user-facing HTML. Describe the pipeline in terms of what it does (monitors feeds, covers AI news, publishes continuously) not what tool runs it. Vendor names (Gemini, FLUX, HuggingFace) belong in internal documentation, not in the copy Google crawls.</p>
+
+  <h3>The AI Trends Category — Wired Into All 6 Locations</h3>
+  <p>Adding a new category to the frontend is not a one-file change. When "AI Trends" (slug: <code>ai</code>) was added, it needed to appear in 6 places:</p>
+  <ol>
+    <li><code>CategoryBadge.tsx</code> — colour and display label (purple badge: <code>#e879f9</code>)</li>
+    <li><code>NavBar.tsx</code> — top navigation link</li>
+    <li><code>Sidebar.tsx</code> — sidebar category list with post count</li>
+    <li><code>app/page.tsx</code> — homepage filter tabs</li>
+    <li><code>category/[slug]/page.tsx</code> — SEO metadata (title + description for <code>/category/ai</code>)</li>
+    <li><code>api/posts/draft/route.ts</code> — TypeScript type cast (was missed in Session #16)</li>
+  </ol>
+  <p><code>app/sitemap.ts</code> was already updated in Session #16. <code>api/posts/create/route.ts</code> VALID_CATEGORIES was already updated in Session #16. The draft route type was missed — a TypeScript type cast in one route file was not in sync with the create route. Build passes even when a type cast is incomplete (TypeScript doesn't validate the cast itself, only the usage), so this kind of gap can hide until the draft endpoint is actually called with <code>category: 'ai'</code>.</p>
+  <p><strong>Category change checklist for future reference:</strong></p>
+  <pre><code>☐ CategoryBadge.tsx — COLOURS + LABELS
+☐ NavBar.tsx — CATEGORIES array
+☐ Sidebar.tsx — CATEGORIES array
+☐ app/page.tsx — CATEGORIES array
+☐ category/[slug]/page.tsx — CATEGORY_META map
+☐ app/sitemap.ts — static category routes
+☐ api/posts/create/route.ts — VALID_CATEGORIES + TypeScript cast
+☐ api/posts/draft/route.ts — TypeScript cast
+☐ lib/createPost.ts — PostPayload.category union type
+☐ Supabase posts table — CHECK constraint migration</code></pre>
+  <p>That's 10 locations. Miss any one of them and something either breaks silently (Supabase constraint), fails at build (TypeScript), or renders incorrectly (badge shows slug instead of label).</p>
+
+  <div class="chapter-summary">
+    <p><strong>One-line summary:</strong> Three post-deployment bugs: URL pattern classification replaced with category field check; migration timing window recovered via SQL UPDATE; AI brand labels removed for SEO. Adding a new category requires updating 10 locations — always use the checklist.</p>
+  </div>
+</div><!-- end chapter-26 -->
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -5176,7 +5295,7 @@ jobId = imageResult.jobId</code></pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 19 June 2026 — Chapter 25 added: YouTube Podcast Pipeline.
+    Last updated: 19 June 2026 — Chapter 26 added: Three Post-Deployment Bugs.
   </p>
 </div>
 
