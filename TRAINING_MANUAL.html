@@ -4940,6 +4940,234 @@ git commit -m "docs: SESSION_LOG + TRAINING_MANUAL — Session #N: [summary]"
   </div>
 </div>
 
+<div class="chapter" id="chapter-25">
+  <div class="chapter-header">
+    <span class="chapter-number">Chapter 25</span>
+    <h2 class="chapter-title">The YouTube Podcast Pipeline: Transcripts, Multimodal Gemini, and Inline Video Embeds</h2>
+    <p class="chapter-subtitle">Adding a second Phase 1 mode that monitors YouTube channels, generates editorial blog posts from transcripts, and embeds the video inline at post page render time</p>
+    <p class="chapter-meta">Session #16 · 19 June 2026 · scout-agent commit e0f5d0b · aitrends-ng commits cdf7c6e, 33bffe6</p>
+  </div>
+
+  <h3>What This Chapter Is About</h3>
+  <p>Session #16 added a YouTube podcast pipeline to the existing system. Instead of RSS text articles, this pipeline monitors YouTube channels, fetches transcripts from long-form AI episodes, and generates structured editorial blog posts. The same Phase 2 (<code>complete.js</code>) publishes them — no changes to the image or publish logic needed beyond one check. This chapter documents the architecture decisions, the five technical problems we solved, and the lessons learned.</p>
+
+  <h3>The Core Design Decision: Same Phase 2, New Phase 1 Mode</h3>
+  <p>The two-phase architecture already existed. Phase 1 queues posts to <code>pending_posts</code>. Phase 2 generates images and publishes. Adding YouTube support meant writing a new Phase 1 mode — not duplicating the entire pipeline.</p>
+  <p>Implementation: a single env var routes execution.</p>
+  <pre><code>// scout.js — 3 lines added at the top of runScout()
+if (process.env.SCOUT_MODE === 'podcast') {
+  const { runPodcastScout } = await import('./scout-podcast.js')
+  return runPodcastScout()
+}
+// ... existing RSS pipeline unchanged below</code></pre>
+  <p>The GHA workflow (<code>scout-podcast.yml</code>) hardcodes <code>SCOUT_MODE: podcast</code> in its env block. The RSS pipeline's workflow (<code>scout.yml</code>) is untouched. They run independently on separate schedules. Phase 2 processes all pending posts regardless of which Phase 1 created them.</p>
+  <p><strong>Lesson:</strong> When adding a major new mode to an existing pipeline, routing via env var is cleaner than forking the pipeline file. One entry point, two behaviours. Phase 2 stays completely shared.</p>
+
+  <h3>YouTube RSS Feeds — Free, No API Key</h3>
+  <p>YouTube exposes public RSS feeds for every channel at:</p>
+  <pre><code>https://www.youtube.com/feeds/videos.xml?channel_id={CHANNEL_ID}</code></pre>
+  <p>Each entry contains: video ID, title, publication date, description, and view count. It does NOT contain transcripts — those are fetched separately. The feed updates within minutes of a new video being published. No API key, no quota, no rate limiting.</p>
+  <p><strong>Channel ID verification:</strong> Channel IDs look like <code>UCilMYYyoot7vhLn4Tinzmmg</code>. You cannot guess them — you must extract them from a known video URL. The method we used:</p>
+  <pre><code># Method: YouTube oEmbed → video page → channelId
+curl -sL "https://www.youtube.com/watch?v={VIDEO_ID}" | grep -oE '"channelId":"UC[^"]{22}"'</code></pre>
+  <p>We discovered that theMITmonk's channel ID <code>UC-5yNbJKcYrRbhocskA-6qA</code> (from an old reference) was inactive — the feed returned 0 items. The actual active channel was <code>UC4ZVkG3RQPzvZk7alIVjcCg</code>, found by running the above command against a known video URL <code>IWdvG9Up8Mc</code>. Always verify channel IDs return items before shipping.</p>
+
+  <h3>The Duration Gate — 8 Minutes Minimum</h3>
+  <p>Not every YouTube video is a long-form podcast. Channels like Udacity mix 2-minute explainers with 45-minute deep dives. The pipeline must only process the long-form ones.</p>
+  <p>Implementation in <code>transcript.js</code>: fetch the YouTube video page, extract the JSON-LD script tag, parse the ISO 8601 duration.</p>
+  <pre><code>// Parses PT1H23M45S → 5025 seconds
+function parseIsoDuration(pt) {
+  const m = pt.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!m) return 0
+  return (parseInt(m[1]||0)*3600) + (parseInt(m[2]||0)*60) + parseInt(m[3]||0)
+}
+
+async function getVideoDuration(videoId) {
+  const page = await fetch(`https://www.youtube.com/watch?v=${videoId}`)
+  const html = await page.text()
+  const match = html.match(/"duration":"(PT[^"]+)"/)
+  return match ? parseIsoDuration(match[1]) : null
+}</code></pre>
+  <p>The gate rejects anything under 480 seconds (8 minutes). If the page scrape fails and duration is unknown, a proxy check is used: if the transcript is under 6,000 characters, it's assumed too short. The 6,000-char proxy works because 8 minutes of speech at 130 WPM = ~1,040 words ≈ 6,200 chars.</p>
+
+  <h3>Transcript Fetching — 20,000 Character Limit</h3>
+  <p>The existing <code>fetcher.js</code> had a 4,000 character limit — fine for news articles, too short for podcasts. <code>transcript.js</code> is a new file with a 20,000 character limit, covering roughly the first 20 minutes of speech at 150 WPM.</p>
+  <p>Fallback chain:</p>
+  <ol>
+    <li><code>YoutubeTranscript.fetchTranscript(videoId)</code> — the <code>youtube-transcript</code> npm package (already installed)</li>
+    <li><code>tavilyExtract(videoUrl)</code> — Tavily API extract endpoint (same pattern as <code>felix.js</code>)</li>
+    <li>RSS description field (200–1,000 chars from the feed XML)</li>
+    <li>If all three are empty or under 200 chars → <code>{ skip: true, skipReason: 'no_content' }</code></li>
+  </ol>
+  <p>GHA IP addresses are blocked by some sites. The Tavily fallback is critical here — the same reason it was added to <code>felix.js</code> for Substack URLs.</p>
+
+  <h3>Gemini Multimodal — Thumbnail as Creative Input</h3>
+  <p>The Gemini API accepts image data inline via <code>inlineData</code>. We download the YouTube thumbnail (1280×720 from <code>maxresdefault.jpg</code>, fallback to <code>hqdefault.jpg</code>), base64-encode it, and pass it as the first item in the Gemini parts array:</p>
+  <pre><code>const parts = []
+if (thumbnailData) {
+  parts.push({
+    inlineData: {
+      mimeType: thumbnailData.mimeType,  // 'image/jpeg'
+      data: thumbnailData.buffer.toString('base64')
+    }
+  })
+}
+parts.push({ text: prompt })
+
+const payload = {
+  contents: [{ parts }],
+  generationConfig: { temperature: 0.75, maxOutputTokens: 8192 }
+}</code></pre>
+  <p>The image appears first in the parts array — Gemini processes it before reading the text prompt. This gives Gemini visual context (the visual theme, colours, subject matter, style of the thumbnail) which it uses to write a unique HF FLUX image generation prompt.</p>
+  <p><strong>Why not use the thumbnail directly as the cover image?</strong> Felix's editorial standard requires unique images — thumbnails are often channel branding, stock photos with text overlays, or low-effort screenshots. HF FLUX generates a proper editorial illustration. The thumbnail provides creative input; the final image is independently generated.</p>
+  <p><strong>Important:</strong> <code>complete.js</code> normally calls <code>trySourceImage()</code> to scrape the og:image from the source URL. For YouTube URLs, the og:image IS the thumbnail. We added an <code>isYouTubeSource</code> check to skip this step and go straight to HF FLUX:</p>
+  <pre><code>const isYouTubeSource = post.source_urls?.[0]?.match(/youtube\.com|youtu\.be/)
+let result = null
+if (!post.post_id &amp;&amp; !isYouTubeSource) {
+  result = await trySourceImage(post.source_urls)
+} else if (isYouTubeSource) {
+  console.log('  YouTube/podcast post — using HF FLUX with Gemini-generated image prompt...')
+}</code></pre>
+
+  <h3>The YouTube Embed Placeholder — Security Without Compromise</h3>
+  <p>Felix wanted the YouTube video embedded inline in the post body — specifically at the "watch or keep reading" decision point between Key Takeaways and the Main Ideas sections. But there's a security problem: we cannot put a YouTube video ID in the HTML content stored in Supabase, because that HTML goes through <code>sanitize-html</code> before storage. An <code>&lt;iframe&gt;</code> tag would be stripped, and even if we allowed it, hardcoding the video ID in the HTML content field opens XSS risk if the content is ever manipulated.</p>
+  <p>The solution: a placeholder element with no value, and the post page injects the actual embed at render time from a separate, validated field (<code>source_urls</code>).</p>
+  <p><strong>Gemini writes this in the HTML content:</strong></p>
+  <pre><code>&lt;div data-youtube=""&gt;&lt;/div&gt;</code></pre>
+  <p><strong><code>sanitize-html</code> allowlist updated</strong> in <code>create/route.ts</code>:</p>
+  <pre><code>allowedTags: [...existingTags, 'div'],
+allowedAttributes: {
+  ...existingAttrs,
+  'div': ['data-youtube'],
+}</code></pre>
+  <p><strong>Post page (<code>app/post/[slug]/page.tsx</code>) replaces it at render time:</strong></p>
+  <pre><code>function extractYouTubeId(url: string): string | null {
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&amp;?/]+)/)
+  return m ? m[1] : null
+}
+
+function injectYouTubeEmbed(content: string, videoId: string): string {
+  const embed = `&lt;div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden"&gt;` +
+    `&lt;iframe src="https://www.youtube-nocookie.com/embed/${videoId}?rel=0&amp;modestbranding=1" ` +
+    `loading="lazy" style="position:absolute;top:0;left:0;width:100%;height:100%" ` +
+    `allow="accelerometer;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen&gt;&lt;/iframe&gt;` +
+    `&lt;/div&gt;`
+  return content.replace('&lt;div data-youtube=""&gt;&lt;/div&gt;', embed)
+}
+
+// In PostPage component:
+const youtubeId = post.source_urls.length > 0 ? extractYouTubeId(post.source_urls[0]) : null
+const processedContent = youtubeId ? injectYouTubeEmbed(post.content, youtubeId) : post.content</code></pre>
+  <p>The video ID comes from <code>source_urls[0]</code> — a separate, validated field, not the HTML content. The HTML content only contains a valueless placeholder. This means the content field is safe to sanitize without special exceptions. The YouTube URL only appears once, in a structured field, and is never rendered as a clickable link on the post page.</p>
+  <p>Also: <code>youtube-nocookie.com</code> instead of <code>youtube.com</code> — this variant does not set cookies until the user clicks play. Privacy-compliant by default.</p>
+
+  <h3>The Supabase Category Constraint — The Silent 500</h3>
+  <p>After all the code was working, Phase 2 generated images successfully (54KB, 92KB, 139KB — all confirmed) but publishing failed with HTTP 500. The error was:</p>
+  <pre><code>Publisher error 500: {"error":"Failed to create post"}</code></pre>
+  <p>Diagnosis required narrowing the problem to the exact failure point. Testing the API endpoint directly:</p>
+  <pre><code># Works:
+curl -X POST https://www.aitrends.ng/api/posts/create \
+  -H "x-api-key: ..." -d '{"category":"tools",...}'
+→ {"success":true}
+
+# Fails:
+curl -X POST https://www.aitrends.ng/api/posts/create \
+  -H "x-api-key: ..." -d '{"category":"ai",...}'
+→ {"error":"Failed to create post"}</code></pre>
+  <p><strong>Root cause:</strong> The Supabase <code>posts</code> table has a CHECK constraint that was created when the table was first built:</p>
+  <pre><code>check (category in ('ai-models','anthropic','industry','tools'))</code></pre>
+  <p><code>'ai'</code> is not in the constraint. The INSERT throws a Postgres constraint violation → <code>createPost()</code> throws → Next.js returns 500. The VALID_CATEGORIES check in <code>create/route.ts</code> passed (it had been updated), but the database itself rejected the write.</p>
+  <p>This is the classic two-layer validation problem: the application layer passes, the database layer fails. The fix requires a migration — you cannot fix it by changing application code alone.</p>
+  <p><strong>Migration SQL (must be run in Supabase console):</strong></p>
+  <pre><code>ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_category_check;
+ALTER TABLE posts ADD CONSTRAINT posts_category_check
+  CHECK (category IN ('ai-models','anthropic','industry','tools','ai'));</code></pre>
+  <p>The <code>supabase/schema.sql</code> file was updated to reflect the correct constraint so future runs of the schema file (e.g., for a white-label fork) will include 'ai'. The three pending posts (IDs 108, 109, 110) will retry automatically on the next Phase 2 cycle once the migration is applied.</p>
+
+  <h3>The submitImageJob() Object Return Bug</h3>
+  <p>Phase 1 logged: <code>🎨 Image job queued: [object Object]</code></p>
+  <p>Supabase showed <code>image_job_id: '{"jobId":null}'</code> — the whole object stringified, not the jobId value.</p>
+  <p><strong>Root cause:</strong> <code>submitImageJob()</code> returns <code>{ jobId: null }</code> — an object. The code did:</p>
+  <pre><code>// Bug — assigns the whole object:
+jobId = await submitImageJob(digest.imagePrompt)</code></pre>
+  <p><strong>Fix:</strong></p>
+  <pre><code>// Fix — destructure to get the value:
+const imageResult = await submitImageJob(digest.imagePrompt)
+jobId = imageResult.jobId</code></pre>
+  <p>Why didn't this break Phase 2? Because HuggingFace's <code>processJob(_jobId, prompt)</code> uses an underscore prefix on <code>_jobId</code> — it's deliberately ignored. HF is synchronous: Phase 2 generates the image from the prompt regardless of what's in jobId. The wrong string in the database was harmless in this case, but the fix is still required for correctness and for providers (Fal.ai, AI Horde) that DO use the jobId.</p>
+  <p><strong>General lesson:</strong> When a function is documented as returning an object (not a scalar), always destructure. <code>const { thing } = await getThingContainer()</code>, not <code>thing = await getThingContainer()</code>.</p>
+
+  <h3>The AI Category Requires 5 Places to Sync</h3>
+  <p>Adding a new category is not a one-file change. Every category must be registered in 5 places simultaneously:</p>
+  <ol>
+    <li><strong><code>VALID_CATEGORIES</code> in <code>app/api/posts/create/route.ts</code></strong> — gatekeeper; wrong category returns 400</li>
+    <li><strong><code>PostPayload.category</code> in <code>lib/createPost.ts</code></strong> — TypeScript type; build fails if missing</li>
+    <li><strong>Supabase CHECK constraint</strong> — database; INSERT fails if missing (silent 500)</li>
+    <li><strong><code>app/sitemap.ts</code></strong> — static category route for SEO</li>
+    <li><strong><code>feeds-podcast.js</code> (or feeds.js)</strong> — the category string sent by the scout</li>
+  </ol>
+  <p>Places 2 and 3 are the silent killers: place 2 causes a TypeScript build failure (caught before deploy), but place 3 causes a runtime 500 that only appears when a post is published. Always run a test publish with the new category value to a staging environment or directly against the live API before deploying the scout.</p>
+
+  <h3>Gemini's 6-Section Editorial Structure</h3>
+  <p>Felix's editorial standard for podcast posts is more structured than the RSS pipeline's Africa-first digest. The format follows a "Layer" model — from hook to substance:</p>
+  <ol>
+    <li><strong>Overview (Layer 1)</strong> — 1-2 paragraphs. What is this about, why does it matter, what transformation does it provide?</li>
+    <li><strong>Key Takeaways</strong> — 5-7 bullet points. What the reader will learn. Helps decide whether to continue.</li>
+    <li><strong>YouTube embed placeholder</strong> — <code>&lt;div data-youtube=""&gt;&lt;/div&gt;</code> exactly here.</li>
+    <li><strong>Main Ideas 1-N</strong> — 3-6 H3 sections, each a theme from the podcast. Examples, insights, quotes.</li>
+    <li><strong>Notable Quotes</strong> — 3-5 verbatim pull quotes in <code>&lt;blockquote&gt;</code> tags.</li>
+    <li><strong>Practical Applications</strong> — 4-6 concrete action steps in an ordered list.</li>
+    <li><strong>Final Thoughts</strong> — 1 paragraph answering "what does this mean going forward?" Not a summary.</li>
+    <li><strong>Source block</strong> — Plain text only: channel name, guest name, published date. No hyperlinks.</li>
+  </ol>
+  <p>The hyperlink rule is important: channel names, creator names, and YouTube URLs must NEVER appear as hyperlinks in the post body. They appear once, as plain text, in the source block at the bottom. This prevents PageRank leakage to YouTube channels and keeps the content self-contained.</p>
+
+  <h3>The AI Signal Gate for Mixed-Content Channels</h3>
+  <p>Not all episodes from these channels are AI-focused. The Diary Of A CEO interviewed 10+ people with no AI content in the latest batch: JD Vance (politics), creatine (health), fat loss (diet), pyramids (archaeology), parenting, emerging markets. Without the AI gate, these would reach Gemini, generate content, and appear on aitrends.ng as "AI" content.</p>
+  <p>The gate checks title + description against an explicit keyword list. For podcast mode, two terms were added that weren't in the RSS gate: <code>'agi'</code> and <code>'artificial general intelligence'</code> — common in podcast discussions but less common in news headlines.</p>
+  <p>Non-AI episodes are marked seen immediately (even though they're not published), so they're not re-checked on every subsequent run. Without this, every Phase 1 run would re-check the same rejected episodes from the 10 most recent videos.</p>
+
+  <h3>What the Live Test Showed</h3>
+  <p>Three posts were queued in the first live test:</p>
+  <ul>
+    <li><strong>Udacity</strong> — "Exploring Udacity's Online Master's Degrees: MSc in AI" — 10,679 chars, Gemini 2.5-flash fallback (3.5-flash timed out on large transcript). Thumbnail 117KB.</li>
+    <li><strong>Silicon Valley Girl</strong> — "The AI-First Playbook: How Peter Yang Runs a 140K Newsletter" — 7,851 chars. Guest: Peter Yang. Thumbnail 193KB.</li>
+    <li><strong>Mo Gawdat</strong> — "Mo Gawdat on Navigating the Age of AI with Agility and Ethics" — 8,528 chars. Thumbnail 105KB.</li>
+  </ul>
+  <p>HF FLUX generated images for all three (54KB, 92KB, 139KB). Phase 2 correctly skipped the og:image lookup for all three (isYouTubeSource check worked). Publishing failed only because of the Supabase CHECK constraint — once that migration is run, all three will publish automatically on the next Phase 2 cycle.</p>
+  <p>The AI gate correctly blocked 15+ non-AI episodes from Udacity and The Diary Of A CEO. Ethan Mollick's channel returned 0 items — his channel is inactive. theMITmonk's channel required a channel ID correction (wrong ID in initial code — found correct one via video page scrape).</p>
+
+  <h3>Files Created in This Session</h3>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0">
+    <tr style="background:#1f2937"><th style="padding:8px;border:1px solid #374151;text-align:left">File</th><th style="padding:8px;border:1px solid #374151;text-align:left">Type</th><th style="padding:8px;border:1px solid #374151;text-align:left">Purpose</th></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>feeds-podcast.js</code></td><td style="padding:8px;border:1px solid #1f2937">New</td><td style="padding:8px;border:1px solid #1f2937">6 YouTube channel RSS feeds</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>transcript.js</code></td><td style="padding:8px;border:1px solid #1f2937">New</td><td style="padding:8px;border:1px solid #1f2937">Duration gate, transcript fetch, thumbnail download</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>gemini-podcast.js</code></td><td style="padding:8px;border:1px solid #1f2937">New</td><td style="padding:8px;border:1px solid #1f2937">Multimodal Gemini, 6-section prompt, image prompt generation</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>scout-podcast.js</code></td><td style="padding:8px;border:1px solid #1f2937">New</td><td style="padding:8px;border:1px solid #1f2937">Phase 1 for podcast mode — RSS → pending_posts</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>scout.js</code></td><td style="padding:8px;border:1px solid #1f2937">Modified (3 lines)</td><td style="padding:8px;border:1px solid #1f2937">SCOUT_MODE routing</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>complete.js</code></td><td style="padding:8px;border:1px solid #1f2937">Modified (1 check)</td><td style="padding:8px;border:1px solid #1f2937">isYouTubeSource skips og:image lookup</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>scout-podcast.yml</code></td><td style="padding:8px;border:1px solid #1f2937">New</td><td style="padding:8px;border:1px solid #1f2937">Daily 06:00 UTC GHA workflow</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>app/api/posts/create/route.ts</code></td><td style="padding:8px;border:1px solid #1f2937">Modified</td><td style="padding:8px;border:1px solid #1f2937">'ai' in VALID_CATEGORIES; div[data-youtube] in sanitize-html allowlist</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>app/post/[slug]/page.tsx</code></td><td style="padding:8px;border:1px solid #1f2937">Modified</td><td style="padding:8px;border:1px solid #1f2937">extractYouTubeId + injectYouTubeEmbed; source_urls section hidden for YouTube posts</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>lib/createPost.ts</code></td><td style="padding:8px;border:1px solid #1f2937">Modified</td><td style="padding:8px;border:1px solid #1f2937">'ai' added to PostPayload category union type</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>app/sitemap.ts</code></td><td style="padding:8px;border:1px solid #1f2937">Modified</td><td style="padding:8px;border:1px solid #1f2937">/category/ai static route</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>app/about/page.tsx</code></td><td style="padding:8px;border:1px solid #1f2937">Modified</td><td style="padding:8px;border:1px solid #1f2937">Step 06 "AI Podcast Digests" added</td></tr>
+    <tr><td style="padding:8px;border:1px solid #1f2937"><code>supabase/schema.sql</code></td><td style="padding:8px;border:1px solid #1f2937">Modified</td><td style="padding:8px;border:1px solid #1f2937">CHECK constraint updated to include 'ai'</td></tr>
+  </table>
+
+  <h3>What Still Needs to Happen (At Start of Next Session)</h3>
+  <ol>
+    <li><strong>Run Supabase migration</strong> — 2-line ALTER TABLE. Once run, the 3 pending posts will publish on the next Phase 2 cycle.</li>
+    <li><strong>Add cron-job.org trigger</strong> for <code>scout-podcast.yml</code> (GHA native cron is set at 06:00 UTC; cron-job.org adds reliability).</li>
+    <li><strong>Monitor the first 5 published podcast posts</strong> — verify 6-section structure, no forced phrases, correct source attribution format.</li>
+    <li><strong>Find Ethan Mollick's active channel</strong> — his <code>UCuEvINOL2TLekZeeCk50Yug</code> channel is inactive. Needs a working video URL to find the correct channel ID.</li>
+  </ol>
+
+  <div class="chapter-summary">
+    <p><strong>One-line summary:</strong> YouTube podcast pipeline = new Phase 1 mode (SCOUT_MODE=podcast) with 4 new files, routed in 3 lines of scout.js, sharing Phase 2 completely. The five fixes that mattered: correct channel ID verification, Supabase category constraint migration, submitImageJob() destructuring, isYouTubeSource check in complete.js, and the data-youtube="" placeholder for safe XSS-free video embeds.</p>
+  </div>
+</div><!-- end chapter-25 -->
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -4948,7 +5176,7 @@ git commit -m "docs: SESSION_LOG + TRAINING_MANUAL — Session #N: [summary]"
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 18 June 2026 — Chapter 24 added: Project Documentation Strategy.
+    Last updated: 19 June 2026 — Chapter 25 added: YouTube Podcast Pipeline.
   </p>
 </div>
 
