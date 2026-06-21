@@ -9274,6 +9274,266 @@ category: category as 'ai-models' | 'anthropic' | 'industry' | 'tools' | 'ai'</c
   </div>
 </div><!-- end session-17 -->
 
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!--                     SESSION #18 — 21 JUNE 2026                 -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="session" id="session-18">
+  <h2>Session #18 — 21 June 2026</h2>
+  <p class="session-meta">Project: aitrends.ng · Focus: Newsletter signup, feedback form, Vercel Analytics, PostgREST schema cache lesson</p>
+
+  <div class="turn">
+    <h3>Turn 1 — Session resumed; confirmed all stuck posts published</h3>
+    <p><strong>Felix:</strong> [Session continued from context summary. Three requests: check if recent fixes worked, create a feedback form for comments and email collection, set up visitor analytics.]</p>
+    <p><strong>Action:</strong> Checked GitHub Actions logs for the 21:30 UTC June 20 Phase 2 run.</p>
+    <pre><code>gh run view 27884436697 --repo FAIT-Blog/scout-agent --log 2>&1 | grep -E "(✅ Published|Phase 2 complete)"</code></pre>
+    <p><strong>Result:</strong></p>
+    <pre><code>✅ Published: https://www.aitrends.ng/post/exploring-udacitys-online-masters-degrees-msc-in-ai-and-mba-in-ai-product
+✅ Published: https://www.aitrends.ng/post/the-ai-first-playbook-how-peter-yang-runs-a-140k-newsletter-solo
+✅ Published: https://www.aitrends.ng/post/mo-gawdat-on-navigating-the-age-of-ai-with-agility-and-ethical-purpose
+✅ Phase 2 complete.</code></pre>
+    <p>All three stuck posts (108, 109, 110) published at 21:30 UTC June 20. The SQL reset with <code>attempts = 0</code> worked correctly. Podcast pipeline confirmed running daily — posts 116 and 117 queued June 20, further run at 12:31 UTC June 21.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2 — Plan presented for feedback form and analytics</h3>
+    <p><strong>Decision (presented to Felix):</strong></p>
+    <ul>
+      <li><strong>Analytics:</strong> Vercel Analytics — one package install, one component in layout.tsx. Already on Vercel, no new account needed. No cookies required.</li>
+      <li><strong>Newsletter signup:</strong> Supabase <code>newsletter_subscribers</code> table + <code>/api/subscribe</code> route + compact email form in sidebar</li>
+      <li><strong>Feedback/comments:</strong> Supabase <code>feedback</code> table + <code>/api/feedback</code> route + form at bottom of each post page</li>
+    </ul>
+    <p>Proceeded with implementation.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3 — Read existing files before writing</h3>
+    <p>Read 6 files to understand current state before touching anything:</p>
+    <ul>
+      <li><code>app/layout.tsx</code> — root layout, where <code>&lt;Analytics /&gt;</code> would go</li>
+      <li><code>app/post/[slug]/page.tsx</code> — post page, where <code>FeedbackForm</code> would go</li>
+      <li><code>components/Footer.tsx</code> — already clean (RSS link only)</li>
+      <li><code>package.json</code> — confirmed React 18.3.1, no vercel analytics yet</li>
+      <li><code>lib/supabase.ts</code> — confirmed <code>supabaseAdmin</code> proxy exists and uses <code>SUPABASE_SECRET_KEY</code></li>
+      <li><code>app/api/slack/editorial/route.ts</code> — confirmed pattern for using <code>supabaseAdmin</code> in API routes</li>
+    </ul>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4 — npm install @vercel/analytics</h3>
+    <pre><code>cd aitrends.ng && npm install @vercel/analytics</code></pre>
+    <p><strong>Result:</strong> Installed <code>@vercel/analytics@^2.0.1</code> — confirmed in package.json.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 5 — All files written</h3>
+
+    <h4>app/layout.tsx — added Analytics import and component</h4>
+    <pre><code>// Added:
+import { Analytics } from '@vercel/analytics/next'
+
+// Inside &lt;body&gt;:
+&lt;Analytics /&gt;</code></pre>
+
+    <h4>app/api/subscribe/route.ts — NEW FILE</h4>
+    <pre><code>import { NextRequest, NextResponse } from 'next/server'
+import { supabaseAdmin } from '@/lib/supabase'
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length &lt;= 254
+}
+
+export async function POST(req: NextRequest) {
+  let body: Record&lt;string, unknown&gt;
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  if (!email || !isValidEmail(email)) {
+    return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
+  }
+
+  const { error } = await supabaseAdmin
+    .from('newsletter_subscribers')
+    .upsert({ email, status: 'active' }, { onConflict: 'email' })
+
+  if (error) {
+    console.error('[/api/subscribe]', error.message)
+    return NextResponse.json({ error: 'Failed to subscribe' }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
+}</code></pre>
+
+    <h4>app/api/feedback/route.ts — NEW FILE</h4>
+    <pre><code>import { NextRequest, NextResponse } from 'next/server'
+import { supabaseAdmin } from '@/lib/supabase'
+
+function strip(val: unknown, maxLen: number): string {
+  if (typeof val !== 'string') return ''
+  return val.replace(/&lt;[^&gt;]*&gt;/g, '').trim().slice(0, maxLen)
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length &lt;= 254
+}
+
+export async function POST(req: NextRequest) {
+  let body: Record&lt;string, unknown&gt;
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const message = strip(body.message, 2000)
+  if (!message) {
+    return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+  }
+
+  const name = strip(body.name, 100) || null
+  const rawEmail = strip(body.email, 254)
+  const email = rawEmail && isValidEmail(rawEmail) ? rawEmail : null
+  const post_slug = strip(body.post_slug, 200) || null
+
+  const { error } = await supabaseAdmin
+    .from('feedback')
+    .insert({ name, email, message, post_slug })
+
+  if (error) {
+    console.error('[/api/feedback]', error.message)
+    return NextResponse.json({ error: 'Failed to save feedback' }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
+}</code></pre>
+
+    <h4>components/NewsletterSignup.tsx — NEW FILE</h4>
+    <p>Client component (<code>'use client'</code>) with email input, Subscribe button, inline success/error states. Styled to match sidebar card design. Success state shows "You're on the list!" message. Placed in Sidebar between "About AITrends.ng" blurb and Categories list.</p>
+
+    <h4>components/FeedbackForm.tsx — NEW FILE</h4>
+    <p>Client component (<code>'use client'</code>) with Name (optional), Email (optional), Message (required, 2000 char max with live counter). Two-column grid for name/email on desktop. Send Feedback button disabled until message has content. Success state shows "Thank you! Your message has been received." Placed on post pages between People Also Ask section and closing <code>&lt;/div&gt;</code>.</p>
+
+    <h4>components/Sidebar.tsx — added NewsletterSignup</h4>
+    <pre><code>// Added import:
+import NewsletterSignup from '@/components/NewsletterSignup'
+
+// Added between About blurb and Categories:
+&lt;NewsletterSignup /&gt;</code></pre>
+
+    <h4>app/post/[slug]/page.tsx — added FeedbackForm</h4>
+    <pre><code>// Added import:
+import FeedbackForm from '@/components/FeedbackForm'
+
+// Added above closing &lt;/div&gt;:
+{/* Feedback */}
+&lt;FeedbackForm postSlug={slug} /&gt;</code></pre>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 6 — Build verification</h3>
+    <pre><code>npm run build 2>&1 | tail -30</code></pre>
+    <p><strong>Result:</strong> Clean build. Both new routes listed:</p>
+    <pre><code>├ ƒ /api/feedback
+├ ƒ /api/subscribe</code></pre>
+    <p>TypeScript passed in 2.2 seconds. No errors.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 7 — Commit and push to GitHub</h3>
+    <pre><code>git add app/layout.tsx "app/api/subscribe/route.ts" "app/api/feedback/route.ts" \
+  components/NewsletterSignup.tsx components/FeedbackForm.tsx components/Sidebar.tsx \
+  "app/post/[slug]/page.tsx" package.json package-lock.json
+
+git commit -m "feat: newsletter signup, feedback form, and Vercel Analytics"
+git push origin main</code></pre>
+    <p><strong>Commit:</strong> <code>8796ed4</code> — pushed to <code>FAIT-Blog/aitrends-ng</code>. 9 files changed, 380 insertions. Vercel auto-deploy triggered.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 8 — Felix confirms Supabase tables created; first test fails</h3>
+    <p><strong>Felix:</strong> "I have done so, check again"</p>
+    <p>Tested both endpoints on live site:</p>
+    <pre><code>curl -s -X POST https://www.aitrends.ng/api/subscribe -H "Content-Type: application/json" \
+  -d '{"email":"test-verify@aitrends.ng"}'
+# → {"error":"Failed to subscribe"}
+
+curl -s -X POST https://www.aitrends.ng/api/feedback -H "Content-Type: application/json" \
+  -d '{"message":"Verification test","post_slug":"test"}'
+# → {"error":"Failed to save feedback"}</code></pre>
+    <p>Both returning 500. Deployment was live (SHA matched commit <code>8796ed4</code>). Error was happening inside Supabase, not during connection or initialization.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 9 — Root cause diagnosed via local dev server logs</h3>
+    <p>Could not use Vercel CLI (project not linked). Started aitrends.ng locally on port 3001 (port 3000 was occupied by a different project — "FAIT Gadgets" / WhatsApp-estore):</p>
+    <pre><code>npm run dev -- -p 3001 > /tmp/aitrends-dev.log 2>&1 &
+curl -s -X POST http://localhost:3001/api/subscribe -H "Content-Type: application/json" \
+  -d '{"email":"test@aitrends.ng"}'
+# → {"error":"Failed to subscribe"}  (same error locally with real env vars)
+
+grep -E "(subscribe|feedback|Error)" /tmp/aitrends-dev.log</code></pre>
+    <p><strong>Error messages from server log:</strong></p>
+    <pre><code>[/api/subscribe] Could not find the table 'public.newsletter_subscribers' in the schema cache
+[/api/feedback] Could not find the table 'public.feedback' in the schema cache</code></pre>
+
+    <h4>Root cause: PostgREST schema cache</h4>
+    <p>Supabase's client library communicates with PostgreSQL via <strong>PostgREST</strong> — an HTTP API layer that sits between the Supabase JS client and the actual database. PostgREST caches the database schema at startup to serve requests efficiently. When new tables are created in Supabase (via the Table Editor or SQL), PostgREST does not know about them until the schema cache is reloaded.</p>
+    <p>The Supabase client was connecting fine, but PostgREST could not find <code>newsletter_subscribers</code> or <code>feedback</code> in its cached schema — so it returned an error before even attempting the insert.</p>
+    <p>This is a standard Supabase "gotcha" that affects any newly created tables.</p>
+
+    <h4>Fix: NOTIFY pgrst, 'reload schema';</h4>
+    <p>In the Supabase SQL Editor, running this single statement forces PostgREST to immediately reload its schema cache from the live database:</p>
+    <pre><code>NOTIFY pgrst, 'reload schema';</code></pre>
+    <p>An alternative is to wait ~30 seconds — Supabase auto-reloads on a timer. But the explicit NOTIFY is immediate.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 10 — Felix runs schema reload; full verification passes</h3>
+    <p><strong>Felix:</strong> "I have done so, check again"</p>
+    <pre><code># Local test:
+curl -s -X POST http://localhost:3001/api/subscribe \
+  -H "Content-Type: application/json" -d '{"email":"test@aitrends.ng"}'
+# → {"success":true}
+
+curl -s -X POST http://localhost:3001/api/feedback \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Test message from verification","post_slug":"test-post"}'
+# → {"success":true}
+
+# Live site test:
+curl -s -X POST https://www.aitrends.ng/api/subscribe \
+  -H "Content-Type: application/json" -d '{"email":"verify@aitrends.ng"}'
+# → {"success":true}
+
+curl -s -X POST https://www.aitrends.ng/api/feedback \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Live site verification test","post_slug":"verification"}'
+# → {"success":true}</code></pre>
+    <p>Both endpoints confirmed working locally and on the live site. Test rows visible in Supabase Table Editor (<code>verify@aitrends.ng</code> in newsletter_subscribers; two test rows in feedback). Felix advised to delete the test rows manually.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Session #18 Summary</h3>
+    <h4>What was built:</h4>
+    <ul>
+      <li><strong>Vercel Analytics</strong> — <code>@vercel/analytics</code> installed, <code>&lt;Analytics /&gt;</code> in layout.tsx. View in Vercel project dashboard → Analytics tab. No cookies, GDPR-friendly.</li>
+      <li><strong>/api/subscribe</strong> — Newsletter email collection. Public POST endpoint. Validates email format, upserts to <code>newsletter_subscribers</code> (duplicate emails handled gracefully).</li>
+      <li><strong>/api/feedback</strong> — Visitor comments. Public POST endpoint. Name and email optional, message required (HTML stripped, 2000 char cap). Inserts to <code>feedback</code> table with <code>post_slug</code> so you know which article generated each comment.</li>
+      <li><strong>NewsletterSignup component</strong> — Sidebar on every page. Inline success/error states. No page reload.</li>
+      <li><strong>FeedbackForm component</strong> — Bottom of every post page. Two-column name/email, full-width textarea, live character counter, disabled button until message typed.</li>
+    </ul>
+    <h4>Key lesson: PostgREST schema cache</h4>
+    <p>After creating new tables in Supabase, always run <code>NOTIFY pgrst, 'reload schema';</code> in the SQL Editor before testing. PostgREST caches the schema at startup and will return "Could not find the table in the schema cache" until it reloads. This applies to every new table, every time.</p>
+    <h4>Commits this session:</h4>
+    <ul>
+      <li><code>8796ed4</code> — aitrends-ng: newsletter signup, feedback form, Vercel Analytics (9 files, 380 insertions)</li>
+    </ul>
+  </div>
+</div><!-- end session-18 -->
+
 </div>
 </body>
 </html>

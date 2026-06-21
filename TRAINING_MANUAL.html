@@ -5287,6 +5287,90 @@ WHERE id IN (108, 109, 110);</code></pre>
   </div>
 </div><!-- end chapter-26 -->
 
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!--                        CHAPTER 27                              -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="chapter" id="chapter-27">
+  <h2>Chapter 27 — Adding Visitor Engagement: Newsletter, Feedback, and Analytics</h2>
+  <p class="chapter-meta">Session #18 · 21 June 2026 · aitrends.ng</p>
+
+  <h3>The Three Features</h3>
+  <p>In Session #18 we added three visitor engagement features to aitrends.ng in a single commit:</p>
+  <ol>
+    <li><strong>Vercel Analytics</strong> — page view tracking with no cookies</li>
+    <li><strong>Newsletter signup</strong> — email collection in the sidebar, stored in Supabase</li>
+    <li><strong>Feedback/comments</strong> — per-post message form, stored in Supabase</li>
+  </ol>
+  <p>The build pattern is the same for each: a server-side API route that writes to Supabase, and a client-side React component that calls that route via <code>fetch()</code>.</p>
+
+  <h3>Why 'use client' Is Required for Forms</h3>
+  <p>Next.js App Router server components cannot hold state. A form that needs to track input values, submission state (idle / loading / success / error), and inline error messages requires React's <code>useState</code> hook — which only runs in the browser. Any component that uses <code>useState</code> must be a client component, marked with <code>'use client'</code> at the top of the file.</p>
+  <p>The post page (<code>app/post/[slug]/page.tsx</code>) is a server component — it fetches data from Supabase at request time. But it can import and render client components like <code>FeedbackForm</code>. The split is: the server component handles data fetching, the client component handles interactivity. This is the correct Next.js App Router pattern.</p>
+  <pre><code>// FeedbackForm.tsx
+'use client'
+import { useState } from 'react'
+
+export default function FeedbackForm({ postSlug }: { postSlug: string }) {
+  const [message, setMessage] = useState('')
+  const [state, setState] = useState&lt;'idle' | 'loading' | 'success' | 'error'&gt;('idle')
+  // ...
+}</code></pre>
+
+  <h3>API Route Design: Public Endpoints Without Authentication</h3>
+  <p>The newsletter and feedback endpoints are public — any visitor can call them. This is by design: there is no login system for readers. Protection comes from input validation, not authentication:</p>
+  <ul>
+    <li><strong>Email validation</strong> — regex check + max 254 chars (RFC 5321 limit)</li>
+    <li><strong>HTML stripping</strong> — all <code>&lt;tags&gt;</code> removed from text fields before storage (prevents stored XSS even though this data is only viewed in Supabase dashboard, not rendered on the site)</li>
+    <li><strong>Length caps</strong> — message max 2000 chars, name max 100 chars, prevents database payload abuse</li>
+    <li><strong>Type narrowing</strong> — all inputs checked with <code>typeof val === 'string'</code> before use</li>
+  </ul>
+  <p>Both routes use <code>supabaseAdmin</code> (the service role client) to write to Supabase, because the <code>feedback</code> and <code>newsletter_subscribers</code> tables have RLS (Row Level Security) enabled by default. The service role key bypasses RLS. Using the anon key would require writing RLS INSERT policies — the service role approach is simpler for server-side API routes.</p>
+
+  <h3>The PostgREST Schema Cache — The Critical "Gotcha"</h3>
+  <p>After Felix created both tables in the Supabase Table Editor, both endpoints immediately returned 500 errors:</p>
+  <pre><code>[/api/subscribe] Could not find the table 'public.newsletter_subscribers' in the schema cache
+[/api/feedback] Could not find the table 'public.feedback' in the schema cache</code></pre>
+
+  <h4>What is PostgREST?</h4>
+  <p>Supabase's JavaScript client does not talk directly to PostgreSQL. It talks to <strong>PostgREST</strong> — an HTTP API layer that translates JS client calls (<code>.from('table').insert()</code>) into SQL queries. PostgREST reads the PostgreSQL schema at startup and caches it in memory so it can quickly validate and route requests.</p>
+  <p>When new tables are created in Supabase (via Table Editor, SQL Editor, or any means), <strong>PostgREST's cache is not automatically updated</strong>. It still holds the old schema. Any attempt to query a new table fails with the "not found in schema cache" error, even though the table physically exists in PostgreSQL.</p>
+
+  <h4>The Fix</h4>
+  <p>PostgreSQL's <code>NOTIFY</code> command sends a message on a channel. PostgREST subscribes to the <code>pgrst</code> channel. Sending a <code>reload schema</code> message tells PostgREST to re-read the database schema immediately:</p>
+  <pre><code>-- Run this in the Supabase SQL Editor after creating any new table:
+NOTIFY pgrst, 'reload schema';</code></pre>
+  <p>After running this, both endpoints returned <code>{"success":true}</code> instantly — no code changes, no redeploy.</p>
+
+  <h4>When This Applies</h4>
+  <p>This is required every time a new table is created in Supabase and immediately accessed via the JS client. It does not apply to:</p>
+  <ul>
+    <li>Adding columns to existing tables (columns are also cached — same fix applies)</li>
+    <li>Tables that were present before the current PostgREST instance started</li>
+    <li>Direct PostgreSQL connections (only affects the PostgREST API layer)</li>
+  </ul>
+  <p>Supabase also auto-reloads the schema cache periodically (~30 seconds). If you wait long enough, the error resolves itself. But <code>NOTIFY pgrst, 'reload schema';</code> is the immediate fix.</p>
+  <p><strong>Rule for every future session:</strong> After creating any new Supabase table, run <code>NOTIFY pgrst, 'reload schema';</code> in the SQL Editor before testing the endpoint that uses it.</p>
+
+  <h3>Vercel Analytics — Zero-Config Visitor Tracking</h3>
+  <p>Vercel Analytics is the lowest-friction visitor tracking option for a project already deployed on Vercel. It requires:</p>
+  <ol>
+    <li><code>npm install @vercel/analytics</code></li>
+    <li>Add <code>&lt;Analytics /&gt;</code> to <code>app/layout.tsx</code> (inside <code>&lt;body&gt;</code>)</li>
+    <li>Enable in Vercel project dashboard → Analytics tab (one-time click)</li>
+  </ol>
+  <p>It tracks: page views, unique visitors, top pages, referrers, countries, browsers. No cookies are set, so no GDPR consent banner is needed. Data is visible only in the Vercel dashboard — not in Supabase.</p>
+  <p>The <code>@vercel/analytics/next</code> import is used (not <code>@vercel/analytics/react</code>) because the project uses Next.js. The Next.js variant uses the Web Vitals API and works correctly with the App Router.</p>
+
+  <h3>Viewing Your Data</h3>
+  <p><strong>Analytics:</strong> Vercel project dashboard → Analytics tab. Shows real-time and historical data.</p>
+  <p><strong>Newsletter subscribers:</strong> Supabase Table Editor → <code>newsletter_subscribers</code>. Export as CSV for import into Buttondown, Beehiiv, or Mailchimp when ready to send newsletters.</p>
+  <p><strong>Feedback:</strong> Supabase Table Editor → <code>feedback</code>. The <code>post_slug</code> column tells you which article generated each message. Sort by <code>created_at</code> to see newest first.</p>
+
+  <div class="chapter-summary">
+    <p><strong>One-line summary:</strong> Forms in Next.js App Router need <code>'use client'</code> for state; API routes use the service role client to bypass RLS; always run <code>NOTIFY pgrst, 'reload schema';</code> after creating new Supabase tables — PostgREST caches the schema and won't see new tables until the cache reloads.</p>
+  </div>
+</div><!-- end chapter-27 -->
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -5295,7 +5379,7 @@ WHERE id IN (108, 109, 110);</code></pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 19 June 2026 — Chapter 26 added: Three Post-Deployment Bugs.
+    Last updated: 21 June 2026 — Chapter 27 added: Newsletter, Feedback Forms, and the PostgREST Schema Cache.
   </p>
 </div>
 
