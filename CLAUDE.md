@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-06-19 (Session #17 — Post-deployment bug fixes: isYouTubeSource → category check, posts 108-110 reset, AI labels removed, AI Trends category wired everywhere; cron-job.org podcast trigger added)
+**Last Updated:** 2026-06-21 (Session #18 — Newsletter signup + feedback form + Vercel Analytics; PostgREST schema cache reload lesson)
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -169,6 +169,30 @@ Unique constraint on `(feed_url, item_guid)` — prevents Scout from re-publishi
 
 Self-updating vocabulary — Gemini extracts `TRENDING_TERMS` from each digest and saves them here. Scout loads these on the next run and merges with the 40-term hardcoded baseline to score articles.
 
+### Table: `newsletter_subscribers`
+| Column | Type | Notes |
+|---|---|---|
+| id | bigint | primary key, identity |
+| email | text | unique, not null |
+| subscribed_at | timestamptz | auto |
+| status | text | `active` · `unsubscribed` |
+
+Written by `/api/subscribe` (upsert on conflict email). View in Supabase Table Editor to see all subscribers.
+
+### Table: `feedback`
+| Column | Type | Notes |
+|---|---|---|
+| id | bigint | primary key, identity |
+| name | text | nullable (optional field) |
+| email | text | nullable (optional field, validated if provided) |
+| message | text | required, max 2000 chars, HTML stripped before storage |
+| post_slug | text | nullable — slug of the post the feedback was submitted on |
+| created_at | timestamptz | auto |
+
+Written by `/api/feedback`. View in Supabase Table Editor to read visitor comments.
+
+**PostgREST schema cache note:** After creating new tables in Supabase, the PostgREST API layer must reload its schema cache before the tables are accessible via the Supabase client. Run `NOTIFY pgrst, 'reload schema';` in the SQL Editor immediately after creating new tables, or wait ~30 seconds for auto-reload.
+
 ---
 
 ## 5. AITRENDS.NG — BLOG FRONTEND
@@ -259,6 +283,12 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 - About page updated: Gemini 3.5 Flash, real feed list, Africa-first mission
 - ShareButtons on post pages: X, WhatsApp, LinkedIn, Telegram, Copy Link (clipboard + "Copied!" feedback)
 - Continuous scroll via IntersectionObserver 300px lookahead — no "Load More" button
+- **Engagement features (Session #18):**
+  - Vercel Analytics — `@vercel/analytics` installed, `<Analytics />` in `layout.tsx`. Page views, unique visitors, top pages — no cookies required
+  - `/api/subscribe` — POST, upserts email to `newsletter_subscribers` Supabase table (email validated, timing-safe not needed — public endpoint)
+  - `/api/feedback` — POST, inserts name/email/message/post_slug to `feedback` Supabase table (HTML stripped, email validated, 2000 char cap)
+  - `NewsletterSignup` component — compact email subscribe form in sidebar on every page
+  - `FeedbackForm` component — name/email/message form at the bottom of every post page (below People Also Ask)
 - **Security hardened (Session #13):**
   - `sanitize-html` on all AI-generated content before Supabase write (allowlist: h2–h4, p, strong, em, lists, a, blockquote, hr)
   - `crypto.timingSafeEqual()` on API key comparison in `create` and `draft` routes
@@ -669,8 +699,14 @@ Add a new cron-job.org job:
 - ✅ **Issue 3 (editorial inputs not consumed)** — Fixed via Step 0.5 editorial override in scout.js. Felix's URL submissions now bypass the Africa GATE and always produce a post.
 - ✅ **Issue 4 (slug truncation)** — Fixed in slugify.ts. Trims at last word boundary, no trailing hyphens.
 
+### ✅ Completed — Session #18 (21 June 2026)
+- ✅ **Vercel Analytics added** — `@vercel/analytics` installed, `<Analytics />` added to `app/layout.tsx`. Tracks page views, unique visitors, top pages — no cookies required. Enabled via Vercel project dashboard → Analytics tab.
+- ✅ **Newsletter subscription built** — `/api/subscribe` POST route upserts email to `newsletter_subscribers` Supabase table. `NewsletterSignup` client component added to sidebar (visible on homepage, category pages, all post pages). Email format validated. Duplicate emails handled gracefully via upsert.
+- ✅ **Feedback form built** — `/api/feedback` POST route inserts to `feedback` Supabase table. `FeedbackForm` client component added below "People Also Ask" on every post page. Name and email optional, message required (2000 char cap, live counter). HTML stripped before storage.
+- ✅ **PostgREST schema cache issue diagnosed and fixed** — After Felix created both tables in Supabase Table Editor, both endpoints returned 500: "Could not find the table in the schema cache". Root cause: PostgREST (the API layer sitting between Supabase client and PostgreSQL) caches the DB schema at startup. New tables are invisible until the cache reloads. Fix: `NOTIFY pgrst, 'reload schema';` in SQL Editor. Both endpoints confirmed working on live site: `{"success":true}` from both. Commit: `8796ed4` (aitrends-ng).
+
 ### 🔵 Later (after system is perfected)
-- [ ] Email newsletter / subscriber form (Buttondown or Beehiiv — free)
+- [ ] Connect newsletter subscribers to an email sending tool (Buttondown or Beehiiv — free tier for < 1000 subscribers)
 - [ ] Social media auto-posting (Twitter/X, LinkedIn on each Scout publish)
 - [ ] Admin dashboard on aitrends.ng (view, delete, manage posts without going into Supabase)
 - [ ] Render deployment for Scout (replace unreliable GHA cron — `index.js` daemon already written)
@@ -781,3 +817,4 @@ Felix's explicit instruction: SESSION_LOG.html and TRAINING_MANUAL.html are comm
 | S15 | 18 June 2026 | aitrends.ng + docs | Document push strategy locked: SESSION_LOG + TRAINING_MANUAL = local-only commits; CLAUDE.md = push to GitHub. HF FLUX.1-schnell confirmed as active default image provider (image-providers/index.js). www.aitrends.ng confirmed still broken via curl (Whogohost CNAME not updated, www not in Vercel). updated_at added: Post interface `updated_at?: string | null`; `wasUpdated()` helper; "Updated [date]" in meta row; JSON-LD dateModified uses updated_at when available; Supabase migration SQL documented in to-do (71550cf aitrends-ng, pushed). |
 | S17 | 19 June 2026 | scout-agent + aitrends.ng + docs | Post-deployment bug fixes: isYouTubeSource → category check (29e3641, c627d01); posts 108-110 reset via SQL UPDATE; AI Generated badges + FAIT attribution + Gemini/FLUX brand names removed from site (4d7753d); AI Trends category wired into all 6 frontend locations + purple badge + SEO metadata (48763db); cron-job.org podcast trigger added. |
 | S16 | 19 June 2026 | scout-agent + aitrends.ng + docs | YouTube podcast pipeline built and local-tested. New files: feeds-podcast.js (6 channels), transcript.js (20k chars, 8-min gate, Tavily fallback, thumbnail download), gemini-podcast.js (multimodal: thumbnail base64 + transcript → 6-section editorial post + HF FLUX prompt), scout-podcast.js (Phase 1 with AI signal gate, 1 post per channel per run). SCOUT_MODE=podcast routing added to scout.js (3 lines). complete.js: isYouTubeSource check skips og:image for YouTube posts → HF FLUX path used. scout-podcast.yml GHA workflow (daily 06:00 UTC). Fixed: theMITmonk channel ID corrected (UC4ZVkG3RQPzvZk7alIVjcCg). Fixed: submitImageJob() — destructure { jobId } not raw object. aitrends.ng: 'ai' added to VALID_CATEGORIES (create/route.ts, lib/createPost.ts, sitemap.ts, about page, post page YouTube embed). supabase/schema.sql category constraint updated. Blocked: Supabase CHECK constraint on posts.category must be migrated manually before podcast posts can publish. Local test: 3 posts queued (Udacity MSc AI, Silicon Valley Girl AI-First Playbook with Peter Yang, Mo Gawdat on AI). Phase 2 image generation confirmed working. Commits: cdf7c6e + 33bffe6 (aitrends-ng), e0f5d0b (scout-agent). |
+| S18 | 21 June 2026 | aitrends.ng + docs | Visitor engagement features: Vercel Analytics (@vercel/analytics, `<Analytics />` in layout.tsx); `/api/subscribe` newsletter endpoint + `NewsletterSignup` component in sidebar; `/api/feedback` per-post comments endpoint + `FeedbackForm` component on post pages. Two Supabase tables created by Felix: `newsletter_subscribers`, `feedback`. PostgREST schema cache issue diagnosed — "Could not find table in schema cache" error on both endpoints; fixed with `NOTIFY pgrst, 'reload schema';` in SQL Editor. Both endpoints verified on live site. Commit: 8796ed4 (aitrends-ng). |
