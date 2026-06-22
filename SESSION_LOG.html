@@ -9534,6 +9534,207 @@ curl -s -X POST https://www.aitrends.ng/api/feedback \
   </div>
 </div><!-- end session-18 -->
 
+<div class="session" id="session-19">
+  <h2>Session #19 — 22 June 2026</h2>
+  <p class="session-meta">Project: both · Focus: Full project status audit against live state; editorial queue silent-drop bug fixed; Slack scope gap discovered; stale to-dos closed out</p>
+
+  <div class="turn">
+    <h3>Turn 1 — Felix asks for a status report with discrepancy detection</h3>
+    <p><strong>Felix:</strong> "What's the status of this project; what was done last, what are pending, what changes were expected to take effect by now, what has gone wrong or not working as anticipated, what will you suggest done differently? Read all the documents to detect any discrepancies."</p>
+    <p><strong>Approach:</strong> Rather than summarizing CLAUDE.md's own claims back to Felix, verified each claim against the live system directly — GitHub Actions run history, direct Supabase REST queries, live curl checks against www.aitrends.ng, and a real Slack API call to check actual OAuth scopes.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2 — Git and deploy state check</h3>
+    <pre><code>cd aitrends-project/aitrends.ng &amp;&amp; git log --oneline -15
+cd aitrends-project/scout-agent &amp;&amp; git log --oneline -15
+curl -s -o /dev/null -w "HTTP %{http_code}" https://www.aitrends.ng
+curl -s -o /dev/null -w "HTTP %{http_code}" https://aitrends.ng
+curl -s -o /dev/null -w "HTTP %{http_code}" https://aitrends-ng.vercel.app</code></pre>
+    <p><strong>Result:</strong> Both repos clean, up to date with origin/main. <code>www.aitrends.ng</code> → HTTP 200. <code>aitrends.ng</code> root → HTTP 308 (redirects to www, as designed). Latest commit <code>8796ed4</code> (Session #18) confirmed live on production via a direct grep for "newsletter" in the homepage HTML.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3 — GitHub Actions run history</h3>
+    <pre><code>gh run list --repo FAIT-Blog/scout-agent --limit 50 --json conclusion,name,createdAt \
+  -q '.[] | select(.conclusion=="failure")'
+# → empty — zero failures in last 50 runs</code></pre>
+    <p>Phase 1 (Scout Agent) running on its 6-hour schedule plus workflow_dispatch triggers from cron-job.org; Phase 2 (Complete Posts) running every 30 minutes, both clean. Pulled the full log of the 11:00 UTC Phase 1 run to see real gate behaviour: <code>anthropic</code> skipped (0 of 1 article passed the AI signal gate), <code>ai-models</code> skipped (0 of 4 passed), <code>industry</code> published a blended Yoco/fintech digest after deduplicating against a story already published the same day, <code>tools</code> skipped (Gemini: no genuine Africa relevance). Confirms the long-standing "anthropic/ai-models rarely publish" to-do item is still real and current, not stale.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4 — Direct Supabase queries instead of trusting the schema docs</h3>
+    <pre><code>SUPA_URL=$(grep NEXT_PUBLIC_SUPABASE_URL .env.local | cut -d= -f2)
+SUPA_KEY=$(grep SUPABASE_SECRET_KEY .env.local | cut -d= -f2)
+
+curl -s "$SUPA_URL/rest/v1/posts?select=category&amp;status=eq.published" \
+  -H "apikey: $SUPA_KEY" -H "Authorization: Bearer $SUPA_KEY" | python3 -c "..."
+# → total: 119  {'industry': 79, 'tools': 16, 'ai-models': 13, 'ai': 7, 'anthropic': 4}
+
+curl -s "$SUPA_URL/rest/v1/posts?select=id,updated_at&amp;limit=1" ...
+# → [{"id":"61c6dde0-...","updated_at":"2026-06-18T05:01:10.375642+00:00"}]
+# updated_at column EXISTS and is populated — the Session #15 to-do ("run the migration")
+# is stale; it was already done, just never checked off.
+
+curl -s "$SUPA_URL/rest/v1/editorial_queue?select=id,status,created_at&amp;status=eq.pending" ...
+# → 4 rows pending: ids 15 (22 Jun), 14 (22 Jun), 8 (16 Jun), 7 (16 Jun)</code></pre>
+    <p>The 4 pending editorial_queue rows — two of them <strong>6 days old</strong> — were not mentioned in any "Known Issues" or to-do section of CLAUDE.md. This was the first sign of the silent-drop bug.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 5 — Tracing why rows 7, 8, 14, 15 never got consumed</h3>
+    <p>Read <code>felix.js</code> and <code>scout.js</code> Step 0.5 in full. Rows 14 and 15 are <code>youtu.be</code> URLs with no accompanying note text. Rows 7 and 8 are long pasted article text (no URL) — a two-part "vibe-coding tool safety comparison" Felix pasted directly into #scout-editor.</p>
+    <p><strong>Case A (14, 15) — found in felix.js, original code:</strong></p>
+    <pre><code>if (content) {
+  items.push({ url: primaryUrl, instruction, content, ogImage, rowId: row.id })
+} else {
+  // Both fetch paths failed — treat instruction as a topic signal for RSS Gemini
+  if (instruction) topics.push({ text: instruction })
+  console.log(`    ⚠️  Both direct fetch and Tavily failed — using instruction as topic signal`)
+}</code></pre>
+    <p><code>fetchContent()</code> tries <code>youtube-transcript</code> for YouTube URLs — known to be blocked on GitHub Actions' IP range (already documented in CLAUDE.md's #scout-editor usage table). Tavily's <code>/extract</code> fallback can't pull a transcript from a video page either. With <code>instruction</code> empty (no note text on these two rows), the row was pushed to neither <code>items</code> nor <code>topics</code> — it vanished. Consumption only happens inside the loop over <code>felixInputs.items</code> in <code>scout.js</code>, so a row that's in neither array is never marked consumed. It just sits <code>pending</code> and gets silently retried — and silently re-fails — every single Phase 1 run, forever, with no error surfaced anywhere Felix would see it.</p>
+    <p><strong>Case B (7, 8) — same file, different branch:</strong></p>
+    <pre><code>} else if (instruction) {
+  topics.push({ text: instruction })
+  console.log(`    Topic signal: "${instruction.slice(0, 60)}"`)
+}</code></pre>
+    <p>Any no-URL submission, regardless of length, was treated as a one-line "EDITOR NOTES" hint fed into the next unrelated RSS digest prompt — never as content in its own right, and (same as case A) never consumed. Felix's ~2,500–10,000 character paste was being discarded down to a vague seasoning note and would have repeated that forever without ever becoming the dedicated post it was clearly meant to be.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 6 — Fix: failEditorialRow() + replyFailureToFelix() (case A)</h3>
+    <p>Added to <code>memory.js</code>:</p>
+    <pre><code>// Mark a row as failed when content extraction produced nothing usable...
+// Reason is stored in `used_in_post` (prefixed `[FAILED]`) since the table
+// has no dedicated reason column — avoids a Supabase migration.
+export async function failEditorialRow(id, reason) {
+  const { error } = await supabase
+    .from('editorial_queue')
+    .update({
+      status:       'failed',
+      used_in_post: `[FAILED] ${reason}`,
+      consumed_at:  new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('status', 'pending')
+  if (error) console.error('memory.failEditorialRow error:', error.message)
+}</code></pre>
+    <p>Added to <code>slack.js</code> — <code>replyFailureToFelix(slackTs, slackChannel, url, reason)</code>, a sibling of the existing <code>replyToFelix()</code> success-confirmation function, posting into the same thread so Felix sees the failure where he submitted the link.</p>
+    <p>Updated <code>felix.js</code> case A to call both instead of falling through to <code>topics</code>:</p>
+    <pre><code>const reason = 'No extractable content — likely a blocked YouTube transcript ' +
+               'fetch or an unreachable article page'
+await failEditorialRow(row.id, reason)
+await replyFailureToFelix(row.slack_ts, row.slack_channel, primaryUrl, reason)</code></pre>
+    <pre><code>node --check felix.js &amp;&amp; node --check memory.js &amp;&amp; node --check slack.js
+# → all OK</code></pre>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 7 — Fix: long-form text gets its own post (case B)</h3>
+    <pre><code>// felix.js
+} else if (instruction) {
+  if (instruction.length &gt; 500) {
+    items.push({
+      url: null,
+      instruction: 'Write a post based on the pasted content below.',
+      content: instruction.slice(0, 4000),
+      ogImage: null,
+      rowId: row.id,
+    })
+  } else {
+    topics.push({ text: instruction })   // short steering notes unchanged
+  }
+}</code></pre>
+    <p>500 chars was chosen as the threshold deliberately — long enough that a real steering note ("focus on Anthropic this week") never crosses it, short enough that a pasted article clearly does. <code>generateEditorialDigest()</code> in <code>gemini.js</code> already accepts <code>{url: null, content, instruction}</code> without any changes needed — it builds the <code>&lt;SOURCE_CONTENT&gt;</code> block from <code>content</code> regardless of whether a URL exists, and <code>scout.js</code>'s <code>sourceUrls: [item.url].filter(Boolean)</code> already handles a null URL safely.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 8 — Cleaning up the 4 already-stuck rows</h3>
+    <p>The code fix only prevents <em>future</em> occurrences. The 4 rows already wedged in Supabase needed the same treatment applied retroactively. Ran a one-off script (not committed — temporary, deleted after running) using the new functions directly against the live queue:</p>
+    <pre><code>node cleanup_stuck_rows_tmp.mjs
+# Found 4 pending row(s)
+# Failing row 14: https://youtu.be/9YMYVb1ASCg
+#   ⚠️  Editorial row 14 marked failed: No extractable content...
+#   Slack failure reply failed: missing_scope
+# Failing row 15: https://youtu.be/6bc5H4CtC9w
+#   ⚠️  Editorial row 15 marked failed: No extractable content...
+#   Slack failure reply failed: missing_scope
+# Done</code></pre>
+    <p>Rows 14 and 15 (unrecoverable YouTube URLs) marked <code>failed</code> — confirmed via direct Supabase query afterward. Rows 7 and 8 (recoverable long text) deliberately left untouched/<code>pending</code> — verified the fix recognises them correctly with a separate dry-run script calling <code>fetchFelixInputs()</code> directly:</p>
+    <pre><code>node test_felix_tmp.mjs
+#   Found 2 pending editorial input(s) in queue
+#     📝 Long-form text submission (9929 chars) — generating a dedicated post
+#     📝 Long-form text submission (4499 chars) — generating a dedicated post
+#   Editorial inputs: 2 item(s) ready, 0 topic(s)
+# items: [ { rowId: 7, url: null, contentLen: 4000 }, { rowId: 8, url: null, contentLen: 4000 } ]</code></pre>
+    <p>Rows 7 and 8 will become a real published post on the next scheduled Phase 1 run, now that the code recognises them — no manual trigger was used, to avoid unilaterally generating and publishing content without it happening through the normal pipeline.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 9 — The Slack scope discovery</h3>
+    <p>The <code>Slack failure reply failed: missing_scope</code> line above was not expected. Checked the actual granted OAuth scopes directly against the Slack API rather than trusting CLAUDE.md's documented scope list:</p>
+    <pre><code>curl -s -D - -o /dev/null "https://slack.com/api/chat.postMessage" -X POST \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" -H "Content-Type: application/json" \
+  -d '{"channel":"C0B73H2QBT7","text":"scope test"}' | grep -i "oauth-scope"
+# x-accepted-oauth-scopes: chat:write:bot
+# x-oauth-scopes: channels:history,channels:read,groups:history,groups:read</code></pre>
+    <p>The bot token has exactly the 4 read scopes CLAUDE.md documents as required — and has never had <code>chat:write</code>. CLAUDE.md's scope list was written in Session #9 for the read-only ingestion half of the editorial feature; the threaded-reply confirmation half (<code>replyToFelix()</code>, also built in Session #9) needs <code>chat:write</code> and nobody added it when that feature shipped on the same token.</p>
+    <p><strong>Implication:</strong> every "✅ Used in: ..." threaded confirmation this pipeline has ever attempted to send has been silently failing since Session #9. The separate webhook-based <code>notifySlack()</code> to #aitrends-feed has been working the whole time, which is almost certainly why nobody noticed — there was always <em>a</em> Slack message arriving, just never the specific thread reply the editorial feature was built to send. This cannot be fixed from the codebase; it requires Felix to add the <code>chat:write</code> scope in the Slack app's OAuth config and reinstall the app, which issues a new bot token that then needs updating in <code>.env</code> and GitHub Actions Secrets. Logged as a Critical to-do.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 10 — Verifying two to-do items that turned out to already be resolved</h3>
+    <p>Checked the <code>NEXT_PUBLIC_SITE_URL</code> Vercel env var to-do (Session #15, still listed High priority):</p>
+    <pre><code>grep -rln "NEXT_PUBLIC_SITE_URL" --include="*.ts" --include="*.tsx" .
+# → only app/api/posts/create/route.ts
+grep -n "NEXT_PUBLIC_SITE_URL" -A3 app/api/posts/create/route.ts
+# const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.aitrends.ng'</code></pre>
+    <p>Every other file that needs the site URL (<code>sitemap.ts</code>, <code>feed.xml/route.ts</code>, <code>layout.tsx</code>) hardcodes <code>https://www.aitrends.ng</code> directly, and the one file that reads the env var falls back to the identical value. Whether the Vercel dashboard variable was ever actually updated makes no observable difference. Combined with the <code>updated_at</code> finding in Turn 4, two High-priority to-do items closed out as already-resolved-but-unconfirmed.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 11 — Orphaned file cleanup</h3>
+    <p>An untracked file <code>command (ypco5u)</code> was sitting in the project root — a Python heredoc script (not executed, just saved as a literal file by a prior session) that edits TRAINING_MANUAL.html heading text. Checked whether its edits were already applied before touching it:</p>
+    <pre><code>grep -c "ch5-reliability\">GHA Cron Reliability — Two External Triggers" TRAINING_MANUAL.html
+# → 2  (already applied)
+grep -c "ch9-schedule-dispatch" TRAINING_MANUAL.html
+# → 2  (already applied)</code></pre>
+    <p>Confirmed the edits described in the file were already live in TRAINING_MANUAL.html — the file was pure debris, not unfinished work. Deleted.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 12 — Documentation updated per Felix's instruction</h3>
+    <p><strong>Felix:</strong> "I prefer chronological updating of the documents... they were supposed to point it out by comments and reasons instead of leaving them like that... Fix the editorial YouTube bug and others. Then list pending to-do list."</p>
+    <p>Per this instruction: no past session's entries were rewritten. CLAUDE.md, SESSION_LOG.html (this entry), and TRAINING_MANUAL.html (Chapter 28) were all appended to chronologically, with each correction written as an explicit note explaining what was wrong and why — not silently merged into old text.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Session #19 Summary</h3>
+    <h4>Fixed:</h4>
+    <ul>
+      <li><strong>Editorial queue silent-drop bug (case A: failed URL extraction)</strong> — rows with no extractable content now marked <code>failed</code> with a reason and Felix notified in-thread, instead of retrying and re-failing forever with no feedback. <code>failEditorialRow()</code> added to memory.js, <code>replyFailureToFelix()</code> added to slack.js, felix.js wired to call both.</li>
+      <li><strong>Editorial queue silent-drop bug (case B: long pasted text, no URL)</strong> — submissions over 500 chars with no URL now become their own dedicated post via Step 0.5, instead of being discarded into a one-line topic hint that was never consumed.</li>
+      <li><strong>4 already-stuck rows cleaned up</strong> — 14, 15 (unrecoverable YouTube URLs) marked failed; 7, 8 (recoverable pasted text) left pending to be picked up as real posts on the next Phase 1 run.</li>
+      <li><strong>Orphaned debris file removed</strong> — <code>command (ypco5u)</code> deleted from project root (edits it described were already applied).</li>
+    </ul>
+    <h4>Found but cannot fix from code — requires Felix's action:</h4>
+    <ul>
+      <li><strong>Slack bot token missing <code>chat:write</code> scope</strong> — every threaded confirmation reply (<code>replyToFelix()</code>, and now <code>replyFailureToFelix()</code>) has been silently failing since Session #9. Requires adding the scope in Slack's app admin console, reinstalling the app, and updating <code>SLACK_BOT_TOKEN</code> everywhere it's referenced.</li>
+    </ul>
+    <h4>Stale to-dos closed out (already resolved, never checked off):</h4>
+    <ul>
+      <li><code>updated_at</code> Supabase migration — column exists and is populated. No action needed.</li>
+      <li><code>NEXT_PUBLIC_SITE_URL</code> Vercel env var — moot; every consumer either hardcodes the URL or falls back to the same value.</li>
+    </ul>
+    <h4>Files changed (scout-agent):</h4>
+    <ul>
+      <li><code>felix.js</code> — both fixes above, plus updated header comment</li>
+      <li><code>memory.js</code> — added <code>failEditorialRow()</code></li>
+      <li><code>slack.js</code> — added <code>replyFailureToFelix()</code></li>
+    </ul>
+  </div>
+</div><!-- end session-19 -->
+
 </div>
 </body>
 </html>

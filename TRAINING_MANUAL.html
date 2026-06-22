@@ -378,8 +378,20 @@ li { margin-bottom: 6px; }
         <li><a href="#ch13-docphilosophy">TRAINING_MANUAL Documentation Philosophy</a></li>
       </ul>
     </li>
+    <li><a href="#ch28">Session #19 — The Audit That Found Four Silent Failures</a>
+      <ul class="sub">
+        <li><a href="#ch28-method">Verify Against Live State, Not Against Last Session's Notes</a></li>
+        <li><a href="#ch28-editorial">War Story 12: The Editorial Row That Never Dies</a></li>
+        <li><a href="#ch28-slack-scope">War Story 13: The Confirmation That Was Never Sent</a></li>
+        <li><a href="#ch28-stale-todos">Stale To-Dos: Two Items That Were Already Done</a></li>
+      </ul>
+    </li>
   </ol>
 </div>
+
+<!-- NOTE (Session #19): The Table of Contents above does not list Chapters 15–27 —
+     this drift predates this session and was flagged to Felix rather than silently
+     rewritten. Chapter 28 below is appended in the correct chronological position. -->
 
 <!-- ═══════════════════ CHAPTER 1 ═══════════════════ -->
 <div class="chapter" id="ch1">
@@ -5371,6 +5383,191 @@ NOTIFY pgrst, 'reload schema';</code></pre>
   </div>
 </div><!-- end chapter-27 -->
 
+<!-- ═══════════════════ CHAPTER 28 ═══════════════════ -->
+<div class="chapter" id="ch28">
+  <div class="chapter-num">Chapter 28</div>
+  <h2>Session #19 — The Audit That Found Four Silent Failures</h2>
+</div>
+
+<p>
+  Felix asked a status question, not a coding question: what's the state of the project, what was
+  done last, what's pending, and — critically — find discrepancies between what the documents claim
+  and what's actually true. This chapter is about the method used to answer that, and the four
+  things it found that no document had recorded.
+</p>
+
+<h3 id="ch28-method">Verify Against Live State, Not Against Last Session's Notes</h3>
+<p>
+  Every previous session's status summary had been written from the CLAUDE.md + SESSION_LOG.html
+  record itself — a closed loop. If a to-do item was marked pending in Session #15 and never
+  re-checked, it stayed "pending" in every session afterward by inertia, whether or not it was
+  still true. This session broke the loop by checking the live systems directly instead of trusting
+  the paper trail:
+</p>
+<ul>
+  <li><code>gh run list</code> against both GitHub repos — actual CI history, not the "✅ confirmed working" claims in old commits</li>
+  <li>Direct PostgREST queries against Supabase (<code>curl $SUPA_URL/rest/v1/...</code> with the service role key) — actual row counts and column values, not the schema as documented</li>
+  <li><code>curl</code> against the live domain — actual HTTP status and rendered HTML, not the "confirmed live" note from three sessions ago</li>
+  <li>Slack API header inspection (<code>x-oauth-scopes</code> on a real <code>chat.postMessage</code> call) — actual granted scopes, not the scope list written in CLAUDE.md</li>
+</ul>
+<p>
+  Four real discrepancies surfaced this way that no prior session had caught, because no prior
+  session had gone back to check.
+</p>
+
+<h3 id="ch28-editorial">War Story 12: The Editorial Row That Never Dies</h3>
+<p>
+  A direct query against <code>editorial_queue</code> showed four rows stuck in <code>pending</code>
+  — two from 16 June, two from 22 June (the day of this session). All four had been silently
+  re-attempted and silently re-failed on every single Phase 1 run since their creation, with zero
+  feedback anywhere — not in the logs Felix would think to check, not in Slack, nowhere.
+</p>
+<p><strong>Root cause, case A — YouTube URLs (rows 14, 15):</strong></p>
+<pre><code>// felix.js — BEFORE
+if (content) {
+  items.push({ url: primaryUrl, instruction, content, ogImage, rowId: row.id })
+} else {
+  // Both fetch paths failed — treat instruction as a topic signal for RSS Gemini
+  if (instruction) topics.push({ text: instruction })
+  console.log(`    ⚠️  Both direct fetch and Tavily failed — using instruction as topic signal`)
+}</code></pre>
+<p>
+  <code>fetchContent()</code> calls <code>youtube-transcript</code> for YouTube URLs, which is
+  frequently blocked on GitHub Actions' datacenter IP ranges — a limitation the project's own
+  CLAUDE.md already documented ("YouTube URL → may be blocked on GHA — use manual paste"). The
+  Tavily fallback also can't extract a transcript from a video page. When both failed and the row
+  had no accompanying note text, <code>instruction</code> was an empty string — so the row was
+  pushed to <em>neither</em> <code>items</code> nor <code>topics</code>. It vanished from
+  processing entirely. Nothing marked it consumed, because consumption only happens inside the loop
+  over <code>felixInputs.items</code> back in <code>scout.js</code> — and this row was never in that
+  array. The row stayed <code>pending</code> forever, indistinguishable from a row that hadn't been
+  processed yet, so Scout dutifully retried it every run.
+</p>
+<p><strong>Root cause, case B — long pasted text, no URL (rows 7, 8):</strong></p>
+<p>
+  Felix had pasted a ~2,500–10,000 character article (a vibe-coding tool comparison, split across
+  two Slack messages) directly into #scout-editor rather than linking to it. The code treated any
+  no-URL submission identically — as a one-line "EDITOR NOTES" hint seasoning the next unrelated RSS
+  digest, never as content in its own right:
+</p>
+<pre><code>// felix.js — BEFORE
+} else if (instruction) {
+  topics.push({ text: instruction })
+  console.log(`    Topic signal: "${instruction.slice(0, 60)}"`)
+}</code></pre>
+<p>
+  This discarded the substance of what Felix wrote and, like case A, never consumed the row —
+  the same 2,500-character paste would have been silently re-summarized into a "topic hint" on every
+  Phase 1 run indefinitely, never becoming the dedicated post it was clearly meant to be.
+</p>
+<p><strong>The fix — fail loudly instead of dying silently, and give long text its own post:</strong></p>
+<pre><code>// felix.js — AFTER (case A: URL extraction exhausted)
+if (content) {
+  items.push({ url: primaryUrl, instruction, content, ogImage, rowId: row.id })
+} else {
+  const reason = 'No extractable content — likely a blocked YouTube transcript ' +
+                 'fetch or an unreachable article page'
+  await failEditorialRow(row.id, reason)               // status → 'failed', stops the retry loop
+  await replyFailureToFelix(row.slack_ts, row.slack_channel, primaryUrl, reason)
+}
+
+// AFTER (case B: long text, no URL → its own post instead of a topic hint)
+} else if (instruction) {
+  if (instruction.length > 500) {
+    items.push({
+      url: null,
+      instruction: 'Write a post based on the pasted content below.',
+      content: instruction.slice(0, 4000),
+      ogImage: null,
+      rowId: row.id,
+    })
+  } else {
+    topics.push({ text: instruction })   // short steering notes keep the old behaviour
+  }
+}</code></pre>
+<p>
+  <code>failEditorialRow()</code> is a new function in <code>memory.js</code>. The table has no
+  dedicated reason column, and adding one would mean asking Felix to run a migration before the fix
+  takes effect — so the reason is stored in the existing <code>used_in_post</code> text column,
+  prefixed <code>[FAILED]</code>. Pragmatic, not pretty, but it ships immediately.
+</p>
+<p>
+  The two unrecoverable YouTube rows (14, 15) were marked <code>failed</code> directly in this
+  session, so they stop retrying. The two recoverable text rows (7, 8) were deliberately left
+  <code>pending</code> — they will be picked up and turned into a real post on the next scheduled
+  Phase 1 run, now that the code recognises them. Verified locally with a one-off script calling the
+  fixed <code>fetchFelixInputs()</code> against the live queue: both rows correctly produced
+  <code>items</code> instead of disappearing.
+</p>
+
+<h3 id="ch28-slack-scope">War Story 13: The Confirmation That Was Never Sent</h3>
+<p>
+  Wiring up the failure notification above required calling <code>replyFailureToFelix()</code> for
+  real, against the live Slack workspace — and it failed: <code>missing_scope</code>. Inspecting the
+  response headers on a direct <code>chat.postMessage</code> call showed why:
+</p>
+<pre><code>x-accepted-oauth-scopes: chat:write:bot
+x-oauth-scopes: channels:history,channels:read,groups:history,groups:read</code></pre>
+<p>
+  The bot token has exactly the four read scopes CLAUDE.md lists as required — and CLAUDE.md never
+  mentions <code>chat:write</code>, because the scopes list was written for the read-only
+  <em>ingestion</em> half of the editorial feature (reading #scout-editor) in Session #9, before the
+  threaded-reply <em>confirmation</em> half (<code>replyToFelix()</code> in <code>slack.js</code>,
+  also added Session #9) was built on the same token. Nobody added the write scope when the second
+  feature was built on top of the first.
+</p>
+<p>
+  The practical consequence: <strong>every "✅ Used in: ..." thread reply this pipeline has ever
+  attempted to send — since Session #9 — has been silently failing.</strong> The webhook-based
+  <code>notifySlack()</code> to #aitrends-feed (a separate, write-capable mechanism) has been working
+  the whole time, which is almost certainly why this went unnoticed: there was always a Slack
+  message arriving somewhere, just never the specific threaded confirmation the editorial feature
+  was built to send.
+</p>
+<p>
+  This isn't something Claude Code can fix from the codebase — it requires Felix to add the
+  <code>chat:write</code> scope to the Slack app's OAuth configuration in the Slack admin console and
+  reinstall the app, which issues a new bot token that then needs updating in <code>.env</code>,
+  GitHub Actions Secrets, and anywhere else <code>SLACK_BOT_TOKEN</code> is referenced. Logged as a
+  Critical to-do rather than silently worked around.
+</p>
+
+<h3 id="ch28-stale-todos">Stale To-Dos: Two Items That Were Already Done</h3>
+<p>
+  Two "High" priority to-do items from Session #15 turned out to already be resolved, just never
+  checked off:
+</p>
+<ul>
+  <li>
+    <strong>"Run Supabase <code>updated_at</code> migration"</strong> — a direct query
+    (<code>select id,updated_at from posts limit 1</code>) returned a populated timestamp. The
+    column and its trigger already exist in the live database. No migration is outstanding.
+  </li>
+  <li>
+    <strong>"Update <code>NEXT_PUBLIC_SITE_URL</code> in Vercel"</strong> — turned out to be moot,
+    not done. Every file that uses a site URL (<code>sitemap.ts</code>, <code>feed.xml/route.ts</code>,
+    <code>layout.tsx</code>) hardcodes <code>https://www.aitrends.ng</code> directly. The one file
+    that reads the env var (<code>api/posts/create/route.ts</code>) falls back to the same hardcoded
+    value if the env var is unset. Whether Felix ever made the dashboard change makes no observable
+    difference to the running site.
+  </li>
+</ul>
+<p>
+  Neither is a bug. Both are a reminder that a to-do list is a claim about the world, and claims go
+  stale. A 30-second live check before carrying an item forward into a new session would have caught
+  both — and is now the standard this session is setting for the next one.
+</p>
+
+<div class="chapter-summary">
+  <p><strong>One-line summary:</strong> Documentation drifts silently when "pending" and "done"
+  are never re-verified against the live system — this session found a row that retried-and-failed
+  for 6 days with zero feedback, a Slack scope gap that's made every threaded confirmation a no-op
+  since Session #9, and two stale to-dos that were already resolved. Fixed what code could fix;
+  flagged what only Felix can (the Slack OAuth scope). The fixes are documented here with reasons,
+  per Felix's explicit instruction: point out what's wrong with comments, don't just quietly patch it.</p>
+</div>
+</div><!-- end chapter-28 -->
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -5379,7 +5576,8 @@ NOTIFY pgrst, 'reload schema';</code></pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 21 June 2026 — Chapter 27 added: Newsletter, Feedback Forms, and the PostgREST Schema Cache.
+    Last updated: 22 June 2026 — Chapter 28 added: the Session #19 audit — editorial queue
+    silent-drop bug fixed, Slack chat:write scope gap discovered, two stale to-dos closed out.
   </p>
 </div>
 
