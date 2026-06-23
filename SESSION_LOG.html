@@ -9735,6 +9735,47 @@ grep -c "ch9-schedule-dispatch" TRAINING_MANUAL.html
   </div>
 </div><!-- end session-19 -->
 
+<div class="session" id="session-20">
+  <h2>Session #20 — 23 June 2026</h2>
+  <p class="session-meta">Project: docs only · Focus: 3 new to-do items logged — Google Alert, homepage change-detection monitor, tagline/footer rewording</p>
+
+  <div class="turn">
+    <h3>Turn 1 — Felix asks to add three items to the to-do list</h3>
+    <p><strong>Felix:</strong> "Add to to-do list: 1. Set up a Google Alert for "AITrends.ng" or site:aitrends.ng to get email notifications when new content is indexed. 2. Setup a change detection monitor than can monitor the homepage for changes. Set them to alert you if: The site title or description changes. New categories or navigation links appear. Non-AI keywords. 3. Change this Tagline: "Africa's autonomous briefing on AI — the latest news, trends, and what it means for builders in Nigeria and across the continent" to "AItrends.ng-- insights, and lessons for the future." Do same for the footer: "Today and the next AI trends""</p>
+    <p><strong>Read as:</strong> all three are to-do additions, not live execution requests — Felix's framing was "Add to to-do list," not "do it" or "change it now," and the project's own standing rule (Section 8 of CLAUDE.md) requires explicit instruction before any write action. Item 3 reads as a fully-specified spec (exact before/after text) meant for a future session to execute, consistent with how other to-do items in this file already embed ready-to-run SQL/code.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2 — Verified the quoted tagline against the live site before logging it</h3>
+    <pre><code>curl -s https://www.aitrends.ng/ | grep -oE '&lt;meta name="description"[^&gt;]*&gt;'
+# &lt;meta name="description" content="Africa&amp;#x27;s autonomous briefing on AI — the latest news,
+#   trends, and what it means for builders in Nigeria and across the continent."/&gt;</code></pre>
+    <p>Confirmed Felix's quoted tagline text matches the live meta description exactly — no discrepancy to flag here, unlike several findings in Session #19.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3 — Footer replacement text was ambiguous; asked rather than guessed</h3>
+    <p>Felix's message named the footer's <em>current</em> text ("Today and the next AI trends") but didn't explicitly restate what it should become — "Do same for the footer" could mean "apply the same new tagline text to the footer too" or "I'll give separate footer wording later." Asked directly rather than assuming, since this is a branding decision and guessing wrong would mean documenting (and potentially later executing) the wrong copy.</p>
+    <p><strong>Felix's answer:</strong> "Use the same new tagline text" — footer becomes "AItrends.ng-- insights, and lessons for the future." too.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4 — All three items added to CLAUDE.md Section 7</h3>
+    <p>Tagline/footer item placed under 🟠 High (concrete, ready-to-execute, exact text given). Google Alert and change-detection monitor placed under 🟡 Medium (both genuinely lower urgency — observability/SEO-adjacent, not blocking anything). For the change-detection monitor, noted two implementation paths rather than picking one unprompted: a third-party service (Visualping/Distill.io, no code) versus a custom scout-agent script reusing existing `evergreen_vocab`/`hasAISignal()` patterns — left the choice for whoever implements it, since Felix didn't specify a preference.</p>
+    <p>Noted in the tagline/footer to-do, per the Round 1 history already in CLAUDE.md, that this exact string previously had to be updated in at least 4 places (layout.tsx, Footer.tsx, Sidebar.tsx, about page) — flagging that for whoever picks up the to-do so it isn't half-applied.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Session #20 Summary</h3>
+    <p>No code changed this session — documentation only. Three to-do items added to CLAUDE.md Section 7:</p>
+    <ul>
+      <li>🟡 Medium — Google Alert for "AITrends.ng" / <code>site:aitrends.ng</code> (manual, no code)</li>
+      <li>🟡 Medium — homepage change-detection monitor (title/description change, new nav/category links, non-AI keywords) — two implementation options noted, decision deferred</li>
+      <li>🟠 High — tagline + footer rewording, exact before/after text specified, footer wording confirmed with Felix, not yet executed</li>
+    </ul>
+  </div>
+</div><!-- end session-20 -->
+
 </div>
 </body>
 </html>
