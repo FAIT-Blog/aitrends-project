@@ -9776,6 +9776,187 @@ grep -c "ch9-schedule-dispatch" TRAINING_MANUAL.html
   </div>
 </div><!-- end session-20 -->
 
+<div class="session" id="session-21">
+  <h2>Session #21 — 23 June 2026</h2>
+  <p class="session-meta">Project: aitrends.ng · Focus: Execute the tagline/footer to-do logged in Session #20</p>
+
+  <div class="turn">
+    <h3>Turn 1 — Felix asks to start, then picks the tagline item</h3>
+    <p><strong>Felix:</strong> "Let's start" → (clarified which to-do) → "Let's do tagline"</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2 — Located every occurrence of the old strings before editing</h3>
+    <pre><code>grep -rln "autonomous briefing on AI\|Today and the next AI trends" --include="*.ts" --include="*.tsx" .
+# app/layout.tsx
+# app/about/page.tsx
+# components/Footer.tsx</code></pre>
+    <p>layout.tsx had three variants of the tagline (description, og:description, twitter:description — each worded slightly differently). about/page.tsx combined both the old tagline AND "today and the next AI trends" into one sentence. Footer.tsx renders a separately-styled "AITrends.ng" (gold ".ng") before appending the old footer phrase — important because the new tagline text Felix gave starts with the brand name itself.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3 — Two corrections flagged before editing, not silently applied</h3>
+    <p>Felix's message: change tagline to <code>"AItrends.ng-- insights, and lessons for the future."</code>, footer to match. Two issues raised with Felix before touching any file:</p>
+    <ul>
+      <li>"AItrends.ng" (caps A-I, lowercase trends) doesn't match the established brand spelling "AITrends.ng" used everywhere else in the codebase and docs — corrected to the existing spelling.</li>
+      <li>Pasting the new text verbatim into the footer would read "AITrends.ng — AITrends.ng — insights, and lessons for the future." (brand name twice), since the footer already renders a styled "AITrends.ng" before the tagline text. Kept the existing styled element, swapped only the trailing copy to "— insights, and lessons for the future."</li>
+    </ul>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4 — Edits applied</h3>
+    <pre><code>// app/layout.tsx — all 3 description fields
+description: "AITrends.ng — insights, and lessons for the future."
+
+// app/about/page.tsx — subtitle
+AITrends.ng — insights, and lessons for the future.
+
+// components/Footer.tsx — trailing copy only, brand element untouched
+{' '}— insights, and lessons for the future.</code></pre>
+    <p>Checked <code>components/Sidebar.tsx</code> too (CLAUDE.md's Round 1 history named it as a 4th location for a similar past rollout) — confirmed it has a different, unrelated "About blurb" sentence, not the targeted string. Left untouched.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 5 — Verified locally before pushing</h3>
+    <pre><code>npx tsc --noEmit
+# (no output — clean)
+
+npm run dev -- -p 3010 &
+curl -s http://localhost:3010/ | grep -oE '&lt;meta name="description"[^&gt;]*&gt;'
+# &lt;meta name="description" content="AITrends.ng — insights, and lessons for the future."/&gt;
+
+npm run build
+# ✓ Generating static pages using 7 workers (12/12) — clean, all routes built</code></pre>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 6 — Committed, pushed, confirmed live</h3>
+    <pre><code>git add app/layout.tsx app/about/page.tsx components/Footer.tsx
+git commit -m "content: update tagline and footer to ..."
+git push origin main
+# 8796ed4..2c76eeb main -> main</code></pre>
+    <p>Felix asked for a live confirmation in a follow-up message. After Vercel finished deploying:</p>
+    <pre><code>curl -s https://www.aitrends.ng/ | grep -oE '&lt;meta name="description"[^&gt;]*&gt;'
+# &lt;meta name="description" content="AITrends.ng — insights, and lessons for the future."/&gt;</code></pre>
+    <p>Confirmed live.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Session #21 Summary</h3>
+    <p>Tagline and footer updated across 3 files, 2 wording corrections flagged to Felix before applying (brand spelling, footer brand-name duplication), typecheck + build verified locally, confirmed live on production after deploy. Commit: <code>2c76eeb</code> (aitrends-ng).</p>
+  </div>
+</div><!-- end session-21 -->
+
+<div class="session" id="session-22">
+  <h2>Session #22 — 23 June 2026</h2>
+  <p class="session-meta">Project: scout-agent + aitrends.ng · Focus: Build the homepage change-detection monitor logged in Session #20</p>
+
+  <div class="turn">
+    <h3>Turn 1 — Felix moves to the next to-do item</h3>
+    <p><strong>Felix:</strong> "Next: Homepage change-detection monitor"</p>
+    <p>The Session #20 to-do had explicitly deferred the implementation choice — third-party service vs. custom-built — to implementation time. Asked rather than picked unprompted, since it's a real cost/architecture decision: a third-party diff tool (Visualping/Distill.io) is faster to set up but can't do the semantic "non-AI keyword" check Felix asked for, so that check would need custom logic either way.</p>
+    <p><strong>Felix's answer:</strong> custom script in scout-agent, matching the project's existing build-it-yourself pattern.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2 — Read the actual homepage markup before writing selectors</h3>
+    <pre><code>cat components/NavBar.tsx
+# &lt;nav className="site-nav"&gt; ... CATEGORIES.map(cat =&gt; &lt;Link href={cat.href}&gt;{cat.label}&lt;/Link&gt;)
+
+grep -n "className\|h2\|h3\|href=" components/HeroPost.tsx components/PostCard.tsx
+# HeroPost: entire &lt;article class="hero-article"&gt; wrapped in &lt;Link href={`/post/${post.slug}`}&gt;, title in &lt;h2&gt;
+# PostCard: entire &lt;div class="post-card"&gt; wrapped in &lt;Link href={`/post/${post.slug}`}&gt;, title in &lt;h3 class="post-title"&gt;</code></pre>
+    <p>Designed extraction around <code>nav.site-nav a</code> for nav links, and "any <code>&lt;a href="/post/..."&gt;</code> containing an h2 or h3" for post titles — robust to either card type without needing two separate code paths.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3 — Built the off-topic keyword list from documented incidents, not a guess</h3>
+    <p>Rather than inventing a generic denylist, pulled the terms from CLAUDE.md's own Critical to-do history: "3 off-topic posts confirmed by Felix" (MTN, BNPL ×2) and "BusinessDay Nigeria sports feed" (FIFA stadium management post). List: <code>mtn, bnpl, buy now pay later, fifa, afcon, premier league, champions league, super eagles, world cup, kidnap, gunmen, bandits, insurgency, presidential candidate, governorship election</code> — deliberately narrow, with a code comment noting it should grow from confirmed false positives the same way <code>evergreen_vocab</code> does, not from preemptive guessing.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4 — Wrote homepage-monitor.js, slack.js addition, GHA workflow</h3>
+    <p>New file <code>homepage-monitor.js</code> — <code>runHomepageMonitor()</code>: fetches the live homepage, extracts title/description/nav links/post titles, diffs against the last snapshot stored in a new Supabase table, alerts Slack on any diff, then always re-saves the current state (self-healing — no stale "still different" alerts on the next run after one alert fires).</p>
+    <p>Added <code>notifyMonitorAlert()</code> to slack.js — posts to #aitrends-feed via the existing <code>SLACK_WEBHOOK_URL</code>, deliberately not the bot token, so this feature is unaffected by the <code>chat:write</code> scope gap discovered in Session #19.</p>
+    <p>New GHA workflow <code>homepage-monitor.yml</code> — <code>workflow_dispatch</code> + cron every 6h (offset :30 from Phase 1's :00 schedule), reusing existing secrets only (<code>SUPABASE_URL</code>, <code>SUPABASE_SECRET_KEY</code>, <code>SLACK_WEBHOOK_URL</code>) — no new secrets needed.</p>
+    <pre><code>node --check homepage-monitor.js && node --check slack.js
+# syntax OK</code></pre>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 5 — Dry-ran the extraction logic against the live site before touching Supabase</h3>
+    <pre><code># one-off script, not committed
+TITLE: AITrends.ng — Africa's AI news, today and next
+DESCRIPTION: AITrends.ng — insights, and lessons for the future.
+NAV LINKS: [6 links matching NavBar.tsx exactly]
+POSTS FOUND: 10
+[correct titles + /post/ hrefs for all 10]</code></pre>
+    <p>Also dry-ran the off-topic keyword check against the 10 real homepage titles — zero false positives, confirming the list is appropriately narrow.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 6 — Supabase table setup, including the PostgREST cache gotcha again</h3>
+    <p>Wrote the SQL to <code>aitrends.ng/supabase/add-homepage-monitor.sql</code> and asked Felix to run it — same manual pattern as every prior table (editorial_queue, newsletter_subscribers, feedback). First attempt:</p>
+    <pre><code>curl "$SUPA_URL/rest/v1/homepage_monitor?select=*" ...
+# {"code":"PGRST205", "message":"Could not find the table 'public.homepage_monitor' in the schema cache"}</code></pre>
+    <p>Same PostgREST schema-cache issue documented in Session #18. Felix asked for explicit step-by-step instructions rather than a quick "run NOTIFY" — walked through: the exact Supabase dashboard URL, where the SQL Editor lives in the sidebar, that <code>NOTIFY pgrst, 'reload schema';</code> is a <em>separate</em> statement from the CREATE TABLE block (easy to miss), and confirmed what "clear the editor" means (select-all + replace, doesn't matter how). Felix confirmed both steps done.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 7 — Full live verification</h3>
+    <pre><code>curl "$SUPA_URL/rest/v1/homepage_monitor?select=*" ...
+# []  (table exists, empty)
+
+node -e "...runHomepageMonitor()..."
+# 🔍 Homepage monitor — fetching live site...
+#   No baseline yet — saving first snapshot, nothing to compare against.
+# ✅ Homepage monitor baseline saved.
+
+# run again — should report no changes:
+node -e "...runHomepageMonitor()..."
+#   ✅ No changes detected</code></pre>
+    <p>To verify the alert path actually fires (not just the "no changes" path), patched the stored snapshot directly in Supabase — not the live site — to a fake old title and a stripped-down nav_links array, then re-ran:</p>
+    <pre><code>curl -X PATCH ".../homepage_monitor?id=eq.1" -d '{"title":"OLD TEST TITLE...","nav_links":[{"text":"Anthropic","href":"/category/anthropic"}]}'
+
+node -e "...runHomepageMonitor()..."
+#   ⚠️  2 change(s) detected — notifying Slack
+#   💬 Homepage monitor alert sent to Slack
+# ✅ Homepage monitor complete.</code></pre>
+    <p>Confirmed the snapshot self-healed back to the real live state on this same run (title and all 6 nav links correct again in Supabase afterward) — proving the monitor won't keep re-alerting on a change it already reported.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 8 — Committed and pushed</h3>
+    <pre><code>git add homepage-monitor.js slack.js .github/workflows/homepage-monitor.yml
+git commit -m "feat: homepage change-detection monitor"
+git push origin main
+# e9d1d0f..e9fc094 main -> main  (scout-agent)
+
+git add supabase/add-homepage-monitor.sql
+git commit -m "docs: add homepage_monitor table SQL migration"
+git push origin main
+# 2c76eeb..65665a8 main -> main  (aitrends-ng)</code></pre>
+  </div>
+
+  <div class="turn">
+    <h3>Session #22 Summary</h3>
+    <h4>What was built:</h4>
+    <ul>
+      <li><strong>homepage-monitor.js</strong> — independent of Phase 1/2, checks site title/description, nav links, and off-topic keywords on homepage post titles every 6h</li>
+      <li><strong>homepage_monitor Supabase table</strong> — single-row snapshot, self-healing on every run</li>
+      <li><strong>notifyMonitorAlert() in slack.js</strong> — uses the webhook, not the bot token, so it works despite the Session #19 chat:write scope gap</li>
+      <li><strong>homepage-monitor.yml GHA workflow</strong> — own 6h schedule, no new secrets required</li>
+    </ul>
+    <h4>Verified live, not just unit-tested:</h4>
+    <p>Real baseline save, real "no change" run, and a real Slack alert triggered by a deliberately simulated change — all three paths exercised against the live Supabase table and live Slack webhook, not mocked.</p>
+    <h4>Commits:</h4>
+    <ul>
+      <li><code>e9fc094</code> — scout-agent: homepage-monitor.js, slack.js, GHA workflow</li>
+      <li><code>65665a8</code> — aitrends-ng: SQL migration reference copy</li>
+    </ul>
+  </div>
+</div><!-- end session-22 -->
+
 </div>
 </body>
 </html>
