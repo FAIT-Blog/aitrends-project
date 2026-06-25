@@ -10341,6 +10341,260 @@ OK on retry: Can African Startups Survive the Claude API Price War?...</code></p
   </div>
 </div><!-- end session-24 -->
 
+<div class="session" id="session-25">
+  <h2>Session #25 — 25 June 2026</h2>
+  <p class="session-meta">Project: scout-agent + aitrends.ng + CLAUDE.md · Focus: Africa-first editorial mandate removed entirely</p>
+
+  <div class="turn">
+    <h3>Methodology note for this entry</h3>
+    <p>This session's actual turn-by-turn exchange is not present in this Claude Code instance's working context — the conversation was summarized by the harness before this documentation pass began, and the detailed turn record was not preserved. CLAUDE.md's Section 7 critical to-do entry and Section 10 history row for Session #25 (written live, during the session itself) are the most complete record actually available. This entry reconstructs the session from that record rather than fabricating tool outputs or dialogue that aren't actually known. Per Felix's standing instruction to flag discrepancies rather than silently paper over them — this is being stated plainly rather than presented as if it were a verbatim transcript.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 1 — Felix asks two questions that turned into a much bigger one</h3>
+    <p>Felix asked whether the remaining quota-blocked de-stuffing work (10 posts left over from Session #23) could be scheduled, and separately, whether any checks existed to prevent needing this kind of retroactive cleanup again in the future.</p>
+    <p>Checking the second question surfaced a real, currently-live gap: grepping gemini.js for the Session #7 banned-phrase / anti-repetition guards returned zero matches. The Session #8 prompt simplification had silently dropped them — meaning new posts could still reproduce the exact stuffing/forced-phrase problem the last two sessions had just spent significant effort cleaning up.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2 — Felix reframes the whole problem</h3>
+    <p>Felix's response didn't ask for the banned-phrase guards to be restored. He reframed the underlying cause: a narrow phrase ban is whack-a-mole, because the forced phrases were never the root cause — the Africa-relevance mandate itself was. Whenever a genuinely non-Africa story still had to clear the Africa GATE to get published, Gemini would manufacture a connection by whatever means necessary (forced city-list openers, repeated bolded phrases manufacturing an impression of relevance). Patching the symptom (the specific phrase) just pushes Gemini toward a different fabrication next time.</p>
+    <p>His decision: drop the Africa-first mandate entirely. Make the site general-AI. Leave all 121 existing published posts untouched regardless of relevance — this is forward-looking only, not a retroactive unpublishing pass.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3 — Scoped with EnterPlanMode given the size of the change</h3>
+    <p>Given the scope spans two repos, core prompt logic, and branding copy across many files, this was planned before any code was touched. Two Explore agents mapped every Africa-dependency across scout-agent (gemini.js's gate blocks, scout.js's sentinel handling, feeds.js's 14 Africa-specific + 12 global feed split, and confirmation that scout-podcast.js was already fully general with no Africa gate to remove) and every Africa-branding location across aitrends.ng + CLAUDE.md (14+ locations across 9 files). A Plan agent validated the proposed closing-sentence redesign against the existing Session #7 "TITLE VARIETY" precedent before implementation began.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4 — Three explicit scope calls from Felix before implementation</h3>
+    <ul>
+      <li>Leave <code>EVERGREEN_ENTITIES</code>'s Africa-related scoring-boost terms alone — harmless tie-breaker, not part of the actual problem.</li>
+      <li>Rejected a fixed "Bottom line:" replacement label for the new closing-sentence instruction — Felix's own words: "too obvious, predictable... sometimes come out forced" — correctly identifying a fixed label as the same forcing problem in miniature, just relocated.</li>
+      <li>Keep <code>feeds.js</code> exactly as configured — the Africa-specific feed sources stay, only the relevance gate on what gets published from them is removed.</li>
+    </ul>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 5 — Implementation</h3>
+    <p>Removed the full Africa GATE block — including the now-moot Session #23 ai-models extra-strictness clause — from both <code>generateDigest()</code> and <code>generateBlendedDigest()</code> in gemini.js. Replaced the old conditional "What this means for Africa" closing sentence with a new instruction mandating varied construction (implication / forward-looking note / skeptical beat / pointed question), with fixed labels explicitly banned. Removed the now-dead <code>SKIP_NO_AFRICA_RELEVANCE</code> sentinel check in scout.js.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 6 — Verified with one real run, not a batch (quota-conscious after Session #23)</h3>
+    <pre><code>2 posts queued:
+- Nigeria's NITDA digital sovereignty strategy — genuinely Africa-relevant on its own merits, not forced
+- Anthropic vs. Alibaba Claude-distillation dispute — purely global, zero Africa framing attempted</code></pre>
+    <p>Both closing sentences varied in construction, no sentinel leakage, no forced phrasing — confirming the gate removal works as intended rather than just assumed correct from reading the code.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 7 — Branding and copy updated to match</h3>
+    <p>Updated across both repos: layout.tsx titles, about page, Sidebar, NewsletterSignup, feed.xml on aitrends.ng; CLAUDE.md Section 1 mission/tagline/voice/audience and the Gemini Prompt Mandate subsection. <code>npm run build</code> clean afterward. The now-superseded Session #23 ai-models to-do item and a now-moot Medium to-do item were marked with dated annotations rather than rewritten in place, per CLAUDE.md's own append-only convention.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Session #25 Summary</h3>
+    <p>AITrends.ng's Africa-first editorial mandate — in place since the project's earliest sessions — removed entirely, on Felix's explicit root-cause diagnosis that the mandate itself, not any specific phrase, was generating the recurring fabrication pattern documented across Sessions #7, #8, #14, and #23. The site is now general-AI. All 121 existing posts left untouched; this governs new posts going forward only.</p>
+  </div>
+</div><!-- end session-25 -->
+
+<div class="session" id="session-26">
+  <h2>Session #26 — 25 June 2026</h2>
+  <p class="session-meta">Project: scout-agent + aitrends.ng + CLAUDE.md · Focus: To-do confirmations, scheduling the remaining cleanup, site search, podcast prompt fix</p>
+
+  <div class="turn">
+    <h3>Methodology note for this entry</h3>
+    <p>As with Session #25 above, items 1–3 in this session were summarized by the harness before this documentation pass — the turn-by-turn record for those specific items isn't in this instance's working context. CLAUDE.md's history row (written live during the session) is the source for those three. Item 4 (the podcast prompt fix) happened within this same documentation session's visible context and is written in full below from direct knowledge, not reconstruction.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 1 — Three completed to-dos confirmed, one new one raised (reconstructed from CLAUDE.md)</h3>
+    <p>Felix confirmed he'd personally completed the Google Search Console sitemap submission and the Google Alert setup — both manual, external, to-do-list items from prior sessions — and these were marked done. Separately, he asked for the 12 remaining quota-blocked cleanup posts (10 de-stuffing from Session #23, 2 forced-phrase from Session #24) to be scheduled rather than attempted immediately, and raised that the site needed a search function for easy content discovery.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2 — Scheduled the 12-post cleanup via the /schedule skill (reconstructed from CLAUDE.md)</h3>
+    <p>Per CLAUDE.md's record: scheduled as a one-time cloud routine for 2026-06-27 08:00 UTC. Because the cloud agent runs in an isolated environment with its own git checkout, the scheduling prompt was written to be self-contained — giving the cloud instance the exact detection methodology (the regex/phrase-repetition logic from Session #23, not a fixed list of post IDs, since the live set of affected posts could shift between now and the 27th) rather than relying on it recalling specifics from this conversation. CLAUDE.md notes the cloud environment's Gemini/Supabase secret configuration wasn't confirmed at scheduling time — worth checking before the 27th.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3 — Site search built (reconstructed from CLAUDE.md)</h3>
+    <p>Per CLAUDE.md's record: a live, dropdown-as-you-type search was added to the NavBar, searching post title, excerpt, and tags, per Felix's explicit UX choices. New <code>app/api/search/route.ts</code> (GET, public Supabase client, <code>.or()</code> on ilike title/excerpt plus <code>.cs.</code> exact-match on tags, with comma/paren sanitization since those characters have syntax meaning in PostgREST's <code>.or()</code> filter), new <code>components/SearchDropdown.tsx</code> (debounced fetch mirroring the existing NewsletterSignup.tsx pattern, click-outside and Escape to close, mobile collapses to a tap-to-expand icon rather than hiding search entirely), with NavBar.tsx and globals.css updated to match.</p>
+    <p>The backend was verified live against real Supabase data — title match, a tag-only match (a post whose tags rather than title contained the query), the 1-character minimum-length guard, comma-injection sanitization, and the no-match case all confirmed correct. No headless browser tool was available locally to click-test the dropdown UI directly, and rather than silently downloading a fresh Chromium binary for a one-off check on Felix's real Mac (not a disposable sandboxed container), Felix was asked to do the interactive click-through himself.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4 — Felix confirms the search UI works</h3>
+    <p><strong>Felix:</strong> "I have check the beautiful job. Well done!"</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 5 — Felix flags two formatting issues on the YouTube podcast posts</h3>
+    <p><strong>Felix:</strong> "On the AI trends category psots like; 1. Mo Gawdat on Navigating the Age of AI with Agility and Ethical Purpose, 2. The AI-First Playbook: How Peter Yang Runs a 140K Newsletter Solo and the rest, I want you to amend the prompt that will make Gemini not to include: Main Idea 1, Main Idea 2, Main Idea 3, Main Idea 4, etc, it should just just give it the suitable subheading. And the section where it says 'Notable Quotes', it is not meant to list them out, but it is suppose to incorporate them into the body of the post... To demonstrate that you understand me you can use just of the posts to make an impression."</p>
+    <p>Two distinct asks: (1) drop the literal "Main Idea N:" prefix from each thematic section's heading, keeping just a natural descriptive subheading — and keep the same sequential multi-section structure, just unlabeled; (2) stop collecting quotes into a separate "Notable Quotes" list at the end, and instead weave them into the relevant body paragraph as if the writer had genuinely internalised what the guest said, not as a separate exhibit.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 6 — Read the actual prompt before editing it</h3>
+    <pre><code>grep -n "Main Idea\|Notable Quotes\|MAIN IDEA\|NOTABLE QUOTE" gemini-podcast.js
+105:&lt;h3&gt;Main Idea 1: [Descriptive Theme Title]&lt;/h3&gt;
+108:&lt;h3&gt;Main Idea 2: [Descriptive Theme Title]&lt;/h3&gt;
+111:&lt;h3&gt;Notable Quotes&lt;/h3&gt;</code></pre>
+    <p>Confirmed no other code (scout-podcast.js, the post-page renderer) depended on the literal "Notable Quotes" heading text or assumed a fixed quote-count structure — safe to remove without breaking validation logic elsewhere.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 7 — Edited the prompt</h3>
+    <p>Replaced the two numbered "Main Idea N: [Descriptive Theme Title]" lines with an instruction to write a specific, natural subheading with no numbering or "Main Idea" label, and added explicit guidance that the same number of thematic sections (3–6, per the existing "cover 3-6 themes" instruction, left unchanged) should still run in sequence — only the label disappears, not the structure. Removed the standalone "Notable Quotes" block entirely and added an instruction, embedded directly in the per-section guidance, to weave verbatim quotes into the relevant section's prose as they're written — with a worked example showing the technique (a quote landing mid-sentence as part of the argument, not set apart) — and to reserve <code>&lt;blockquote&gt;</code> for the rare case a quote is genuinely striking enough to deserve visual weight on its own, rather than as the default presentation.</p>
+    <pre><code>node --check gemini-podcast.js
+# OK</code></pre>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 8 — Demonstrated on one real post, manually rather than via a fresh Gemini call</h3>
+    <p>Fetched the live content of "The AI-First Playbook: How Peter Yang Runs a 140K Newsletter Solo" (id <code>9e0600b0-91b0-4f39-9b8c-0a79d2874ca2</code>) — four "Main Idea N:" sections and a 5-quote "Notable Quotes" block. Restructured by hand: dropped all four "Main Idea N:" prefixes, keeping the same four sections in the same sequence with just their descriptive titles. Rewove each of the 5 quotes into the body paragraph it actually supports — e.g. "at this point, he admits, 'it almost feels like cheating'" landing inside the paragraph about his productivity, and "he jokes that 'my wife is tired of me asking for advice all the time,' which is partly why the AI has become his sounding board instead" landing inside the paragraph about him using AI as an advisor. Two quotes were already partially paraphrased in the original body text — used those spots to convert the paraphrase into the direct quote rather than duplicating both forms.</p>
+    <pre><code>const { error } = await supabase.from('posts').update({ content: newContent }).eq('id', '9e0600b0-91b0-4f39-9b8c-0a79d2874ca2')
+# Updated successfully.</code></pre>
+    <p>Verified live:</p>
+    <pre><code>Contains "Main Idea": false
+Contains "Notable Quotes": false
+h3 headings found:
+ - Key Takeaways
+ - The One-Person Business Powered by Self-Improving AI
+ - Automating Content Creation and Repurposing
+ - AI as a Strategic Advisor and Builder
+ - The Five Layers of AI Adoption and Practical Steps
+ - Practical Applications
+ - Final Thoughts</code></pre>
+    <p>Felix asked for confirmation that the sequential multi-section structure itself was meant to stay — only the "Main Idea N" label removed, not the section-by-section format. Confirmed yes, pointing to the four still-distinct, still-sequential headings as evidence.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Session #26 Summary</h3>
+    <p>Three to-dos closed out (Search Console, Google Alert — both Felix's own manual completions), the 12-post cleanup scheduled for 2026-06-27, and a live site search shipped. Separately, the YouTube podcast pipeline's "Main Idea N" labels and standalone "Notable Quotes" list fixed in gemini-podcast.js's prompt going forward, demonstrated on one real published post by hand. The other existing AI Trends posts Felix named were deliberately not touched — he asked for one demonstration, not a retroactive pass.</p>
+  </div>
+</div><!-- end session-26 -->
+
+<div class="session" id="session-27">
+  <h2>Session #27 — 25 June 2026</h2>
+  <p class="session-meta">Project: scout-agent · Focus: Gemini daily-quota cooldown — stop cron jobs wasting resources on a known-dead quota</p>
+
+  <div class="turn">
+    <h3>Turn 1 — Felix's question, in full</h3>
+    <p><strong>Felix:</strong> "Have you considered that since Gemini daily quota may queue some of the cron jobs, especially in the this recent case where you have used up the daily quota (20) to correct or cleanup, could it be that when some job line up it will not have negative impact because their failure to go through/ execute will be counted as errors and the several retrials will be repeated and since it will take a long while before Gemini daily quota refreshes, there will be so many failed job attempt. So what is in place to inform the scout/cronjob to wait till there is Gemini quota thereby preventing unnessary waste of resources and accumulation of error report? Let me know if you understand me."</p>
+    <p>Restated back to confirm understanding before investigating: (1) when quota is exhausted, does the pipeline fail gracefully or repeat errors against a dead quota all day; (2) does any retry layer keep hammering Gemini pointlessly while quota is still zero; (3) is there anything that detects "quota's gone" and tells the pipeline to stand down rather than accumulate failed runs and error noise.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 2 — Read the real error-handling code rather than guess</h3>
+    <pre><code>grep -n "try\|catch\|generateDigest\|generateBlendedDigest" scout.js
+# confirmed each category wrapped in its own try/catch, logs and `continue`s on failure
+# does NOT call markSeen() on failure — articles retried fresh next run
+
+grep -n "gemini\|generateDigest\|generateBlended" complete.js
+# (no matches — Phase 2/publishing never calls Gemini at all)
+
+cat .github/workflows/scout.yml
+# "Notify Slack on failure" step is `if: failure()` — only fires if the
+# GHA job itself exits non-zero</code></pre>
+    <p>Findings reported back: Gemini calls don't retry-storm on 429 in production code (only 503 triggers the fallback+retry loop) — that risk was specific to my own one-off cleanup scripts, not the live pipeline. The real problems: (1) RSS fetch, full-text extraction, and Tavily search all happen <em>before</em> the Gemini call in scout.js — so the expensive upstream work runs every category, every 6h, for zero output, while quota is dead; (2) each category's try/catch swallows the error and never re-throws, so <code>runScout()</code> exits 0 (success) even when every category failed — meaning the GHA "Notify Slack on failure" step never fires, so the failure is completely silent, not just noisy; (3) no quota-state tracking exists anywhere to let a future run skip early; (4) Phase 2 (publishing) is entirely unaffected, confirmed by the empty grep.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 3 — Felix: "Let's talk through first"</h3>
+    <p>Discussed before writing any code. Led with a concrete discovery: the model fallback only triggers on 503, never 429 — meaning <code>gemini-2.5-flash</code>'s separate daily quota bucket had never actually been touched by any of the prior cleanup work, despite all of it hitting 429 on <code>gemini-3.5-flash</code>. That's a near-free fix on its own.</p>
+    <p>Laid out three further design choices with a recommendation on each: reactive detection (catch the real 429) over proactive self-counting (scout-agent's own counter can't see manual one-off work hitting the same Google-side quota, so it would give false confidence regardless); skip the entire run on a known cooldown rather than a partial skip, trading a rare missed short-lived RSS item for fully eliminating the wasted Tavily/fetch calls; alert once per day on first detection rather than on every 6-hourly skipped run. Also flagged that a normal day's legitimate usage (4 Phase 1 runs × up to 4 categories, plus editorial items, plus the daily podcast run) could already sit close to the 20-call ceiling even with zero manual work — framing this as a recurring operational concern, not a one-off artifact of cleanup days.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 4 — Felix decides</h3>
+    <p><strong>Felix:</strong> "Let's go with Reactive. I have also created the Google Alert and Google Search Console for aitrends.ng." (the second sentence logged separately under Session #26's to-do confirmations)</p>
+    <p>Two design choices still open were asked directly rather than assumed: full-run skip vs. partial skip, and whether to extend the 429 fallback regardless of the cooldown system.</p>
+    <p><strong>Felix's answers:</strong> "Skip the whole run (recommended)" / "Yes, do it now regardless of the cooldown system."</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 5 — Found gemini-podcast.js had its own independent copy of the same logic</h3>
+    <pre><code>grep -n "GEMINI_PRIMARY\|GEMINI_FALLBACK\|MAX_ATTEMPTS\|callGemini" gemini-podcast.js scout-podcast.js
+gemini-podcast.js:23: const GEMINI_PRIMARY  = '...gemini-3.5-flash:generateContent'
+gemini-podcast.js:24: const GEMINI_FALLBACK = '...gemini-2.5-flash:generateContent'
+# identical signature, identical retry shape — same Google project, same
+# model names, same shared quota bucket as scout.js</code></pre>
+    <p>This meant the fix needed to land in three files' worth of retry logic (generateDigest, generateBlendedDigest, generateEditorialDigest in gemini.js, plus the separate copy in gemini-podcast.js) unless consolidated — chose to extract one shared helper rather than quadruple the new cooldown-detection logic.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 6 — Built it</h3>
+    <p><strong>memory.js</strong> — added <code>isGeminiQuotaCooledDown()</code> / <code>setGeminiQuotaCooldown()</code>, single-row Supabase state matching the existing <code>homepage_monitor</code> pattern exactly. A cooldown from a previous calendar day is treated as stale — rather than compute Google's exact reset time (their error body's <code>retryDelay</code> field is a short backoff hint, not the real daily reset), the next day's first attempt is just allowed to try again, cheap to be wrong in that direction.</p>
+    <p><strong>slack.js</strong> — added <code>notifyQuotaExhausted()</code>, same webhook-based pattern as <code>notifyMonitorAlert()</code>, fires only on a new cooldown event.</p>
+    <p><strong>gemini.js</strong> — extracted <code>callGeminiWithFallback(payload, label)</code>, exported so gemini-podcast.js could reuse it. Falls back to gemini-2.5-flash on <em>either</em> 503 or 429 now (previously 503 only). Only when both primary and fallback return 429 in the same attempt does it call <code>setGeminiQuotaCooldown()</code>, conditionally fire the Slack alert (only if this is a new cooldown event today), and throw a distinguishable <code>GEMINI_QUOTA_EXHAUSTED</code> error. Replaced all three duplicated retry blocks (generateDigest, generateBlendedDigest, generateEditorialDigest) with calls to the shared helper.</p>
+    <p><strong>gemini-podcast.js</strong> — removed its entire independent copy (GEMINI_PRIMARY/FALLBACK constants, callGemini, the full retry loop) and replaced with an import of the shared helper from gemini.js.</p>
+    <p><strong>scout.js</strong> — added the cooldown pre-check at the very top of <code>runScout()</code>, before any RSS/Tavily/Gemini work, returning immediately with one clean log line if already cooled down today. Added a check in both the Step 0.5 editorial-item catch and the main category-loop catch: on <code>GEMINI_QUOTA_EXHAUSTED</code> specifically, <code>break</code> out of the loop immediately rather than <code>continue</code>-ing to the next item/category, since the quota is global — the next attempt would just fail the same way.</p>
+    <p><strong>scout-podcast.js</strong> — same pre-check at the top. For the mid-run break: first wrote <code>return totalQueued</code> inside the nested per-video catch block, then caught it immediately on review — a bare <code>return</code> would skip the function's own trailing "✅ Podcast Scout complete" summary log. Fixed by introducing a <code>quotaExhausted</code> flag, checked at the top of the outer channel loop, set and <code>break</code>-ed from the inner video loop — preserves the final summary log even when cut short.</p>
+    <pre><code>node --check scout-podcast.js && node --check gemini-podcast.js && node --check gemini.js && node --check scout.js && node --check memory.js && node --check slack.js
+# all OK</code></pre>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 7 — SQL migration, matching the existing single-row RLS pattern</h3>
+    <pre><code>cat aitrends.ng/supabase/add-homepage-monitor.sql
+# confirmed exact pattern: CREATE TABLE IF NOT EXISTS, ENABLE ROW LEVEL
+# SECURITY, one "service role full access" policy</code></pre>
+    <p>Wrote <code>aitrends.ng/supabase/add-gemini-quota-cooldown.sql</code> mirroring that pattern exactly — single-row table (<code>id integer primary key default 1</code>, <code>CONSTRAINT single_row CHECK (id = 1)</code>), same RLS policy. Asked Felix to run it in the SQL editor, then <code>NOTIFY pgrst, 'reload schema';</code>.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 8 — Felix's "clear the editor" confusion, again</h3>
+    <p><strong>Felix:</strong> "Just to be clear; I should clear the gemini_quota_cooldown table I just created and ran and then paste: NOTIFY pgrst, 'reload schema'; in stead?" (sent three times, likely a client retry)</p>
+    <p>Clarified explicitly and plainly: "clear the editor" meant the SQL Editor's text input box, not the table — the table and anything in it stays completely untouched. Select-all and delete the <em>text</em> in the query box, type the NOTIFY statement, run it. This is the same point of confusion documented in Session #22 for the homepage_monitor table; worth a permanent, very explicit phrasing going forward rather than "clear the editor" as shorthand.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 9 — Full live verification, then cleanup</h3>
+    <pre><code>// table exists and is readable
+const { data, error } = await supabase.from('gemini_quota_cooldown').select('*')
+// Table exists and is readable. Current rows: []
+
+// 1. before any cooldown
+isGeminiQuotaCooledDown() → false
+// 2. first setGeminiQuotaCooldown() call today
+setGeminiQuotaCooldown() → true   (new event — would fire the Slack alert)
+// 3. after setting
+isGeminiQuotaCooledDown() → true
+// 4. setting again same day
+setGeminiQuotaCooldown() → false  (NOT new — no duplicate alert)
+
+// stale-cooldown check
+upsert hit_at = yesterday's timestamp
+isGeminiQuotaCooledDown() → false  (correctly treated as stale)
+
+// cleanup
+DELETE FROM gemini_quota_cooldown WHERE id = 1
+// Table cleared. Current state: []</code></pre>
+    <p>All four behaviours (no-cooldown, new-cooldown, dedup-on-repeat, stale-from-previous-day) verified directly against the live table before reporting back, then the test row was deleted so the real pipeline starts clean rather than wrongly skipping its next genuine run.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Turn 10 — End-to-end pipeline verification with the gate removed</h3>
+    <p>Ran scout.js once for real (in the background) to confirm the de-gated pipeline (Session #25) and the new quota protection (this session) both work together correctly in production code, not just in isolated test calls. Result: 2 posts queued — one genuinely Africa-relevant on its own merits (Nigeria's NITDA digital sovereignty strategy, scored ev:3 cl:6, picked up via real cluster/evergreen scoring) and one purely global (Anthropic accusing Alibaba of extracting Claude model capabilities) with zero forced Africa framing. <code>ai-models</code> and <code>tools</code> categories were skipped that run for an unrelated, pre-existing reason (the AI-signal gate, not the Africa gate — 0 of 2 and 0 of 3 candidate articles had a strong-enough AI signal in their titles). One transient network blip on <code>markSeen()</code> self-recovered via its existing 2-attempt retry. Both queued posts' content verified directly: no <code>SKIP_NO_AFRICA_RELEVANCE</code> sentinel leakage, no forced "Lagos, Accra, Nairobi" phrasing, no markdown asterisks.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Session #27 Summary</h3>
+    <h4>What was built:</h4>
+    <ul>
+      <li><strong>gemini.js</strong> — shared <code>callGeminiWithFallback()</code>, now falls back to gemini-2.5-flash on 429 as well as 503 (previously 503 only) — uses the separate quota bucket immediately rather than failing outright</li>
+      <li><strong>gemini-podcast.js</strong> — its independent duplicate of the same retry logic removed, now reuses the shared helper</li>
+      <li><strong>memory.js / slack.js</strong> — reactive cooldown state (<code>gemini_quota_cooldown</code> table) and a once-per-day Slack alert on genuine exhaustion</li>
+      <li><strong>scout.js / scout-podcast.js</strong> — skip the entire run if already cooled down today; break out of the remaining categories/channels immediately if exhaustion is hit mid-run, rather than continuing to burn Tavily/transcript/fetch calls on items that will fail the same way</li>
+    </ul>
+    <h4>Verified, not just implemented:</h4>
+    <p>All four cooldown-state behaviours tested directly against the live Supabase table; a real <code>runScout()</code> execution confirmed the de-gated pipeline (Session #25) and the new quota protection work correctly together in production code.</p>
+  </div>
+</div><!-- end session-27 -->
+
 </div>
 </body>
 </html>

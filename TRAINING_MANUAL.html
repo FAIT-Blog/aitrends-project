@@ -5850,6 +5850,196 @@ const OFFTOPIC_KEYWORDS = [
   </p>
 </div>
 
+<!-- ═══════════════════ CHAPTER 32 ═══════════════════ -->
+<div class="chapter" id="ch32">
+  <div class="chapter-num">Chapter 32</div>
+  <h2>Session #25 — When the Fix Itself Is the Bug</h2>
+</div>
+
+<p>
+  By Session #23, the project had spent two full sessions cleaning up forced phrases and
+  keyword-stuffed bold text on old posts, and had just confirmed those specific guards still
+  existed in the live prompt. Session #25 found something more uncomfortable: the guards had
+  quietly disappeared from the prompt entirely during an earlier simplification, and nobody had
+  noticed — meaning new posts could reproduce the exact problem that had just taken two sessions
+  to clean up.
+</p>
+
+<h3 id="ch32-symptom-vs-cause">Patching a Symptom Just Relocates It</h3>
+<p>
+  The instinctive fix was obvious: restore the banned-phrase list, add the guards back. Felix
+  didn't ask for that. He asked a sharper question instead — <em>why</em> did the prompt keep
+  reaching for forced phrases like "For developers in Lagos, Accra, and Nairobi" in the first
+  place? The answer wasn't carelessness. It was the Africa-relevance gate itself: every story had
+  to clear a bar of genuine Africa connection before Gemini was allowed to write about it, and
+  when a genuinely global story didn't have one, the model didn't skip it — it manufactured a
+  connection, because the gate gave it no other way to satisfy the instruction. Banning the
+  specific phrase that fabrication tended to produce doesn't remove the pressure to fabricate; it
+  just pushes the model toward a different phrase next time. Three sessions (#7, #8, #14)
+  documenting variations of the same root cause, before anyone asked whether the gate itself was
+  the problem rather than its symptoms.
+</p>
+<p>
+  The decision that followed — removing the Africa-first mandate entirely rather than tightening
+  it further — only made sense once the root cause was named correctly. A narrower gate would have
+  produced a narrower version of the same fabrication. The lesson generalizes past this project:
+  when the same category of bug keeps recurring in slightly different shapes, the question worth
+  asking isn't "how do I catch this shape too" — it's "what is generating a new shape every time."
+</p>
+
+<h3 id="ch32-rejecting-the-easy-label">Rejecting an Easy Fix for Being Almost-As-Forced</h3>
+<p>
+  One implementation detail is worth keeping on its own. The plan replaced the old fixed closing
+  sentence ("What this means for Africa: ...") with something — and the easy choice was another
+  fixed label, "Bottom line: ...". Felix rejected it on sight: "too obvious, predictable...
+  sometimes come out forced." He was right, and precisely right about <em>why</em> — a fixed label
+  is the same forcing problem in miniature. It doesn't fabricate a fact, but it fabricates a
+  rhythm, the same robotic cadence on every single post regardless of whether that post's actual
+  ending wants a verdict, a question, or a forward-looking note. The eventual fix mandated varied
+  construction instead (implication, forward-looking note, skeptical beat, or pointed question) —
+  mirroring the Session #7 "TITLE VARIETY" fix, which solved the identical problem for headlines
+  two and a half weeks earlier. The same shape of bug — uniformity standing in for quality — kept
+  showing up in different parts of the prompt, and the same shape of fix kept working.
+</p>
+
+<div class="chapter-summary">
+  <p><strong>One-line summary:</strong> When a bug keeps recurring in different shapes, look for
+  what's generating new shapes rather than cataloguing each one — and watch for "fixes" that
+  remove a specific bad pattern while quietly reintroducing the same forcing pressure in a new
+  form.</p>
+</div>
+</div><!-- end chapter-32 -->
+
+<!-- ═══════════════════ CHAPTER 33 ═══════════════════ -->
+<div class="chapter" id="ch33">
+  <div class="chapter-num">Chapter 33</div>
+  <h2>Session #26 — A Label Is Not the Structure</h2>
+</div>
+
+<p>
+  Felix's instruction on the YouTube podcast posts looked, on first read, like a request to
+  remove a section. It wasn't. He asked for the "Main Idea 1, Main Idea 2..." labels gone, and for
+  the separate "Notable Quotes" list dissolved into the body — and then, after seeing the result,
+  he checked something specific: that the post still ran through the same number of distinct
+  sections in sequence, just without the numbering. "I hope you know it is supposed to write them
+  Main idea after the next, just like it did but not with the 'Main Idea' listings. You feel me?"
+</p>
+<p>
+  That check mattered because the two changes requested look similar but aren't: removing a label
+  is cosmetic (the heading text changes, nothing else does), while removing a section's existence
+  would have been structural (fewer headings, less content, a different post shape entirely). It
+  would have been easy to over-read "don't include Main Idea 1, Main Idea 2..." as "don't write
+  multiple distinct sections" and collapse the post into one long undifferentiated piece — solving
+  a problem Felix never described. The actual edit kept the sequential multi-section format fully
+  intact (the demonstration post still has four separate, sequential headings) and changed exactly
+  one thing: what text appears in the heading. Reading a request precisely enough to know which
+  parts are the actual ask and which parts are just the example used to describe it is its own
+  skill, separate from implementing the fix correctly once you know what it is.
+</p>
+<p>
+  The quotes change carried a similar distinction. "Notable Quotes" wasn't wrong because quotes
+  are bad — it was wrong because a list of pull-quotes at the end of a post reads like evidence
+  filed in an appendix, not like something the writer actually absorbed. Felix's own description
+  captured the standard precisely: quotes should make the post feel "as if the writer deliberately
+  want the readers to know that he internalised the message" — which means a quote's correct home
+  is inside the sentence making the argument it supports, not set apart from it. The fix wasn't
+  "remove the quotes section," it was "change where the quotes live and how they're framed."
+</p>
+
+<div class="chapter-summary">
+  <p><strong>One-line summary:</strong> Before implementing a requested removal, check whether the
+  request is actually about a label/framing detail or about the underlying structure — they can
+  look identical in the instruction and require completely different edits.</p>
+</div>
+</div><!-- end chapter-33 -->
+
+<!-- ═══════════════════ CHAPTER 34 ═══════════════════ -->
+<div class="chapter" id="ch34">
+  <div class="chapter-num">Chapter 34</div>
+  <h2>Session #27 — The Free Fix Hiding Inside the Expensive Problem</h2>
+</div>
+
+<p>
+  Felix's question wasn't "fix the quota problem" — it was a genuine operational question, asked
+  carefully enough to restate before answering: when Gemini's daily quota runs out, does the
+  pipeline degrade gracefully, or do scheduled cron jobs keep failing against a dead quota,
+  wasting resources and piling up silent error reports until it resets? Answering it required
+  reading the actual error-handling code rather than reasoning from how the system <em>should</em>
+  behave — and the honest answer split into "this part is fine" and "this part is genuinely
+  broken," which is a more useful answer than either extreme.
+</p>
+
+<h3 id="ch34-free-fix">A Fix That Cost Nothing, Found by Accident</h3>
+<p>
+  While tracing through the retry logic to answer Felix's question, one detail stood out: the
+  fallback from <code>gemini-3.5-flash</code> to <code>gemini-2.5-flash</code> only triggered on a
+  503 (overloaded) response — never on 429 (quota exhausted). Two models, two completely separate
+  daily quota buckets on Google's side, and the code only ever reached for the second bucket when
+  the first one was <em>temporarily busy</em>, not when it was <em>structurally out for the day</em>.
+  Every quota-exhaustion event across Sessions #23 and #24 had hit this exact gap — meaning
+  <code>gemini-2.5-flash</code>'s entire daily allowance had sat untouched through all of it. Extending
+  the fallback condition by one comparison operator (<code>=== 503</code> to
+  <code>=== 503 || === 429</code>) effectively doubled the day's usable capacity, for free, before
+  any of the more involved cooldown-tracking work was even designed. Investigating a reported
+  problem thoroughly — not just enough to answer the question asked — sometimes turns up a
+  separate, smaller, immediately-shippable fix sitting right next to the one being discussed.
+</p>
+
+<h3 id="ch34-reactive-not-proactive">Choosing the Design That's Honest About What It Can't See</h3>
+<p>
+  The more involved fix — a cooldown system that lets scout.js skip an entire run once quota is
+  known to be dead — had two possible designs: scout-agent could track its own call count and
+  self-impose a limit before ever hitting a real 429, or it could just catch the real 429 when it
+  happened and remember it. The proactive counter looks more sophisticated, and was tempting for
+  exactly that reason. It was also wrong for this system specifically: scout-agent's own counter
+  can only see calls scout-agent itself makes. It has no visibility into a one-off cleanup script
+  run from a terminal, hitting the exact same Google-side quota through a completely different
+  code path. A self-counter would report confident headroom that doesn't actually exist, then
+  still get blindsided by the same 429 it was built to prevent. The reactive design — just catching
+  the real failure when it happens — doesn't pretend to know more than the system actually knows.
+  Sometimes the less impressive-sounding design is the one that's honest about its blind spots,
+  and that's worth more than the one that looks more thorough on paper.
+</p>
+
+<h3 id="ch34-same-quota-different-files">One Quota, Three Call Sites — Found by Checking, Not Assuming</h3>
+<p>
+  The fix needed to land in <code>gemini.js</code>, which has three functions
+  (<code>generateDigest</code>, <code>generateBlendedDigest</code>, <code>generateEditorialDigest</code>)
+  that already shared one duplicated retry block. A quick grep before writing any code turned up a
+  fourth, independent copy of the identical logic in <code>gemini-podcast.js</code> — same model
+  names, same Google project, same shared quota, written separately because the podcast pipeline
+  was built in a different session and nobody had connected the two retry blocks since. Fixing
+  three copies and missing a fourth wouldn't have been a partial fix — it would have been a fix
+  that silently didn't apply to a third of the system that draws from the exact same resource.
+  The one-line grep that found it (<code>grep -n "GEMINI_PRIMARY\|GEMINI_FALLBACK\|MAX_ATTEMPTS" gemini-podcast.js
+  scout-podcast.js</code>) took less time than writing the fix for even one of the four call sites —
+  cheap insurance against fixing the symptom you went looking for while leaving an identical one
+  standing two files away.
+</p>
+
+<div class="chapter-summary">
+  <p><strong>One-line summary:</strong> Investigating a reported problem thoroughly can surface a
+  separate, free fix sitting next to it; prefer a design that's honest about what it can't observe
+  over one that looks more sophisticated; and before calling a fix complete, grep for other places
+  the same broken pattern might have been duplicated independently.</p>
+</div>
+</div><!-- end chapter-34 -->
+
+<!-- ═══════════════════ FOOTER ═══════════════════ -->
+
+<div class="manual-footer">
+  <p><strong style="color:#fff">AITrends.ng — Vibe-Coding Training Manual</strong></p>
+  <p>Built by Felix Okon &amp; Claude Code (Sonnet 4.6) · FAIT · Lagos · June 2026</p>
+  <p style="margin-top:12px; font-size:0.75rem">
+    This document is a living training manual. Every session adds new lessons.
+    The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
+    Last updated: 25 June 2026 — Chapters 32–34 added: root cause vs. symptom in the Africa-mandate
+    removal (Session #25), the label-vs-structure distinction in the podcast prompt fix
+    (Session #26), and the free model-fallback fix plus the reactive-vs-proactive quota design
+    (Session #27).
+  </p>
+</div>
+
 </div>
 </body>
 </html>
