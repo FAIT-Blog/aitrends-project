@@ -6025,6 +6025,62 @@ const OFFTOPIC_KEYWORDS = [
 </div>
 </div><!-- end chapter-34 -->
 
+<!-- ═══════════════════ CHAPTER 35 ═══════════════════ -->
+<div class="chapter" id="ch35">
+  <div class="chapter-num">Chapter 35</div>
+  <h2>Session #28 — When Two Timezones Share a Clock</h2>
+</div>
+
+<p>
+  The pipeline went silent for six days — zero posts published from July 7 to July 13 — and every
+  GHA run showed "success." No errors, no failures, no Slack alerts. The cooldown flag that was
+  supposed to be a one-day pause turned into a permanent gate, and the system obediently skipped
+  itself every six hours, reporting success each time, because exiting cleanly after a skip is
+  technically not a failure.
+</p>
+
+<h3 id="ch35-utc-vs-pt">The Comparison That Worked Until It Didn't</h3>
+<p>
+  The cooldown check compared two UTC calendar dates: the date the cooldown was set, and today's
+  UTC date. This worked correctly as long as the pipeline's exhaustion and reset cycles stayed
+  within the same UTC day. The problem started when an early-morning UTC run (the
+  <code>~01:47 UTC</code> GHA cron, which is <code>6:47 PM PT</code> the previous day) passed the
+  cooldown check — new UTC day, different date — tried Gemini, got429 because the quota hadn't
+  reset yet (it resets at midnight PT, not midnight UTC), and re-set the cooldown with the new UTC
+  date. From that point, every subsequent run that UTC day — including the run at
+  <code>05:00 UTC</code> (= midnight PT, when the quota actually resets) — saw "same UTC date"
+  and skipped. The cooldown was self-perpetuating: each day's first run to pass the check would
+  re-set it before midnight PT, blocking the fresh-quota window permanently.
+</p>
+<p>
+  The lesson is about what a date comparison actually means. "Same day" is unambiguous when both
+  timestamps share a timezone. The moment they don't — one system using UTC, another using Pacific
+  — "same day" becomes ambiguous, and a comparison that looks correct in isolation silently
+  produces the wrong answer. The fix replaced the calendar-date comparison with an elapsed-time
+  check: if the cooldown was set less than20 hours ago, it's still active. This is
+  timezone-agnostic by construction — it doesn't matter what timezone either system uses, because
+  it's measuring a duration, not comparing calendar boundaries.
+</p>
+
+<h3 id="ch35-success-is-not-alive">"Success" Is Not the Same as "Running"</h3>
+<p>
+  The second failure mode was subtler than the timezone bug. Every GHA run reported
+  <code>conclusion: "success"</code> because the code exits with <code>process.exit(0)</code>
+  after skipping — it's not an error to skip, it's the intended behaviour when the cooldown is
+  active. The GHA "Notify Slack on failure" step only fires on <code>if: failure()</code>, which
+  never triggers. Six days of zero output, six days of green checkmarks. Monitoring that only
+  watches for failures would never catch this; monitoring that watches for <em>absence of output</em>
+  would. The homepage-monitor (Session #22) exists for exactly this class of problem, but it checks
+  the site's visible state, not the pipeline's internal state — a different blind spot.
+</p>
+
+<div class="chapter-summary">
+  <p><strong>One-line summary:</strong> When two systems use different timezone conventions,
+  "same calendar date" is an assumption, not a fact — and when a skip-and-exit-successfully
+  pattern exists, absence of errors is not evidence of function.</p>
+</div>
+</div><!-- end chapter-35 -->
+
 <!-- ═══════════════════ FOOTER ═══════════════════ -->
 
 <div class="manual-footer">
@@ -6033,10 +6089,8 @@ const OFFTOPIC_KEYWORDS = [
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 25 June 2026 — Chapters 32–34 added: root cause vs. symptom in the Africa-mandate
-    removal (Session #25), the label-vs-structure distinction in the podcast prompt fix
-    (Session #26), and the free model-fallback fix plus the reactive-vs-proactive quota design
-    (Session #27).
+    Last updated: 13 July 2026 — Chapter 35 added: UTC-vs-PT timezone mismatch in the quota cooldown
+    (Session #28).
   </p>
 </div>
 

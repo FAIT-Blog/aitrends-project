@@ -10595,6 +10595,88 @@ DELETE FROM gemini_quota_cooldown WHERE id = 1
   </div>
 </div><!-- end session-27 -->
 
+<!-- ═══════════════════ SESSION 28 ═══════════════════ -->
+<div class="session" id="session-28">
+  <div class="session-header">
+    <h2>Session #28 — 13 July 2026</h2>
+    <p class="session-meta">scout-agent · Gemini quota cooldown timezone bug</p>
+  </div>
+
+  <div class="turn user">
+    <div class="label">Felix — diagnosis request</div>
+    <div class="bubble">
+      Scout has published zero posts since July 7th. Gemini's free tier quota resets daily. Leading theory: the quota-exhausted cooldown flag in Supabase is stuck "on" and never resetting, rather than the pipeline genuinely hitting a fresh quota wall every single day.
+    </div>
+  </div>
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — investigation</div>
+    <div class="bubble">
+      <h3>Finding 1 — GHA Workflows Are Running</h3>
+      <p>Scout cron runs 4×/day (00:00, 06:00, 12:00, 18:00 UTC). Podcast runs 1×/day (06:00 UTC). Homepage-monitor runs 4×/day. All enabled. Recent run logs show <code>conclusion: "success"</code> on every run — no failures. But success = skip (cooldown active) + <code>process.exit(0)</code>, not success = posts published.</p>
+
+      <h3>Finding 2 — Every Gemini Call Site Shares One Cooldown</h3>
+      <p>Four functions hit Gemini: <code>generateDigest()</code>, <code>generateBlendedDigest()</code>, <code>generateEditorialDigest()</code> in gemini.js, and <code>gemini-podcast.js</code>. All route through <code>callGeminiWithFallback()</code> (Session #27 refactor), which calls <code>setGeminiQuotaCooldown()</code> when both models429 in the same call. Both scout.js and scout-podcast.js call <code>isGeminiQuotaCooledDown()</code> before any work. One cooldown, one table, shared across all pipelines. Verified in Supabase: <code>hit_at: "2026-07-13T01:52:03.792+00:00"</code>.</p>
+
+      <h3>Finding 3 — The Retry Logic Doesn't Cause a Storm</h3>
+      <p><code>MAX_ATTEMPTS = 3</code>, <code>12 s</code> delays. Tries <code>gemini-3.5-flash</code> first, then <code>gemini-2.5-flash</code>. Each call is a Google API call, so worst case is 6 API calls per logical digest on 503 retries. The <code>0 */6 * * *</code> cron prevents storms — one logical attempt per 6 hours. The real issue is not over-retry but <em>under-detection</em>: the cooldown skips the entire run cleanly, so the system exits 0 and never alerts.</p>
+
+      <h3>Finding 4 — Total Daily Call Budget</h3>
+      <p>4 RSS runs/day × ~4 categories + podcast + editorial = ~18–21 calls on a happy path. Gemini free tier: 20 requests/day per model. That means the pipeline genuinely runs out of quota every single day on the happy path — the quota exhaustion itself is not a bug. The bug is that the cooldown flag, once set, never clears.</p>
+
+      <h3>Finding 5 — The Cooldown Timezone Bug</h3>
+      <p>The cooldown check at <code>memory.js:357-368</code> compares UTC calendar dates:</p>
+<pre>
+const hitDate = new Date(data.hit_at).toISOString().slice(0, 10)  // "2026-07-13"
+const today = new Date().toISOString().slice(0, 10)               // "2026-07-13"
+return hitDate === today
+</pre>
+      <p>Both sides use UTC dates. Gemini's quota resets at midnight Pacific Time (= 07:00 UTC in summer). The <code>~01:47 UTC</code> GHA cron run (= 6:47 PM PT) always passes the cooldown check (new UTC day), tries Gemini (still exhausted — still previous PT day), hits429, and re-sets the cooldown with the new UTC date. This blocks the <code>05:00 UTC</code> run (= midnight PT, when the quota actually resets) and every subsequent run that UTC day. The cooldown was self-perpetuating: each day's first run to pass the check would re-set it before midnight PT, blocking the fresh-quota window permanently.</p>
+      <p>Traced through GHA run logs day by day: July 7 05:00 UTC (= midnight PT) was the last successful run (queued "Alibaba Restricts Anthropic Tools"). By 09:23 UTC (= 2:23 AM PT) quota was exhausted. Every run from July 8 onward hit the same pattern: 01:47 UTC re-set the cooldown, 05:00 UTC and all subsequent runs skipped. The Supabase row confirmed: <code>hit_at = "2026-07-13T01:52:03"</code>.</p>
+
+      <h3>Fix — Elapsed-Time Staleness</h3>
+      <p>Replaced the UTC-date comparison with a time-elapsed check:</p>
+<pre>
+const STALE_MS = 20 * 60 * 60 * 1000  // 20 hours
+
+const elapsed = Date.now() - new Date(data.hit_at).getTime()
+return elapsed < STALE_MS
+</pre>
+      <p>20-hour threshold is timezone-agnostic. Covers the worst-case gap: quota exhausted at 4 AM PT, resets at midnight PT next day = ~20 hours. If more than 20 hours have passed, the quota has definitely reset. No calendar-date math, no PT-to-UTC conversion, no daylight-saving edge cases.</p>
+      <p><code>node --check memory.js</code> passes clean. Diff is 10 lines changed, self-contained to one function.</p>
+
+      <h3>Deployment plan (not yet executed)</h3>
+      <ol>
+        <li>Commit and push the memory.js fix</li>
+        <li>After fix is live: <code>DELETE FROM gemini_quota_cooldown WHERE id = 1;</code> to clear the stuck row</li>
+        <li>Trigger manual workflow_dispatch on scout.yml</li>
+        <li>Confirm in logs it actually runs Gemini calls (not the 17-second skip)</li>
+        <li>Monitor next few scheduled runs to confirm cooldown clears daily on its own</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="turn assistant">
+    <div class="label">Session #28 Summary</div>
+    <div class="bubble">
+      <h4>Root cause:</h4>
+      <p>UTC-vs-PT timezone mismatch in the cooldown staleness check. The cooldown compared UTC calendar dates, but Gemini's quota resets at midnight PT. The <code>~01:47 UTC</code> run re-set the cooldown before midnight PT, permanently blocking every run for the day.</p>
+      <h4>What was fixed:</h4>
+      <ul>
+        <li><strong>memory.js</strong> — <code>isGeminiQuotaCooledDown()</code> now uses elapsed-time staleness (20-hour threshold) instead of UTC calendar-date comparison</li>
+      </ul>
+      <h4>What was NOT changed:</h4>
+      <ul>
+        <li>RSS cron schedule (remains 4×/day, <code>0 */6 * * *</code>)</li>
+        <li>Podcast cron schedule (remains 1×/day, <code>0 6 * * *</code>)</li>
+        <li>cron-job.org triggers (remains as-is)</li>
+        <li><code>setGeminiQuotaCooldown()</code> — no change, still upserts current UTC timestamp</li>
+        <li>All other pipeline logic unchanged</li>
+      </ul>
+    </div>
+  </div>
+</div><!-- end session-28 -->
+
 </div>
 </body>
 </html>
