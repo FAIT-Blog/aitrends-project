@@ -10677,6 +10677,58 @@ return elapsed < STALE_MS
   </div>
 </div><!-- end session-28 -->
 
+<!-- SESSION 29 -->
+<div class="session" id="session-29">
+  <h2>Session #29 — 15 July 2026</h2>
+  <div class="meta">Project: scout-agent + aitrends-project | Duration: ~40 min</div>
+
+  <div class="turn">
+    <h3>Root cause confirmed: billing, not timezone</h3>
+    <p>Investigated the actual billing state of the old Gemini API key (<code>AQ.Ab8RN6LFhE0F7JbuBAMMIYmqW0RQI60d408lKz0DmrISFgkdiw</code>). In Google AI Studio, the aitrends project showed: "A credit balance above $0 is required to resume service." The key had moved from free tier to Tier 1 billing after ~28 days of use — the429 errors were billing errors, not daily quota limits. Felix could not step down the tier, only delete the project.</p>
+    <p><strong>Decision:</strong> create a new GCP project (free, no billing) and generate a fresh API key. No code deletion needed — just a key swap.</p>
+  </div>
+
+  <div class="turn">
+    <h3>New key + Groq fallback added</h3>
+    <p>Felix provided a new Gemini API key (<code>AQ.Ab8RN6IsSWJ-ooDYgqqTEbkjvxXn_8YNJMujSRgRmfzpoxY1Ag</code>) from a fresh project, plus a Groq API key (<code>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</code>) for Llama 3.3 70B as cross-provider fallback.</p>
+    <p>Attempted to use <code>gemini-2.5-flash</code> as primary (genuinely free, 1,500 req/day, no 28-day expiry) — but the model is <strong>deprecated for new API keys</strong>. Google returns 404: "This model is no longer available to new users." Tested all available models on the new key:</p>
+    <ul>
+      <li><code>gemini-3.5-flash</code> — 200, working</li>
+      <li><code>gemini-3.1-flash-lite</code> — 200, working</li>
+      <li><code>gemini-2.0-flash</code> — 429 (quota exhausted)</li>
+      <li><code>gemini-2.0-flash-lite</code> — 429 (quota exhausted)</li>
+      <li><code>gemini-2.5-flash</code> — 404 (deprecated)</li>
+    </ul>
+    <p>Settled on <code>gemini-3.5-flash</code> as primary (same model as before, fresh free tier) with Groq Llama 3.3 as cross-provider fallback.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Code changes</h3>
+    <p><strong>gemini.js</strong> rewritten:</p>
+    <ul>
+      <li>Two Google model constants → one <code>GEMINI_URL</code> (3.5-flash) + one <code>GROQ_URL</code></li>
+      <li><code>callGemini()</code> simplified (no URL parameter — uses module-level constant)</li>
+      <li>New <code>callGroq()</code> — translates Gemini's <code>contents</code> format to OpenAI <code>messages</code> format</li>
+      <li>New <code>normaliseGroqResponse()</code> — wraps Groq output in Gemini response shape (<code>candidates[0].content.parts[0].text</code>)</li>
+      <li><code>callGeminiWithFallback()</code> — tries Gemini, retries on 503 (3 attempts, 12s delay), falls back to Groq on non-retryable errors, cooldown on 429</li>
+      <li>No caller changes needed — generateDigest, blended, editorial, podcast all use the same interface</li>
+    </ul>
+    <p><strong>memory.js</strong> — comment updated to reflect single-model quota tracking.</p>
+    <p><strong>.env</strong> — GEMINI_API_KEY swapped to new key, GROQ_API_KEY added.</p>
+  </div>
+
+  <div class="turn">
+    <h3>GitHub Actions secrets updated + live test</h3>
+    <p><code>gh secret set GEMINI_API_KEY</code> — updated with new key. <code>gh secret set GROQ_API_KEY</code> — added. Cooldown row deleted from Supabase (was set10 hours earlier, still active under 20h staleness check). Manual workflow_dispatch triggered.</p>
+    <p><strong>Result:</strong> 90 fresh articles found across feeds. Pipeline processed industry (5 articles → "TikTok Expands African AI Literacy Campaign") and ai-models (5 articles → "Google Transforms Gemini API Managed Agents"). Anthropic and tools skipped (0 AI-signal articles). Phase 2 published the TikTok post at 05:30 UTC. Pipeline is alive again after 8 days of silence.</p>
+  </div>
+
+  <div class="turn">
+    <h3>Known limitation</h3>
+    <p><code>gemini-3.5-flash</code> on a fresh free-tier key will hit the same 28-day billing cliff that killed the old key. When that happens, the fix is the same: create another new project, generate a new key, swap in <code>.env</code> + GH Secret. The Groq fallback provides a safety net during any transition gap.</p>
+  </div>
+</div><!-- end session-29 -->
+
 </div>
 </body>
 </html>
