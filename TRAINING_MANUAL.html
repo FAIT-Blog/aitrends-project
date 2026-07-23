@@ -6468,11 +6468,84 @@ const OFFTOPIC_KEYWORDS = [
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHAPTER 41 — TPM Limits: Process One at a Time, Not All at Once
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div class="chapter">
+  <h2>Chapter 41 — TPM Limits: Process One at a Time, Not All at Once</h2>
+  <p>Added: 22 July 2026 (S32 continuation)</p>
+
+  <h3>The Problem</h3>
+  <p>
+    Groq's free tier limits <code>llama-3.3-70b-versatile</code> to <strong>12,000 tokens per
+    minute (TPM)</strong>. The blend mode prompt in <code>generateBlendedDigest()</code> sent
+    ALL sources (up to 8 × 3000 chars each + system prompt) in ONE request — totaling ~16,000
+    tokens. This always exceeded the TPM limit. The 12-second retry delay wasn't enough because
+    TPM is a rolling per-minute window.
+  </p>
+
+  <h3>Why the Fallback Didn't Help</h3>
+  <p>
+    Gemini was supposed to be the fallback, but it was returning HTTP 429 (rate limited). The
+    root cause: the old Groq API key was dead. Every pipeline run for days fell back to Gemini
+    for ALL categories. Gemini free tier: 20 requests/day. With 4 runs/day × 4 categories = up
+    to 16 Gemini calls per run — quota consumed within the first run, then 429 for the rest of
+    the day. Both providers dead = total failure for blend mode, but the pipeline reported
+    "✅ success" because the exit code was always 0 (the old code swallowed errors).
+  </p>
+
+  <h3>The Fix — 2-Pass Approach</h3>
+  <p>
+    Instead of sending all sources in one request, <code>generateBlendedDigest()</code> now
+    processes sources <strong>one at a time</strong>:
+  </p>
+  <ol>
+    <li><strong>Pass 1 — Individual digestion:</strong> Each source is sent to Groq individually
+    (~2,000 tokens each — well under 12,000 limit). If Groq fails on any source, Gemini takes
+    that specific request. A 65-second wait between sources lets the TPM quota reset.</li>
+    <li><strong>Pass 2 — Synthesis:</strong> All pre-analysed digests are combined into one
+    prompt (~4,000 tokens — well under limit). This produces the final blended post.</li>
+  </ol>
+
+  <h3>Rate Limiting Between Categories</h3>
+  <p>
+    Added a 65-second delay between each category in <code>scout.js</code>. Without this, the
+    second category would hit the TPM cap immediately after the first category consumed tokens.
+    The delay ensures each category starts with a fresh TPM window.
+  </p>
+
+  <h3>Retry Delay Increased</h3>
+  <p>
+    <code>callGeminiWithFallback()</code> retry delay changed from 12 seconds to 65 seconds.
+    TPM is a per-minute rolling window — 12 seconds isn't enough for the quota to reset.
+  </p>
+
+  <h3>Key Lessons</h3>
+  <ol>
+    <li><strong>Free tier constraints are design parameters, not obstacles.</strong> Don't
+    recommend paid upgrades when the problem can be solved within free tier limits. The user
+    is testing capability before committing budget.</li>
+    <li><strong>Verify things yourself.</strong> Don't trust logs claiming "success" — check
+    the live site. The pipeline said "✅ complete" for 5 days while publishing zero posts.</li>
+    <li><strong>When API keys change, update ALL dependent systems immediately.</strong> Don't
+    fix one file and assume the rest will work. Check workflows, env blocks, fallback paths,
+    and validation.</li>
+    <li><strong>Process one at a time when resources are limited.</strong> If 12,000 tokens
+    can only handle one article, process one article at a time. Don't try to squeeze 8 into
+    one request and then wonder why it failed.</li>
+    <li><strong>Rate limits are per-minute, not per-request.</strong> A 12-second retry delay
+    doesn't help if the window is 60 seconds. Match your retry delay to the actual rate
+    limit window.</li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 22 July 2026 — Chapter 40 added: honest error reporting, fail-loud pattern,
-    5-day drought root cause analysis (S32 continuation).
+    Last updated: 22 July 2026 — Chapter 41 added: TPM limits, 2-pass blend mode,
+    rate limiting between categories, "verify things yourself" lesson (S32 continuation).
   </p>
 </div>
 

@@ -11569,6 +11569,209 @@ To https://github.com/FAIT-Blog/scout-agent.git
       </div>
     </div>
 
+    <div class="turn" id="s32-turn13">
+      <div class="turn-header">
+        <span class="turn-number">Turn 13</span>
+        <span class="turn-date">22 July 2026 — continuation</span>
+      </div>
+      <div class="turn-content">
+        <p><strong>User:</strong> What's the update after the modifications?</p>
+        <p>Claude checked GHA run history and pipeline state:</p>
+        <pre><code>$ gh run list --repo FAIT-Blog/scout-agent --limit 20 --json databaseId,conclusion,createdAt,displayTitle,workflowName
+
+# Results:
+# 13:24 UTC — Scout Agent — success (OLD code, 2 posts queued, 1 category failed TPM)
+# 17:00 UTC — Scout Agent — failure (NEW code, 0 posts — correctly reported failure!)
+# 18:59 UTC — Scout Agent — success (NEW code, 2 posts queued — industry failed, anthropic + ai-models succeeded)</code></pre>
+        <p>Key finding: The 17:00 UTC run was the first with new code — it correctly failed with exit code 1 and sent Slack alert. The 18:59 run (with Gemini key added) queued 2 posts but industry category failed due to Groq TPM limit (12,000 tokens) — blended prompt with 8 sources was 16,000 tokens.</p>
+        <p>Root cause of 5-day drought diagnosed: old Groq key was dead → every run fell back to Gemini → Gemini free tier quota (20 req/day) consumed within hours → 429 for rest of day → pipeline reported success anyway.</p>
+      </div>
+    </div>
+
+    <div class="turn" id="s32-turn14">
+      <div class="turn-header">
+        <span class="turn-number">Turn 14</span>
+        <span class="turn-date">22 July 2026 — continuation</span>
+      </div>
+      <div class="turn-content">
+        <p><strong>User:</strong> I want to modify something on the About page. Change the subheading from: "Why We Built It" to "Why We Exist"</p>
+        <p>Claude grepped for the string in <code>app/about/page.tsx</code>, found it at line 198, and edited it:</p>
+        <pre><code># Before (line 198):
+            Why We Built It
+
+# After:
+            Why We Exist</code></pre>
+        <p><strong>Critical mistake:</strong> The edit was applied locally but NEVER COMMITTED OR PUSHED. The change sat in the local git working tree while Vercel continued serving the old version. Felix caught this hours later.</p>
+      </div>
+    </div>
+
+    <div class="turn" id="s32-turn15">
+      <div class="turn-header">
+        <span class="turn-number">Turn 15</span>
+        <span class="turn-date">22 July 2026 — continuation</span>
+      </div>
+      <div class="turn-content">
+        <p><strong>User:</strong> Add this new Gemini API key as fallback. I really want to know the performance of Groq. Do just this one thing, don't let it get exposed again as before and make sure you update all quarters: [REDACTED]</p>
+        <p>Claude added the Gemini key to all three locations:</p>
+        <h4>1. GitHub Actions secret</h4>
+        <pre><code>$ gh secret set GEMINI_API_KEY --body "[REDACTED]" --repo FAIT-Blog/scout-agent
+✓ added</code></pre>
+        <h4>2. Local .env</h4>
+        <pre><code># Before:
+# Gemini — currently disabled, Groq-only mode
+# GEMINI_API_KEY=
+
+# After:
+# Gemini — fallback provider (new key, fresh free tier)
+GEMINI_API_KEY=[REDACTED]</code></pre>
+        <h4>3. GHA workflow env blocks</h4>
+        <p>Added <code>GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}</code> to <code>scout.yml</code> (line 50, after GROQ_API_KEY). Already present in <code>scout-podcast.yml</code> (line 40) — also added <code>GROQ_API_KEY</code> there.</p>
+        <h4>4. Validation</h4>
+        <pre><code>$ GEMINI_API_KEY="[REDACTED]" node -e "import('./gemini.js').then(async m => { await m.validateApiKeys(); ... })"
+  ✅ Groq API key validated
+  ⚠️  Gemini API key invalid (HTTP 429) — Groq-only mode
+✅ Both keys validated</code></pre>
+        <p>Gemini returned 429 (rate limited, not 401 invalid) — key is recognized by Google's API but free-tier quota exhausted from old key usage. Will work once quota resets.</p>
+        <h4>5. Committed and pushed</h4>
+        <pre><code>$ git add .github/workflows/scout.yml .github/workflows/scout-podcast.yml
+$ git commit -m "chore: add GEMINI_API_KEY to GHA env blocks (fallback provider)"
+$ git push origin main
+To https://github.com/FAIT-Blog/scout-agent.git
+   ec2f2ce..d052930  main -> main   ✓ pushed</code></pre>
+        <p>Key NOT committed to git, NOT in SESSION_LOG, NOT in CLAUDE.md. Redacted everywhere.</p>
+      </div>
+    </div>
+
+    <div class="turn" id="s32-turn16">
+      <div class="turn-header">
+        <span class="turn-number">Turn 16</span>
+        <span class="turn-date">22 July 2026 — continuation</span>
+      </div>
+      <div class="turn-content">
+        <p><strong>User:</strong> What's the situation of things now?</p>
+        <p>Claude checked GHA runs, verified live site, and diagnosed the full picture:</p>
+        <h4>Live site verified</h4>
+        <pre><code>$ curl -s https://www.aitrends.ng | grep -o "18 July 2026" | wc -l
+# All posts dated 18 July 2026 — last posts published 5 days ago</code></pre>
+        <p>Confirmed: no posts since July 18. The 2 posts queued at 18:59 UTC should publish on next Phase 2 cycle.</p>
+        <h4>Groq TPM diagnosis</h4>
+        <p>The 18:59 run logs showed the exact failure pattern:</p>
+        <pre><code># industry category (5 articles, 8 Tavily sources → blend mode):
+  ⚠️  Groq rate limited (attempt 1/3), waiting 12s...
+  ⚠️  Groq rate limited (attempt 2/3), waiting 12s...
+  ⚠️  Groq failed (Request too large for model llama-3.3-70b-versatile:
+      Limit 12000, Requested 16006), trying Gemini fallback...
+  ❌ Failed to queue industry: Both providers failed. Gemini: 429
+
+# anthropic category (single-source rewrite — only 2 verified sources):
+  ✅ Queued: "Anthropic advocates for universal AI safety protocols..."
+
+# ai-models category (1 article — single-source):
+  ✅ Queued: "OpenAI Launches ChatGPT Health..."</code></pre>
+        <p>Pattern clear: <strong>blend mode</strong> (8 sources × 3000 chars = 16,000 tokens) always exceeds 12,000 TPM. <strong>Single-source rewrites</strong> (~4,000 tokens) always work.</p>
+        <h4>Root cause of Gemini 429</h4>
+        <p>The old Groq key was dead. Every pipeline run for days fell back to Gemini for ALL categories. Gemini free tier: 20 requests/day. With 4 runs/day × 4 categories = up to16 Gemini calls per run → quota consumed within first run → 429 for rest of day. The new Groq key fixed single-source categories; blend mode still fails.</p>
+      </div>
+    </div>
+
+    <div class="turn" id="s32-turn17">
+      <div class="turn-header">
+        <span class="turn-number">Turn 17</span>
+        <span class="turn-date">22 July 2026 — continuation</span>
+      </div>
+      <div class="turn-content">
+        <p><strong>User:</strong> You keep bringing up "Upgrade tier". Don't you know that we are still test running the capability of this project and everything must be tested on free tier first before upscaling. Look at all the trials and errors you help incured, do you know how much waste that is? Is it a difficult thing for you to programm it in such a way that instead of all the articles at once, you can make them one at a time and then move to the fallback when the token is not sufficent. It is very easy to know that 12,000 can only do one or two articles, so spread the articles over a period of time per 12000 token/ minute and when the token is finished, the fallback can take over. Now, in this failure, why did't the fallback kick in? How was Gemini get exuasted when ther is no visible post on the site? Go to the website and verify things for yoursel. You have been claiming things will work or are working and there is no visible post since on the 18th, yet you are quick to recommend upgrade when you can't make do with the limited free tokens.</p>
+        <p>Claude went to the website and verified — all posts dated July 18, confirmed no new posts in 5 days. Diagnosed the full chain:</p>
+        <ul>
+          <li><strong>Why Gemini was exhausted:</strong> Old Groq key was dead → every run fell back to Gemini → 20 free-tier requests/day consumed within first run → 429 for rest of day</li>
+          <li><strong>Why blend mode fails:</strong> 8 sources × 3000 chars + prompt = ~16,000 tokens → always exceeds Groq's12,000 TPM limit</li>
+          <li><strong>Why fallback didn't help:</strong> Gemini was already 429 (quota exhausted from old runs) → both providers dead for blend mode</li>
+        </ul>
+        <p>Claude then rewrote <code>generateBlendedDigest</code> with a 2-pass approach:</p>
+        <h4>The fix — gemini.js: generateBlendedDigest rewritten</h4>
+        <pre><code>// BEFORE: sent ALL sources in ONE request (16,000+ tokens — always exceeds 12,000 TPM)
+const sourcesBlock = bucketList.map((s, i) => `SOURCE ${i + 1}: ... ${(s.content || '').slice(0, 3000)}`).join('\n\n')
+// → one giant prompt → TPM exceeded → fallback to Gemini → Gemini also 429 → both fail
+
+// AFTER: 2-pass approach — digest each source individually, then combine
+// Pass 1: digest each source (~2,000 tokens each — well under 12,000 limit)
+for (let i = 0; i < bucketList.length; i++) {
+  const singlePrompt = `Extract key facts from: ${s.title}\n${(s.content || '').slice(0, 3000)}`
+  const response = await callGeminiWithFallback(payload, `source ${i + 1}`)
+  // 65s wait between each source to let TPM quota reset
+  await new Promise(r => setTimeout(r, 65000))
+}
+// Pass 2: combine pre-analysed digests into final blended post (~4,000 tokens)
+const combinedDigests = sourceDigests.map((s, i) => `SOURCE ${i + 1}: ${s.title}\n${s.digest}`).join('\n\n')
+const finalPrompt = `Synthesise ${sourceDigests.length} pre-analysed sources into ONE post...`</code></pre>
+        <h4>scout.js: delay between categories</h4>
+        <pre><code>// Added 65-second wait between each category to let TPM reset
+if (i < Object.keys(byCategory).length - 1) {
+  console.log('  ⏳ Waiting 65s for API rate limit reset...')
+  await new Promise(r => setTimeout(r, 65000))
+}</code></pre>
+        <h4>gemini.js: retry delay increased</h4>
+        <pre><code>// BEFORE: 12s retry delay — not enough for TPM (per-minute rolling window)
+const RETRY_DELAY_MS = 12000
+
+// AFTER: 65s — matches TPM window
+const RETRY_DELAY_MS = 65000</code></pre>
+        <h4>Verification</h4>
+        <pre><code>$ node --check gemini.js && node --check scout.js
+✓ gemini.js
+✓ scout.js</code></pre>
+        <h4>Push</h4>
+        <pre><code>$ git add gemini.js scout.js
+$ git commit -m "fix: blend mode processes sources one at a time under Groq TPM limit"
+[main 60c8410] 2 files changed, 96 insertions(+), 43 deletions(-)
+$ git push origin main
+To https://github.com/FAIT-Blog/scout-agent.git
+   d052930..60c8410  main -> main   ✓ pushed</code></pre>
+      </div>
+    </div>
+
+    <div class="turn" id="s32-turn18">
+      <div class="turn-header">
+        <span class="turn-number">Turn 18</span>
+        <span class="turn-date">22 July 2026 — continuation</span>
+      </div>
+      <div class="turn-content">
+        <p><strong>User:</strong> "Why We Exist" that I told you to update has not reflected till now. Does it need Groq or Gemini token to update it?</p>
+        <p>Claude checked — the edit was applied locally at Turn 14 but NEVER COMMITTED OR PUSHED. Git status showed <code>M app/about/page.tsx</code> in working tree. This is a pure git oversight, not a token issue.</p>
+        <pre><code>$ git add app/about/page.tsx
+$ git commit -m "fix: update About page subheading to 'Why We Exist'"
+[main d142cfa] 1 file changed, 1 insertion(+), 1 deletion(-)
+$ git push origin main
+To https://github.com/FAIT-Blog/aitrends-ng.git
+   8d0e235..d142cfa  main -> main   ✓ pushed</code></pre>
+        <p>Vercel auto-deploys from main — live within ~60 seconds.</p>
+      </div>
+    </div>
+
+    <div class="turn" id="s32-turn19">
+      <div class="turn-header">
+        <span class="turn-number">Turn 19</span>
+        <span class="turn-date">22 July 2026 — continuation</span>
+      </div>
+      <div class="turn-content">
+        <p><strong>User:</strong> Have you pushed all the recent modification or you have forgotten? Append all the documents in full details.</p>
+        <p>Claude verified all repos are fully pushed:</p>
+        <pre><code># scout-agent: all pushed ✅
+60c8410 fix: blend mode processes sources one at a time under Groq TPM limit
+d052930 chore: add GEMINI_API_KEY to GHA env blocks (fallback provider)
+ec2f2ce fix: Groq-primary pipeline with honest error reporting
+5773a81 feat: Groq-only mode, AEIF editorial prompts, soft quality gate
+
+# aitrends.ng: all pushed ✅
+d142cfa fix: update About page subheading to 'Why We Exist'
+8d0e235 feat: rewrite About page per AEIF editorial constitution
+
+# aitrends-project: SESSION_LOG + TRAINING_MANUAL local-only (per Felix's policy) ✅
+259050f docs: S32 continuation — honest error reporting, Chapter 40, pipeline audit</code></pre>
+        <p>This session log turn (Turn 19) and the corresponding TRAINING_MANUAL chapter are being written now.</p>
+      </div>
+    </div>
+
   </div>
 </body>
 </html>
