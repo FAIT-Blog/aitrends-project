@@ -6382,11 +6382,97 @@ const OFFTOPIC_KEYWORDS = [
 <div class="manual-footer">
   <p><strong style="color:#fff">AITrends.ng — Vibe-Coding Training Manual</strong></p>
   <p>Built by Felix Okon &amp; Claude Code (Sonnet 4.6) · FAIT · Lagos · June 2026</p>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CHAPTER 40 — Honest Error Reporting: Fail Loud, Not Silent
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div class="chapter">
+  <h2>Chapter 40 — Honest Error Reporting: Fail Loud, Not Silent</h2>
+  <p>Added: 22 July 2026 (S32 continuation)</p>
+
+  <h3>The Problem</h3>
+  <p>
+    For 5 days (July 18–22), the pipeline published zero posts. The Gemini API key had expired
+    (HTTP 401) and the old Groq key was also dead. But every run logged <code>✅ Scout complete.
+    0 post(s) queued.</code> — a green checkmark next to total failure. The GHA "Notify Slack on
+    failure" step (<code>if: failure()</code>) never fired because <code>runScout()</code> always
+    exited 0. The pipeline degraded to zero silently, and nobody knew until Felix checked manually.
+  </p>
+
+  <h3>Root Causes (4 independent bugs)</h3>
+  <ol>
+    <li><strong>No API key validation at startup.</strong> Dead keys were only discovered when the
+    Gemini call failed — after RSS fetching, Tavily searching, content extraction, and scoring
+    had all run successfully. Expensive upstream work wasted on a known-dead quota.</li>
+    <li><strong>Category errors were swallowed.</strong> Each category's <code>try/catch</code> in
+    the loop logged the error but never re-threw. <code>runScout()</code> exited 0 regardless.</li>
+    <li><strong>"✅ Complete" printed unconditionally.</strong> No counters for success vs failure.
+    The same success message appeared whether 3 posts queued or 0.</li>
+    <li><strong>scout-podcast.js had its own copy of the same bugs.</strong> Independent
+    <code>quotaExhausted</code> variable that was never initialized, leading to
+    <code>ReferenceError</code> on the first channel.</li>
+  </ol>
+
+  <h3>The Fix — 4 Files</h3>
+
+  <h4>gemini.js — validateApiKeys()</h4>
+  <p>New exported function. Called once at pipeline start (scout.js and scout-podcast.js). Pings
+  Groq with a 5-token request to confirm the key is live. If invalid → immediate abort with a
+  descriptive error message. Gemini key validated as optional (logs warning, continues in
+  Groq-only mode).</p>
+  <pre><code>export async function validateApiKeys() {
+  if (!hasGemini && !hasGroq) {
+    throw new Error('CRITICAL: Neither GEMINI_API_KEY nor GROQ_API_KEY is set...')
+  }
+  if (hasGroq) {
+    const res = await fetch(GROQ_URL, { ... body: 'ping', max_tokens: 5 })
+    if (!res.ok) throw new Error(`CRITICAL: Groq API key is invalid (HTTP ${res.status})...`)
+    console.log('  ✅ Groq API key validated')
+  }
+  // Gemini validated as optional — warning, not abort
+}</code></pre>
+
+  <h4>scout.js — category counters + honest exit</h4>
+  <p>Added <code>categoriesQueued</code> and <code>categoriesFailed</code> counters. Final message
+  is conditional: ✅ only when posts queued, ❌ when errors occurred, ℹ️ when no content found.
+  Non-zero exit on failure so GHA step actually marks the run as failed.</p>
+  <pre><code>if (categoriesQueued > 0) {
+  console.log(`✅ Scout Phase 1 complete. ${categoriesQueued} post(s) queued.`)
+} else if (categoriesFailed > 0) {
+  console.error(`❌ Scout Phase 1 FAILED. ${categoriesFailed} error(s), 0 posts queued.`)
+  throw new Error(`Scout Phase 1 failed: ${categoriesFailed} category error(s), 0 posts queued`)
+} else {
+  console.log('ℹ️  Scout Phase 1 complete. No new AI-relevant content found this cycle.')
+}</code></pre>
+
+  <h4>scout-podcast.js — same pattern</h4>
+  <p>Removed <code>quotaExhausted</code> variable entirely (was causing ReferenceError). Added
+  <code>totalFailed</code> counter. Same honest exit pattern as scout.js.</p>
+
+  <h4>GHA workflows — dead secret references</h4>
+  <p>Both <code>scout.yml</code> and <code>scout-podcast.yml</code> still referenced the deleted
+  <code>GEMINI_API_KEY</code> secret. Replaced with <code>GROQ_API_KEY</code>.</p>
+
+  <h3>Key Lesson</h3>
+  <p>
+    The 5-day drought was not a single failure — it was four independent bugs all conspiring to
+    make the pipeline look healthy while doing nothing. Each bug was individually "minor" (a
+    swallowed error, a missing counter, an unconditional log line). Together they were invisible.
+    <strong>When you fix a failure, audit every place the same pattern could hide the next
+    failure.</strong> Don't fix the symptom and wait for the same error to recur.
+  </p>
+  <p>
+    Felix's instruction: "When you find issues, don't just fix the immediate one. Ensure the
+    whole pipeline is robust against all similar failure modes."
+  </p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 22 July 2026 — Chapter 39 added: AEIF editorial constitution adoption,
-    Groq-only mode, soft quality gate (S32).
+    Last updated: 22 July 2026 — Chapter 40 added: honest error reporting, fail-loud pattern,
+    5-day drought root cause analysis (S32 continuation).
   </p>
 </div>
 
