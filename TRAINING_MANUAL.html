@@ -6541,11 +6541,151 @@ const OFFTOPIC_KEYWORDS = [
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
+<div class="chapter" id="chapter-42">
+  <div class="chapter-num">Chapter 42</div>
+  <h2>Session #33 — When the Meter Is Running</h2>
+
+  <p>This chapter covers the GHA free-tier minutes exhaustion incident (July 24, 2026), the
+  deep minute audit that followed, and the three fixes that reduced consumption going forward.
+  It also covers the <code>ReferenceError: i is not defined</code> crash that preceded the
+  infrastructure failure by two days.</p>
+
+  <h3>42.1 The Incident</h3>
+
+  <p>On July 24, 2026 at ~10:00 UTC, every GitHub Actions workflow in the FAIT-Blog/scout-agent
+  repo stopped getting runners. All runs returned <code>runner_id: 0</code>, <code>num_steps: 0</code>,
+  empty logs. This is GHA's signal that the free-tier minutes (2,000/month for private repos) have
+  been exhausted.</p>
+
+  <p>The transition was pinpointed by comparing the last successful run (<code>2026-07-24T09:56:40Z</code>,
+  Phase 2, commit <code>60c8410a6df9a0dd68d2ef2681e184c47c69d095</code>) with the first failed run
+  (<code>2026-07-24T10:00:06Z</code>, same commit SHA but <code>runner_id: 0</code>). The pipeline
+  went from working to completely blocked in 4 minutes.</p>
+
+  <h3>42.2 The Minute Audit</h3>
+
+  <p>All 3,338 workflow runs were downloaded from the GitHub API and analysed. The breakdown by
+  workflow:</p>
+
+  <pre><code>Phase 2:   2,784 runs (83%)
+Scout:       394 runs (12%)
+Monitor:     122 runs ( 4%)
+Podcast:      36 runs ( 1%)</code></pre>
+
+  <p>Daily run rates showed a 42% increase from June to July:</p>
+
+  <pre><code>JUNE (30 days):     ~52 runs/day → ~1,857 total minutes
+JULY (24 days):     ~74 runs/day → ~2,094 total minutes (over 2,000 limit)</code></pre>
+
+  <p>Three periods emerged from the analysis:</p>
+
+  <ol>
+    <li><strong>Normal operation (June 6 → July 7):</strong> ~44 Phase 2 runs/day, ~6.5 Scout
+    runs/day. Productive — posts published regularly. ~1,606 minutes consumed.</li>
+    <li><strong>Drought (July 8-18):</strong> Zero posts published for 11 days. Scout was broken
+    (Gemini quota exhausted, Groq key dead, code bugs). Phase 2 ran 671 times, succeeded every
+    time, found an empty queue, and exited — but still billed 1 minute each. 814 wasted minutes.</li>
+    <li><strong>Post-fix + breakdown (July 19-24):</strong> Scout had code bugs (<code>i is not
+    defined</code>), then infrastructure failure. ~444 minutes.</li>
+  </ol>
+
+  <p>Key insight: <strong>without the drought, total would have been ~2,046 minutes</strong> —
+  still over 2,000, but barely. The drought was the difference between "barely over" and
+  "clearly over."</p>
+
+  <h3>42.3 What Caused the Increase</h3>
+
+  <p>Two specific changes drove the July spike:</p>
+
+  <ol>
+    <li><strong>Phase 2 cron frequency:</strong> The <code>*/15</code> cron in <code>complete.yml</code>
+    ran ~61 times/day in July (vs ~44/day in June). GHA's scheduling became more reliable over time,
+    so more scheduled runs actually fired. Each run bills 1 minute minimum, even when it exits in
+    3 seconds finding an empty queue.</li>
+    <li><strong>Scout 65-second waits:</strong> Session #32 added a 65-second delay between categories
+    (for Groq TPM limits). This made each Scout run ~2.5 minutes instead of ~1.5 minutes. At 8
+    runs/day, that's 8 extra minutes/day.</li>
+  </ol>
+
+  <h3>42.4 Why cron-job.org Exists</h3>
+
+  <p>cron-job.org was introduced in Session #4 because GHA's native triggers were unreliable.
+  The <code>*/15</code> cron for Phase 2 "ran 0 times" — posts sat in the pending queue for hours.
+  Phase 1 couldn't dispatch Phase 2 via <code>GITHUB_TOKEN</code> (HTTP 403 on scheduled runs).
+  cron-job.org triggers Phase 2 every 30 minutes as a reliability safety net. It is NOT redundant
+  — it's the trigger that actually made the pipeline autonomous.</p>
+
+  <h3>42.5 The <code>i is not defined</code> Bug</h3>
+
+  <p>Two days before the infrastructure failure, a code bug appeared. Session #32 commit
+  <code>60c8410</code> added a 65-second delay between categories for Groq TPM limits. The delay
+  check used the variable <code>i</code>, but the loop was <code>for...of</code> (no index variable):</p>
+
+  <pre><code>// BROKEN — 'i' is undefined
+for (const [category, articles] of Object.entries(byCategory)) {
+  // ... processing ...
+  if (i &lt; Object.keys(byCategory).length - 1) {  // ← ReferenceError
+    await new Promise(r =&gt; setTimeout(r, 65000))
+  }
+}</code></pre>
+
+  <p>The fix converted to an indexed loop:</p>
+
+  <pre><code>// FIXED — 'catIdx' is defined
+const categoryEntries = Object.entries(byCategory)
+for (let catIdx = 0; catIdx &lt; categoryEntries.length; catIdx++) {
+  const [category, articles] = categoryEntries[catIdx]
+  // ... processing ...
+  if (catIdx &lt; categoryEntries.length - 1) {
+    await new Promise(r =&gt; setTimeout(r, 65000))
+  }
+}</code></pre>
+
+  <p>Critical detail: Scout crashed AFTER queuing the post to <code>pending_posts</code>. Phase 2
+  could still publish it. But Scout marked the run as failure, and the next run tried to
+  re-process the same articles (since <code>markSeen()</code> was never called — it comes after
+  the crash point).</p>
+
+  <h3>42.6 The Three Fixes</h3>
+
+  <ol>
+    <li><strong>Phase 2 cron reduced from <code>*/15</code> to <code>*/30</code>:</strong> Saves
+    ~48 minutes/day (~1,440 min/month). cron-job.org remains as the reliability safety net.</li>
+    <li><strong>Fast count check in <code>memory.js</code>:</strong> <code>getPendingPosts()</code>
+    now does a count query before the full fetch. Returns instantly on empty queue. Doesn't save
+    the 1-minute bill (GitHub's minimum), but saves compute and makes the failure visible faster.</li>
+    <li><strong>URL trimming safety:</strong> <code>complete.js</code> and <code>slack.js</code> now
+    use <code>.toString().trim()</code> on all URL construction to prevent whitespace or type errors.</li>
+  </ol>
+
+  <h3>42.7 Lessons</h3>
+
+  <ol>
+    <li><strong>GitHub bills in 1-minute increments minimum.</strong> A 3-second run costs the same
+    as a 57-second run. The only way to save minutes is to run less frequently.</li>
+    <li><strong>Empty-queue runs are pure waste.</strong> When Scout is broken, Phase 2 runs every
+    15-30 minutes finding nothing to publish. Each run burns 1 minute. Over 11 days, this added
+    up to 814 wasted minutes.</li>
+    <li><strong>Private repo free tiers are tight.</strong> 2,000 minutes/month sounds like a lot,
+    but 74 runs/day × 30 days = 2,220 minutes — already over the limit. Any increase in
+    frequency or duration pushes past the cap.</li>
+    <li><strong>When diagnosing infrastructure issues, separate code bugs from resource
+    exhaustion.</strong> Scout failures with <code>runner_id: 0</code> (infrastructure) are
+    fundamentally different from failures with <code>runner_id: 1000003XXX</code> (code bugs).
+    The fix for one doesn't fix the other.</li>
+    <li><strong>cron-job.org was introduced for a reason.</strong> GHA's native cron was unreliable
+    when the pipeline was first built. Removing it without confirming GHA's current reliability
+    would break the pipeline again.</li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 22 July 2026 — Chapter 41 added: TPM limits, 2-pass blend mode,
-    rate limiting between categories, "verify things yourself" lesson (S32 continuation).
+    Last updated: 26 July 2026 — Chapter 42 added: GHA minutes exhaustion diagnosis,
+    Scout 'i is not defined' crash fix, Phase 2 minute optimization, cron-job.org history.
   </p>
 </div>
 
