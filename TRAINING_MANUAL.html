@@ -402,6 +402,11 @@ li { margin-bottom: 6px; }
     <li><a href="#ch36">Session #29 — When the Invoice Arrives</a></li>
     <li><a href="#ch37">Session #30 — When the Vendor Walks Away</a></li>
     <li><a href="#ch38">Session #31 — The Last Mile Is the Hardest</a></li>
+    <li><a href="#ch39">Session #32 — Borrowing Intelligence, Not Rewriting Systems</a></li>
+    <li><a href="#ch40">Session #32 (cont.) — Honest Error Reporting: Fail Loud, Not Silent</a></li>
+    <li><a href="#ch41">Session #32 (cont.) — TPM Limits: Process One at a Time, Not All at Once</a></li>
+    <li><a href="#chapter-42">Session #33 — When the Meter Is Running</a></li>
+    <li><a href="#chapter-43">Session #34 — When the Gate and the Prompt Disagree</a></li>
   </ol>
 </div>
 
@@ -6385,7 +6390,7 @@ const OFFTOPIC_KEYWORDS = [
 <!-- ═══════════════════════════════════════════════════════════════════════
      CHAPTER 40 — Honest Error Reporting: Fail Loud, Not Silent
      ═══════════════════════════════════════════════════════════════════════ -->
-<div class="chapter">
+<div class="chapter" id="ch40">
   <h2>Chapter 40 — Honest Error Reporting: Fail Loud, Not Silent</h2>
   <p>Added: 22 July 2026 (S32 continuation)</p>
 
@@ -6471,7 +6476,7 @@ const OFFTOPIC_KEYWORDS = [
 <!-- ═══════════════════════════════════════════════════════════════════════
      CHAPTER 41 — TPM Limits: Process One at a Time, Not All at Once
      ═══════════════════════════════════════════════════════════════════════ -->
-<div class="chapter">
+<div class="chapter" id="ch41">
   <h2>Chapter 41 — TPM Limits: Process One at a Time, Not All at Once</h2>
   <p>Added: 22 July 2026 (S32 continuation)</p>
 
@@ -6679,13 +6684,171 @@ for (let catIdx = 0; catIdx &lt; categoryEntries.length; catIdx++) {
   </ol>
 </div>
 
+<div class="chapter" id="chapter-43">
+  <div class="chapter-num">Chapter 43</div>
+  <h2>Session #34 — When the Gate and the Prompt Disagree</h2>
+
+  <p>This chapter covers the longest silent stretch in the project's history: zero posts published
+  between July 18 and August 1, 2026, with no crash and no error — because two parts of the system
+  disagreed about what "good enough" means. It also covers the minute-arithmetic decision that
+  moved Phase 2 to hourly, the cleanup of 10 stale failed posts, and the discovery that a
+  cron-job.org trigger had never actually fired once since it was created in Session #17.</p>
+
+  <h3>43.1 The Contradiction</h3>
+
+  <p>The 400-word quality gate was added in Session #32 (<code>publisher.js</code>,
+  <code>passesQualityGate()</code>). It rejects any post under 400 words or without a "Why this
+  matters" closing. But the prompts in <code>gemini.js</code> still carried instructions written
+  before that gate existed:</p>
+
+  <pre><code># generateDigest():
+- Match the source word count as closely as possible. If the source is 200 words, write ~200 words.
+  If 400, write ~400. No minimum. No inflation.
+
+# generateBlendedDigest():
+- Word count: as much as sources support. No minimum, no padding.</code></pre>
+
+  <p>Gemini obediently wrote 130–389-word posts. The publisher then rejected every single one.
+  No crash, no error in the GHA logs — each Phase 2 run simply recorded the post as <code>failed</code>
+  and moved on. Every post queued from July 23 to August 1 failed the gate. The system looked
+  healthy. It was producing zero content.</p>
+
+  <p>The root cause was not the gate (Session #32's gate was fine) and not the model. It was the
+  <strong>contradiction between the gate and the prompt</strong>. The gate demanded 400+ words.
+  The prompt told the model there was no minimum. The model did exactly what the prompt said.</p>
+
+  <h3>43.2 Why Resetting Failed Posts Cannot Fix Them</h3>
+
+  <p>The obvious instinct is to reset the failed posts back to <code>pending_image</code> and let
+  Phase 2 retry them. That would have done nothing: <code>complete.js</code> contains zero
+  references to Gemini or any other LLM. Phase 2 <strong>publishes the content Phase 1 stored</strong>;
+  it never regenerates it. A retry would just re-run the quality gate against the same
+  130–389-word content and fail again.</p>
+
+  <p>Key insight: <strong>Phase 2 is a publisher, not a writer.</strong> When content fails a
+  quality gate, the fix has to happen upstream in Phase 1's prompt — not in a Phase 2 retry.
+  Reset-only recovery works for transient failures (image generation, network, quota) but never
+  for content that was wrong on arrival.</p>
+
+  <h3>43.3 The Fix — Felix's Improved Instruction</h3>
+
+  <p>Felix supplied a complete improved instruction. It was applied verbatim to both prompts
+  (commit <code>b2596f4</code>), adapted only for source count: <code>generateDigest()</code>
+  speaks of "the provided source" (singular), <code>generateBlendedDigest()</code> of "ALL
+  provided sources" (plural). The core block:</p>
+
+  <pre><code>- Write between 400 and 1000 words. The publisher rejects anything under 400 words — never write less.
+- Produce a complete, publication-ready article that accurately reflects the information in the provided source.
+- Use the source's own verified facts, names, dates, numbers, quotations, and terminology wherever applicable.
+- Expand the article through synthesis, explanation, context, comparisons, implications, and logical connections
+  that are directly supported by the provided source.
+- If the available source material is limited, provide additional explanatory context only when it follows
+  directly from the verified information already present in the source.
+- Never invent or speculate about facts, quotations, statistics, events, people, timelines, motivations, or outcomes.
+- Never repeat ideas or add filler solely to satisfy the minimum word count. Every paragraph must contribute
+  new, useful information to the reader.
+- Target 400–1000 words while prioritizing accuracy, clarity, completeness, and reader value over length.
+  Where appropriate, explain why the development matters, who is affected, the opportunities and risks it
+  presents, and what readers should watch next. These insights must be supported by the provided source
+  rather than speculation.</code></pre>
+
+  <p>Notice what this does that a simple "write 400+ words" instruction would not: it tells the model
+  <em>how</em> to expand legitimately (synthesis, context, implications — grounded in the source)
+  while simultaneously banning the two cheap ways to hit a word count (inventing facts, adding
+  filler). It turns the word-count target from a strain into an editorial standard.</p>
+
+  <h3>43.4 The Minute Arithmetic — Why Phase 2 Went Hourly</h3>
+
+  <p>Session #33 discovered GitHub Actions free-tier minutes (2,000/month) were nearly exhausted.
+  With Phase 2 firing ~61 times/day (48 from cron-job.org + 12-13 native), monthly consumption
+  was ~1,830 minutes — before counting Scout, podcast, and monitor runs. Option analysis:</p>
+
+  <ol>
+    <li><strong>Keep both at <code>*/30</code>:</strong> ~2,160 min/month — over the cap.</li>
+    <li><strong>Remove the native cron entirely:</strong> still ~2,160 min/month — the native
+    trigger was only ~13/day anyway.</li>
+    <li><strong>Hourly on both:</strong> ~24 runs/day total, ~720-750 min/month for Phase 2 — the
+    full suite fits under the cap.</li>
+  </ol>
+
+  <p>Hourly was chosen. <code>complete.yml</code>'s native cron was reduced <code>*/30</code> →
+  <code>0 * * * *</code> (commit <code>b8ec2de</code>), and cron-job.org was set to hourly to
+  match. The cost: a post can wait up to ~1 hour before publishing. The trade is explicit and
+  accepted — a bounded publish delay beats a pipeline that stops entirely mid-month.</p>
+
+  <p>Note: cron-job.org has no API token stored in the project, so its schedule is always changed
+  manually in Felix's dashboard. The code change (native cron) and the external change (cron-job.org)
+  must be kept in sync by hand.</p>
+
+  <h3>43.5 Deleting Stale Failed Posts</h3>
+
+  <p>The 10 failed posts in <code>pending_posts</code> (IDs 321–330, all <code>status: failed</code>)
+  were deleted rather than reset. Classification: 8 failed the quality gate (short content — the
+  Session #32 gate correctly caught them, but the prompt contradiction made that <em>every</em>
+  post, not the odd bad one), 1 hit a Supabase Storage mime error (<code>image/jpeg; charset=binary
+  is not supported</code>), and 1 hit AI Horde job expiry. Verified with a range query returning
+  <code>[]</code> after the delete.</p>
+
+  <h3>43.6 The Trigger That Never Fired — Podcast cron-job.org</h3>
+
+  <p>While verifying the pipeline, an audit of the podcast workflow's run history found something
+  remarkable: of all 43 podcast workflow runs, <strong>every single one was a native
+  <code>schedule</code> event</strong> — and zero were <code>workflow_dispatch</code>. The
+  "Scout Podcast Phase 1" cron-job.org job created in Session #17 had <strong>never actually
+  fired</strong>, not even once, in over a month.</p>
+
+  <p>This was not intentional disabling. It was never verified after being marked "done." The job
+  sat enabled but inactive while the native cron quietly did all the work (habitually late —
+  clustering around 08:00-09:00 UTC instead of the configured 06:00). The PAT was ruled out as a
+  cause: the Phase 2 cron-job.org job uses the same PAT and fires reliably 24+ times a day.</p>
+
+  <p>Felix re-enabled and reconfigured it: schedule <code>0 7 * * *</code> (07:00 Africa/Lagos =
+  06:00 UTC, matching <code>scout-podcast.yml</code>'s native <code>0 6 * * *</code>), failure
+  notifications enabled so it cannot die silently again, and next executions confirmed for
+  Aug 2/3/4. Bonus: cron-job.org's proven reliability may also fix the native cron's habitual
+  lateness.</p>
+
+  <p>Lesson: <strong>an external trigger that was set up once and never verified is a source of
+  silent risk, not a source of reliability.</strong> Trusting a job because it was configured is
+  the same mistake as trusting a prompt because it was written. Both need observable proof of
+  firing.</p>
+
+  <h3>43.7 Lessons</h3>
+
+  <ol>
+    <li><strong>Quality gates and prompts must agree.</strong> A gate that rejects what the prompt
+    produces is a contradiction that produces silence, not errors. When adding a gate, read the
+    prompt it governs and remove any instruction that conflicts with it.</li>
+    <li><strong>Phase 2 is a publisher, not a writer.</strong> Content that fails a quality gate is
+    failed upstream. Reset-and-retry only recovers transient failures.</li>
+    <li><strong>Tell the model how to expand, not just how long to be.</strong> A bare minimum word
+    count invites filler and fabrication. Coupling the count with legitimate expansion paths
+    (synthesis, implications) and explicit bans (no invented facts, no repetition) makes the count
+    a quality bar instead of a stretch goal.</li>
+    <li><strong>Minute budgets change architecture.</strong> A 1-minute minimum per run means
+    frequency, not duration, is the lever that keeps the suite under a 2,000-minute cap.</li>
+    <li><strong>Verify every external trigger actually fires.</strong> The podcast cron-job.org job
+    was marked done in Session #17 and had never fired. When a trigger is critical, prove it with
+    run history — once, then again after any reconfiguration.</li>
+  </ol>
+
+  <div class="chapter-summary">
+    <p><strong>One-line summary:</strong> A 400-word quality gate paired with a prompt that said
+    "no minimum" produced zero posts for two weeks with no error at all — the pipeline's longest
+    silent failure, fixed by making the prompt and the gate agree, then hardened by the hour-by-hour
+    minute math that moved Phase 2 to hourly, the deletion of 10 unfixable stale posts, and the
+    revival of a podcast trigger that had never once fired.</p>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 26 July 2026 — Chapter 42 added: GHA minutes exhaustion diagnosis,
-    Scout 'i is not defined' crash fix, Phase 2 minute optimization, cron-job.org history.
+    Last updated: 1 August 2026 — Chapter 43 added: Session #34 quality-gate
+    prompt contradiction fix (zero posts July 18-Aug 1), Phase 2 moved to hourly,
+    stale failed posts deleted, podcast cron-job.org trigger revived.
   </p>
 </div>
 
