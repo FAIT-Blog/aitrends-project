@@ -1,5 +1,5 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-08-01 (Session #34 — quality-gate prompt fix (400-1000 words), Phase 2 cron hourly, 10 stale failed posts deleted, podcast cron-job.org trigger found dead + revived)
+**Last Updated:** 2026-08-02 (Session #35 — Cloudflare Workers AI image provider (new default), Phase 1 quality-gate alignment (400 words + one-time retry), provider order reverted to Groq-primary + Groq TPD skip, GHA GEMINI_API_KEY secret synced, Gemini free-tier 20 req/day cap discovered, new mandatory rules: CLAUDE.md changes must be mirrored in full in TRAINING_MANUAL.html + SESSION_LOG.html; and the earliest documentation style is the standard for all new TRAINING_MANUAL + SESSION_LOG entries)
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
@@ -76,12 +76,13 @@ Global RSS Feeds (TechCrunch, VentureBeat, OpenAI, Google AI, HuggingFace, etc.)
     4. Deduplicates against Supabase scout_memory table
     5. Scores articles by evergreen potential
     6. Groups by category, caps at MAX_ARTICLES=5
-    7. Generates 800-word digest via Gemini 3.5 Flash, grounded strictly in the source (ONE STORY ONLY)
-    8. Submits image job to image provider (HF: returns null jobId; Fal/AI Horde: returns request_id)
-    9. Saves to pending_posts table (status: pending_image) — nothing published yet
-   10. Saves trending terms to evergreen_vocab in Supabase
-   11. Marks articles as seen in scout_memory
-   12. EXITS — Phase 2 (complete.yml, every 5 min) picks up pending posts:
+     7. Generates digest via Groq Llama 3.3 70B (primary) / gemini-3.5-flash (fallback),
+        grounded strictly in the source (ONE STORY ONLY), 400-1000 words
+     8. Submits image job to image provider (Cloudflare: synchronous, returns image buffer in Phase 2)
+     9. Saves to pending_posts table (status: pending_image) — nothing published yet
+    10. Saves trending terms to evergreen_vocab in Supabase
+    11. Marks articles as seen in scout_memory
+    12. EXITS — Phase 2 (complete.yml, hourly) picks up pending posts:
        → Calls image provider → uploads to Supabase Storage → publishes → notifies Slack
         │
         ▼
@@ -120,9 +121,10 @@ Rotate all three together if you ever rotate the key.
 - Border radius: 8px standard, 12px cards
 - Card style: Dark surface (`#111827`), 1px border (`#1f2937`), subtle hover lift
 
-**Cover Image Style (HuggingFace FLUX.1-schnell → Supabase Storage):**
-- Images generated via AI Horde (SDXL) and permanently stored in Supabase Storage (not lazy URLs)
-- **⚠️ HF FLUX.1-schnell DEPRECATED (Session #30):** HF Inference API returned 410 on all text-to-image models. Default provider switched to AI Horde (free, SDXL quality). Fal.ai ($0.003/image, FLUX Schnell) available as upgrade path.
+**Cover Image Style (Cloudflare Workers AI → Supabase Storage):**
+- Images generated via Cloudflare Workers AI (FLUX Schnell, ~10,000 neurons/day free, no credit card) and permanently stored in Supabase Storage (not lazy URLs)
+- **⚠️ HF FLUX.1-schnell DEPRECATED (Session #30):** HF Inference API returned 410 on all text-to-image models. Default provider switched to AI Horde (Session #30), then to **Cloudflare Workers AI (Session #35 — new default)**. Fal.ai ($0.003/image, FLUX Schnell) available as upgrade path.
+- **Provider switch:** `IMAGE_PROVIDER` env var (`.env` + GitHub Secrets) selects `cloudflare` (default) · `aihorde` · `fal` · `huggingface` (deprecated). Phase 2 uses the provider stored on each `pending_posts` row, not the current env var — you can switch providers mid-flight without breaking queued posts.
 - Story-specific: images must depict the specific story — not a generic stock-photo tech scene
 - Art styles rotate per post: watercolour painting, vector flat illustration, editorial ink sketch, bold risograph print
 - BANNED compositions: person-at-laptop-near-window-with-city-view — explicitly prohibited in Gemini prompt
@@ -327,13 +329,13 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 - **`SCOUT_API_KEY` must stay in sync** across three places: `.env`, GH Secret, Vercel
 - **Always use ES modules** — `package.json` has `"type": "module"`. Never use `require()`
 - **`index.js` is NOT used by GitHub Actions** — GHA calls `scout.js` directly. `index.js` is for VPS/server mode only
-- **Never remove the Gemini fallback or retry logic** — `gemini-3.5-flash` gets 503 under load; 3-attempt retry with fallback to `gemini-2.5-flash` must stay
+- **Never remove the Gemini fallback or retry logic** — Groq primary (3-attempt retry, 65s delay) with `gemini-3.5-flash` fallback must stay; see the Groq/Gemini quota rules below for the TPD pre-check that skips Groq's retry loop when near its daily cap
 - **Feed categories must match exactly:** `anthropic`, `industry`, `ai-models`, `tools` — must match `VALID_CATEGORIES` in aitrends.ng `/api/posts/create`
 - **`hasSeen()` throws on Supabase error** — intentional. A DB outage must halt the run, not cause duplicate posts
 - **Keep `process.exit(0)` in the GHA run command** — Supabase realtime WebSocket keeps Node alive indefinitely without it
 - **`maxOutputTokens` must stay at 8192 or higher** — 800-word content + markup + FAQ + all 5 fields exceeds 4000 tokens
-- **`GEMINI_API_KEY` is tied to a fresh project (free tier)** — old project hit Tier 1 billing after28 days; new key has fresh free-tier quota. Rotate before expiry or create another new project
-- **`GROQ_API_KEY` provides cross-provider fallback** — Groq Llama 3.3 70B (14,400 req/day free) is the fallback when Gemini returns non-retryable errors. Different infrastructure, won't go down at the same time
+- **`GROQ_API_KEY` is the PRIMARY provider (Session #35 decision)** — Groq Llama 3.3 70B (100,000 TPD free) is sized for primary duty across 4 runs/day × 4 categories. When Groq's TPD is near-exhausted (≥95% of limit, parsed from the `tokens per day (TPD): Limit X, Used Y` error format and cached module-level), its 3×65s retry loop is skipped entirely and Gemini is called directly.
+- **`GEMINI_API_KEY` is the FALLBACK provider (Session #35 decision)** — `gemini-3.5-flash` free tier has a **hard structural cap of 20 requests/day** (confirmed 2026-08-02 via 429 body: `generate_content_free_tier_requests, limit: 20`). This is not engineerable away — 20/day is too small for a 4-run × 4-category blend pipeline, so Gemini serves only as backup capacity once Groq is exhausted. The key is tied to a fresh GCP project (free tier); old project hit Tier 1 billing after 28 days. Rotate before expiry or create another new project.
 
 ### Pipeline (13 Steps)
 ```
@@ -347,10 +349,12 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 4. Score each article by evergreen potential (vocab match count)
 5. Group by category, sort by score, cap at MAX_ARTICLES=5
 6. Skip categories with < MIN_ARTICLES=1 fresh articles
-7. Generate an accurate digest via Gemini 3.5 Flash
-   (fallback: gemini-2.5-flash on 503; retry up to 3 times, 12s delay)
-8. Validate output: title + content >= 400 chars before proceeding
-9. Submit image job to active provider (HF FLUX.1-schnell / Fal.ai / AI Horde) — returns jobId or null for HF
+7. Generate an accurate digest via Groq Llama 3.3 70B
+   (fallback: gemini-3.5-flash on Groq TPD exhaustion / failure; see Critical Rules)
+8. Validate output: title + content >= 400 words before proceeding
+   (contentWordCount() in scout.js — matches the publisher.js 400-word gate;
+    one-time expansion retry if short, then hard stop; editorial rows fail terminally)
+9. Submit image job to active provider (Cloudflare FLUX Schnell — synchronous, new default) — returns jobId or null for HF
 10. Save to pending_posts table (status: pending_image) — Phase 2 handles publish
 11. Save TRENDING_TERMS to evergreen_vocab in Supabase
 12. Mark articles as seen in scout_memory (2-attempt retry on failure)
@@ -362,8 +366,9 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 scout-agent/
   scout.js       ← Core pipeline. Exports runScout(). Called by GHA.
                    Contains EVERGREEN_ENTITIES baseline (40 terms) + evergreenScore().
-  gemini.js      ← Gemini API integration. General-AI editorial prompt. 3-attempt retry.
-                   Primary: gemini-3.5-flash | Fallback: gemini-2.5-flash
+  gemini.js      ← LLM API integration. General-AI editorial prompt. 3-attempt retry.
+                   Primary: Groq Llama 3.3 70B | Fallback: gemini-3.5-flash
+                   Groq TPD pre-check skips its retry loop when near daily cap.
                    Returns: { title, content, excerpt, imagePrompt, trendingTerms }
   feeds.js       ← All 17 RSS feeds (4 Africa-specific + 13 global)
   felix.js       ← Reads #scout-editor Slack channel (last 8h). Parses URLs + text.
@@ -420,21 +425,25 @@ scout-agent/
 ```env
 SUPABASE_URL=https://tixagzzcaeqdohuyrngl.supabase.co
 SUPABASE_SECRET_KEY=[REDACTED]
-GEMINI_API_KEY=[REDACTED]
+GEMINI_API_KEY=[REDACTED]         ← FALLBACK provider (groq is primary)
+GROQ_API_KEY=[REDACTED]           ← PRIMARY provider
 BLOG_API_URL=https://aitrends-ng.vercel.app/api/posts/create
 SCOUT_API_KEY=[REDACTED]          ← Must match Vercel and aitrends.ng .env.local
 SLACK_WEBHOOK_URL=[REDACTED]      ← Outgoing webhook to #aitrends-feed
 SLACK_BOT_TOKEN=[REDACTED]        ← Bot token to READ #scout-editor
 TAVILY_API_KEY=[REDACTED]         ← Web search for same-story cross-referencing (tavily.com)
+IMAGE_PROVIDER=cloudflare         ← Image provider: cloudflare (default) · aihorde · fal · huggingface (deprecated)
+CLOUDFLARE_API_TOKEN=[REDACTED]   ← Cloudflare Workers AI image generation
+CLOUDFLARE_ACCOUNT_ID=[REDACTED]  ← Cloudflare account for the API token
 ```
 
 **GitHub Actions Secrets required:**
-`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY`, `BLOG_API_URL`, `SCOUT_API_KEY`, `SLACK_WEBHOOK_URL`, `SLACK_BOT_TOKEN`, `TAVILY_API_KEY`
+`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `BLOG_API_URL`, `SCOUT_API_KEY`, `SLACK_WEBHOOK_URL`, `SLACK_BOT_TOKEN`, `TAVILY_API_KEY`, `IMAGE_PROVIDER`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 
 **Slack app scopes required for `SLACK_BOT_TOKEN`:**
-`channels:read`, `channels:history`, `groups:read`, `groups:history`
+`channels:read`, `channels:history`, `groups:read`, `groups:history`, `chat:write`
 
-**⚠️ Discrepancy found Session #19 — this list is incomplete.** These 4 scopes only cover *reading* #scout-editor. The bot token also calls `chat.postMessage` (`replyToFelix()` in slack.js, used since Session #9, plus the new `replyFailureToFelix()` added Session #19) — that requires `chat:write` (Slack reports the requirement as `chat:write:bot`), which was never granted. Confirmed live via the response headers on a real `chat.postMessage` call: `x-oauth-scopes: channels:history,channels:read,groups:history,groups:read` — no `chat:write`. **Practical effect: every threaded Slack reply this pipeline has ever attempted to send has been silently failing since Session #9.** Not fixable from code — see Section 7 Critical to-do.
+**✅ Fixed (Session #24, 24 June 2026):** the Session #19-discovered `chat:write` gap is closed. Felix added the scope and reinstalled the app; a live `auth.test` confirmed `chat:write` in the granted scopes (bot user `scout_editor`); the GH Actions `SLACK_BOT_TOKEN` secret was synced byte-identical from the verified local `.env` value. Threaded replies (`replyToFelix()`, `replyFailureToFelix()`) now reach Felix. Historical note preserved below for context — **no longer actionable**.
 
 ### Gemini Prompt — Editorial Mandate (rewritten Session #25 — Africa-first mandate removed)
 The editorial prompt in `gemini.js` enforces:
@@ -483,6 +492,9 @@ npm start   # runs index.js
 - **Gemini daily-quota cooldown** (Session #27, timezone fix Session #28) — `callGeminiWithFallback()` in gemini.js (shared by generateDigest/generateBlendedDigest/generateEditorialDigest/gemini-podcast.js) falls back to gemini-2.5-flash on 429 as well as 503; `gemini_quota_cooldown` Supabase table (single-row, same pattern as `homepage_monitor`) records when both models 429 in the same call; scout.js and scout-podcast.js check it before any RSS/Tavily/Gemini work and skip the entire run if cooldown was set less than 20 hours ago, plus `break` out of remaining categories/channels immediately if exhaustion is hit mid-run; once-per-day Slack alert via `notifyQuotaExhausted()` in slack.js. Cooldown uses elapsed-time staleness (20h threshold) rather than UTC calendar-date comparison — the old UTC-date approach caused the cooldown to re-set itself before midnight PT, permanently blocking every run for an extra day (Session #28 root cause)
 - **Quality gate prompt alignment** (Session #34, commit b2596f4) — both `generateDigest()` and `generateBlendedDigest()` in gemini.js previously told the LLM "No minimum. No inflation." while `publisher.js` rejected posts under 400 words — the contradiction caused **zero posts published since July 18**. Both prompts now demand 400-1000 words, synthesis-driven expansion from source facts only, an explicit ban on invented facts/quotes/speculation and on filler/repetition to hit the count, and why-it-matters/who's-affected/risks-and-opportunities guidance when the sources support it. Fixes the root cause rather than the symptom (the Session #32 quality gate itself was fine — the prompts just never told Gemini about it)
 - **Phase 2 cron hourly** (Session #34, commit b8ec2de) — native `complete.yml` cron `*/30` → `0 * * * *` to hold the full suite under the 2,000 min/month free-tier cap; cron-job.org set to hourly to match (manual, Felix)
+- **Cloudflare Workers AI image provider** (Session #35, commit 310e87b) — new default `IMAGE_PROVIDER=cloudflare`. FLUX Schnell via Cloudflare Workers AI, ~10,000 neurons/day free, no credit card, synchronous (image buffer returned in Phase 2). New `image-providers/cloudflare.js`; Phase 2 env wired in complete.yml (commit 1b3d9a2); `.gitignore` + `.DS_Store` cleanup (fd97753). Phase 2 still uses the provider stored on each `pending_posts` row, so switching providers mid-flight never breaks queued posts
+- **Phase 1 quality-gate alignment** (Session #35, commit 84fa17a) — `contentWordCount()` helper + `MIN_DIGEST_WORDS = 400` added to scout.js; every Phase 1 path (RSS, blend, editorial) now enforces the publisher.js 400-word gate *before* queueing, with a one-time expansion retry for short content then a hard stop. Editorial failures now call `failEditorialRow()` — terminal, no silent re-loop (kills the Session #19 pattern at the source)
+- **Provider order reverted to Groq-primary + Groq TPD skip** (Session #35, commit 479e025) — Groq Llama 3.3 70B primary, gemini-3.5-flash fallback (undoes the same-day Gemini-primary experiment 5b879a8). New `parseGroqTpd()`/`groqTpdExhausted()` in gemini.js parse Groq's `tokens per day (TPD): Limit X, Used Y` error format and cache module-level; once Groq is ≥95% of its daily limit the 3×65s retry loop is skipped and Gemini is called directly. `lastServedProvider` tracker gates the blend-mode 65s TPM wait to Groq-served calls only
 
 ### YouTube Podcast Pipeline — Key Details
 - **SCOUT_MODE=podcast** routes `scout.js` → `runPodcastScout()` in `scout-podcast.js`
@@ -691,6 +703,10 @@ silently deleted, per Felix's instruction to point out discrepancies with commen
 - ✅ **Phase 2 cron hourly (Session #34, commit b8ec2de)** — `complete.yml` native `*/30` → `0 * * * *`; cron-job.org set to hourly to match (manual, Felix). Accepts up to ~1h publish delay in exchange for keeping the full suite (Phase 2 ~720-750 + Scout + podcast + monitor) under the 2,000 min/month free-tier cap.
 - ✅ **10 stale failed posts deleted (Session #34)** — `pending_posts` IDs 321-330 (July 23-Aug 1, all `failed`) removed. 8 failed the quality gate (short content), 1 hit a Supabase storage mime error (`image/jpeg; charset=binary`), 1 hit AI Horde job expiry. Verified range returns `[]` after delete.
 - ✅ **Podcast cron-job.org trigger found dead + revived (Session #34)** — the "Scout Podcast Phase 1" job (created Session #17) had **never fired**: all 43 podcast runs in GHA history were native `schedule` events, zero `workflow_dispatch`. Not intentionally disabled — never verified working after being marked done. Felix enabled it: `0 7 * * *` (07:00 Africa/Lagos = 06:00 UTC, matching `scout-podcast.yml`'s `0 6 * * *`), failure notifications on, next executions confirmed Aug 2/3/4. Bonus: may fix the native cron's habitual 08:00-09:00 UTC lateness, since cron-job.org runs on schedule.
+- ✅ **Phase 1 quality gate aligned with publisher.js (Session #35, commit 84fa17a)** — `contentWordCount()` + `MIN_DIGEST_WORDS = 400` in scout.js enforce the same 400-word floor the publisher rejects under, *before* queueing. One-time expansion retry (retryInstruction) for short content, then hard stop. Applied to all three Phase 1 paths (RSS digest, blend digest, editorial). Editorial rows that still fail now call `failEditorialRow()` — terminal, no silent re-loop.
+- ✅ **Image provider default switched to Cloudflare Workers AI (Session #35, commit 310e87b)** — AI Horde deprecated as default (SDXL quality, ~30min queue wait). Cloudflare FLUX Schnell: ~10,000 neurons/day free, no credit card, synchronous. Phase 2 Cloudflare env wired (1b3d9a2). `IMAGE_PROVIDER=cloudflare` GH secret set. Mid-flight switching is safe — Phase 2 uses the provider stored on each `pending_posts` row.
+- ✅ **Provider order reverted to Groq-primary + Groq TPD skip (Session #35, commit 479e025)** — Undoes the same-day Gemini-primary experiment (5b879a8). Root cause: Gemini free tier has a **hard structural cap of 20 req/day** for gemini-3.5-flash (confirmed via 429 body `generate_content_free_tier_requests, limit: 20`; a 50s wait still 429'd) — too small for a 4-run/day × 4-category blend pipeline. Groq Llama 3.3 70B's 100,000 TPD free tier is the only provider sized for primary duty. New `parseGroqTpd()`/`groqTpdExhausted()` parse Groq's `tokens per day (TPD): Limit X, Used Y` error format, cache module-level, and skip Groq's 3×65s retry loop entirely once ≥95% of daily limit is consumed (2026-08-02 the loop was burning 65s × 3 × sources on a Groq at 99,059/100,000). `lastServedProvider` tracker makes the blend-mode 65s TPM wait Groq-served-only, so Gemini-served calls don't burn 65s per source.
+- ✅ **GHA `GEMINI_API_KEY` secret synced (Session #35)** — the GH Actions secret held the *old dead key* (from the Session #29 rotation). Every run validated HTTP 400 "API key not valid" against Gemini while Groq's TPD was also exhausted — so run `30716509840` timed out at 15m16s with every source hitting "Both providers failed" + Slack alerts. Secret updated to the working local `.env` value via `gh secret set` (verified SET OK, length 53). Run `30728426220` then validated both keys and queued post 337.
 - ✅ **Africa-first editorial mandate removed entirely (Session #25, 25 June 2026).** Felix's decision, with his own root-cause diagnosis: the Africa relevance gate was itself causing the recurring forced-phrase/fabrication problem (Sessions #7, #8, #14, #23) — when a story had no real Africa angle, Gemini still tried to satisfy the gate by manufacturing one (forced "Lagos, Accra, Nairobi" mentions, bolded phrases to manufacture an impression of relevance). A narrower per-phrase ban doesn't fix this; it just pushes Gemini toward a different fabrication. AITrends.ng is now a general-AI news site. Changes: removed the full "AFRICA RELEVANCE GATE" block (checklist, `SKIP_NO_AFRICA_RELEVANCE` sentinel, the Session #23 ai-models extra-strictness clause — now moot) from both `generateDigest()` and `generateBlendedDigest()` in gemini.js; replaced the old conditional "What this means for Africa" closing sentence with a varied-construction instruction (implication / forward-looking note / skeptical beat / pointed question, explicitly banning fixed labels like "Bottom line:" — mirrors the existing Session #7 "TITLE VARIETY" fix, same mechanism applied to the closing sentence); removed the now-dead sentinel check in scout.js. `generateEditorialDigest()` needed zero changes — it never had an Africa gate by design. Explicitly **not** changed: `feeds.js` (still has the 14 Africa-specific outlets, Felix's call — "keep all current feeds as-is"), `EVERGREEN_ENTITIES`'s Africa-related scoring-boost terms (Felix's call — "leave them in, harmless either way"), `scout-podcast.js`/`gemini-podcast.js` (already fully general). Verified live with one real `runScout()` run (not a batch, given the quota cap): 2 posts queued — one genuinely Africa-relevant (Nigeria's NITDA digital sovereignty strategy, scored on its own merits, not forced) and one purely global with zero Africa framing (Anthropic vs. Alibaba Claude-distillation dispute) — both closing sentences varied in construction, neither used a fixed label, no sentinel leakage. Branding/copy updated to match across CLAUDE.md (this section, tagline, voice, audience in Section 1) and aitrends.ng (layout.tsx titles, about page, Sidebar, NewsletterSignup, feed.xml) — `npm run build` clean afterward. **This is forward-looking only — the 121 existing published posts remain untouched**, per Felix's explicit instruction ("All current live posts are to remain whether relevant or not").
 - ✅ **Add second Anthropic feed source** — `hnrss.org/newest?q=Anthropic&points=10` added to feeds.js (Session #6). anthropic category now has 2 feeds; MIN_ARTICLES=2 satisfied. Feed count: 24 → 25.
 - ✅ **Assess Gemini capability after simplification** — Audit passed (Session #8 continuation, 12 June): 5 posts reviewed. No asterisks, 1 source URL, title variety confirmed. Gemini accurate-rewrite prompt working as intended.
@@ -823,6 +839,61 @@ Claude Code wrote summary-level entries for Turns 8–22 instead of the full ver
 
 All 16 missing turns were retroactively written in full (943 lines, commit 906e7af). The lesson: stating "I will do better" in chat is meaningless — the understanding must be baked into the documents so every future session starts with this rule visible and non-negotiable. Do not economise. Do not defer the log to the end. Do not assume a summary is acceptable because the session is long.
 
+### CLAUDE.md changes MUST be mirrored in the other two documents — updated Session #35 (2 August 2026)
+
+**Mandatory. Non-negotiable. Felix's explicit rule.**
+
+Every change made to `CLAUDE.md` — in ANY session — must be **indicated and listed in full** in BOTH `TRAINING_MANUAL.html` AND `SESSION_LOG.html`. The two documents are not optional recipients: they are mandatory mirrors of whatever this master spec says.
+
+This applies to every kind of CLAUDE.md modification, including (but not limited to):
+- Section additions, deletions, renames, or reordering
+- Rule additions or changes (Critical Rules, "Must Not Do", quota/provider rules, etc.)
+- Pipeline/architecture changes (steps, providers, cron schedules, env vars, secrets)
+- New completed-work entries and to-do status changes (Section 7)
+- Session History table rows (Section 10)
+- The "Last Updated" header line
+- Even a one-line copy correction
+
+**How to comply — the concrete test:**
+Whenever you report a CLAUDE.md change to Felix (for example: "40 insertions / 23 deletions across 7 sections"), that exact change must **also be reflected in full** in TRAINING_MANUAL.html and SESSION_LOG.html — with the same detail, the same code/file references, the same before/after, and the same reasoning. A summary of a summary is not compliance. If you can point to a CLAUDE.md edit and cannot also point to the full record of it in the other two documents, you have not finished the task.
+
+**Order of operations:**
+1. Update `CLAUDE.md`
+2. Immediately update `SESSION_LOG.html` — verbatim log of the change (per the requirement above)
+3. Immediately update `TRAINING_MANUAL.html` — add a new chronological chapter/section capturing the change in full (the manual is append-only: never edit past chapters; new developments go in new chapters at the end)
+4. Only then consider the change complete
+
+**Why this matters — Felix's explicit instruction (2 August 2026):**
+The three documents are one teaching system. TRAINING_MANUAL.html teaches the reader how the system evolved; SESSION_LOG.html records every turn verbatim; CLAUDE.md is the living spec. If CLAUDE.md changes without the other two mirroring it, the documents drift apart and the training material becomes false. Treat the three as a single atomic unit: change one → change all three, fully.
+
+### Documentation style standard — the earliest style is the standard (updated Session #35, 2 August 2026)
+
+**Mandatory. Non-negotiable. Felix's explicit rule.**
+
+**The standard:** the EARLIEST documentation style is the standard, and all new content must conform to it.
+- **TRAINING_MANUAL.html:** Chapters 1–21 (the earliest chapters) are the reference model. They have a clean colour combination, clear indentation, uniform orientation, consistent font types and sizes, clean clear margins, and a visually consistent chapter structure. Later chapters (Chapter 29 onward) drifted away and are NOT the model.
+- **SESSION_LOG.html:** Sessions 1–14 (the earliest sessions) are the reference model for the same reasons. Later sessions are not uniform and are NOT the model.
+
+**Concrete TRAINING_MANUAL.html requirements (matching Chapters 1–21):**
+1. Chapter opens with `<div class="chapter" id="...">` containing a `<div class="chapter-num">Chapter N</div>` followed by a clean descriptive `<h2>` title. The "Chapter N" label lives in the `chapter-num` element — never inline in the `<h2>` (the later "Chapter 40 — ..." / "Session #N — ..." heading style is the drift to avoid).
+2. Two-space HTML indentation throughout; consistent opening (`.page` with `padding: 60px 24px 120px`), consistent margins between blocks.
+3. Use ONLY CSS classes that are actually defined in the `<style>` block: `.chapter`, `.chapter-num`, `.callout` (`.info`/`.warn`/`.success`/`.danger`), `.steps`/`.step`/`.step-num`/`.step-content`, `.tip`, `.badge-*`, `.diagram`, `.lang`, syntax colours (`.kw`, `.fn`, `.str`, `.cmt`, `.num`, `.cls`, `.var`), and styled tables. NEVER invent new classes (`.chapter-number`, `.chapter-date`, `.chapter-summary`) — they are undefined in CSS, render unstyled, and are the direct cause of the later chapters looking broken.
+4. Use the shared palette from `:root` (`--bg: #0a0a0f`, `--surface: #111827`, `--blue: #2563eb`, `--gold: #f59e0b`, `--green`, `--red`, `--purple`, `--text: #e5e7eb`, `--muted: #6b7280`, `--code-bg: #0d1117`). No inline `style=` colour overrides.
+5. Body font `-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif` at 15px; code in monospace at `0.82rem`. Headings via the existing `h2/h3/h4` rules. No font-size/colour inline overrides.
+6. If a needed visual element has no defined CSS class, add its CSS definition to the `<style>` block FIRST (matching the existing design language), then use the class. Unstyled content is a bug.
+
+**Concrete SESSION_LOG.html requirements (matching Sessions 1–14):**
+1. Every turn is a `<div class="turn user">` or `<div class="turn assistant">` pair with a `.label` and a `.bubble`. Use `<hr>` separators and `<!-- TURN N -->` comments between turns, exactly as Sessions 1–14 do.
+2. Felix's words go inside the user bubble verbatim — never paraphrased.
+3. Every tool call is recorded with an `<h4>Read: <path></h4>` / `<h4>Bash: <cmd></h4>` header and the full output in `<pre><code>`. No summaries of tool output.
+4. Do not add inline `style=` attributes to session/turn wrappers (the Session #15 pattern of `style="margin-bottom:60px"` on a bare `<div>` is the drift to avoid). If a session block needs structure, define a class in the `<style>` block.
+5. Keep the session header consistent: `<h2>Session #N — date — topic</h2>` plus a short meta line, matching Sessions 13–14's format.
+
+**Compliance test:**
+Before a chapter or session entry is considered done, check that it visually matches the earliest model — same classes, same indentation, same fonts, same palette, same margins. If it would look out of place next to Chapter 1 or Session 1, it is not finished.
+
+**Scope note:** This rule is forward-looking. Existing chapters/sessions are left as historical record per the append-only convention. New entries must conform. Felix may ask for a one-time restyle pass of the drifted later chapters/sessions at a later date.
+
 ### Document push strategy — updated Session #15 (18 June 2026)
 
 Felix's explicit instruction: SESSION_LOG.html and TRAINING_MANUAL.html are committed locally but NOT pushed to GitHub until further notice. CLAUDE.md is pushed to GitHub at the end of every session.
@@ -881,3 +952,4 @@ Felix's explicit instruction: SESSION_LOG.html and TRAINING_MANUAL.html are comm
 | S32 | 22 July 2026 | both + docs | Adopted AEIF editorial constitution (816-page PDF): editorial identity, voice rules, evidence distinction, "Why this matters" closing added to all 3 Gemini prompts in `gemini.js`. Soft quality gate added to `publisher.js` (h3 check, word count 400–2500, banned words, "Why this matters" closing). `complete.js` updated to handle null return from quality gate. About page rewritten (`app/about/page.tsx`): leads with mission, 6 new sections (Mission, Philosophy, How We Work, Who We Write For, Editorial Principles, Why We Built It). Gemini key dead (HTTP 401) — switched to Groq-only mode: `callGeminiWithFallback` skips Gemini entirely when `GEMINI_API_KEY` unset, calls Groq Llama 3.3 70B directly. New Groq key `gsk_NL4oodji...` synced to `.env` and GitHub Actions. `llama-3.3-70b-versatile` initially blocked at org level (only `llama-3.1-8b-instant` worked); Felix enabled 70B in Groq org settings, confirmed working. Commits: `5773a81` (scout-agent), `8d0e235` (aitrends-ng).  |
 | S333 | 26 July 2026 | scout-agent + aitrends-project | Diagnosed why pipeline stopped July 24: GHA free-tier minutes exhausted (~10:00 UTC, all runs get `runner_id: 0`). Deep minute audit: downloaded all 3,338 workflow runs, computed daily rates (June: ~52/day, July: ~74/day — 42% increase), three-period analysis (normal/drought/post-fix), actual Scout run durations (~2.5 min avg due to 65s waits), recalculated totals (June: ~1,857 min, July through day 24: ~2,094 min — over 2,000 free tier). Drought period (July 8-18) burned 814 minutes with zero posts published — Phase 2 ran 671 times finding empty queue. cron-job.org history traced to Session #4 (GHA native cron unreliable, `GITHUB_TOKEN` 403 on workflow_dispatch). Found `ReferenceError: i is not defined` at `scout.js:542` — introduced in Session #32 commit `60c8410` (65s delay check used `i` but loop was `for...of` with no index). Fixed: (1) `scout.js` — replaced `i` with `catIdx` counter via indexed `for` loop, (2) `complete.yml` — reduced Phase 2 cron from `*/15` to `*/30` (saves ~48 min/day), (3) `memory.js` — added fast count check before full `getPendingPosts()` query (returns early on empty queue), (4) `complete.js` + `slack.js` — URL trimming safety (`.toString().trim()` on all URL construction). All syntax checks passed. Commit `a0af3ed`, pushed to FAIT-Blog/scout-agent. Pipeline still blocked by minutes quota — needs payment method or Aug 1 reset. |
 | S34 | 1 Aug 2026 | scout-agent + aitrends-project | Restored publishing after the Session #32 quality-gate contradiction. Diagnosed zero posts published since July 18: both `gemini.js` prompts said "No minimum. No inflation." while `publisher.js:39` rejects under 400 words and requires a "Why this matters" closing — all 10 posts queued July 23-Aug 1 failed the gate (8 content-failed, 1 Supabase mime `image/jpeg; charset=binary` error, 1 AI Horde job expiry). Applied Felix's full improved instruction verbatim to `generateDigest()` + `generateBlendedDigest()`: 400-1000 words, synthesis from source facts only, ban on invented facts/quotes/speculation, ban on filler/repetition to hit the count, why-it-matters/who's-affected/risks-and-opportunities guidance when source-supported. Commit `b2596f4` pushed. Phase 2 cron dropped `*/30` → hourly (`0 * * * *`) to stay under the 2,000 min/month cap (native commit `b8ec2de`; cron-job.org set to hourly manually by Felix) — accepts ~1h publish delay. Deleted all 10 stale failed `pending_posts` rows (321-330, verified `[]` after). Then traced the "Scout Podcast Phase 1" cron-job.org job: all 43 podcast runs in GHA history were native `schedule`, zero `workflow_dispatch` — it had never fired since Session #17 setup, not intentionally disabled, never verified working. PAT ruled out (Phase 2's cron-job job uses same PAT and fires 48×/day). Felix enabled it: `0 7 * * *` (07:00 Africa/Lagos = 06:00 UTC, matching `scout-podcast.yml`'s `0 6 * * *`), failure notifications on, next executions verified Aug 2/3/4. Bonus: cron-job.org's reliability may fix the native cron's ~2-3h lateness on podcast posts. |
+| S35 | 2 Aug 2026 | scout-agent + aitrends-project | Four threads. (1) **Cloudflare Workers AI image provider** (commit `310e87b`, new default): AI Horde deprecated as default (SDXL quality, ~30min queue wait, anonymous). Cloudflare FLUX Schnell — ~10,000 neurons/day free, no credit card, synchronous (image buffer returned in Phase 2). New `image-providers/cloudflare.js`; `IMAGE_PROVIDER=cloudflare` GH secret set; Phase 2 Cloudflare env wired into complete.yml (`1b3d9a2`); `.gitignore` + `.DS_Store` cleanup (`fd97753`). Phase 2 still uses the provider stored on each `pending_posts` row, so mid-flight provider switches never break queued posts. (2) **Phase 1 quality-gate alignment** (commit `84fa17a`): `contentWordCount()` + `MIN_DIGEST_WORDS = 400` added to scout.js — every Phase 1 path (RSS, blend, editorial) now enforces the publisher.js 400-word gate *before* queueing, with a one-time expansion retry then hard stop. Editorial failures call `failEditorialRow()` — terminal, no silent re-loop. (3) **Provider re-ordering saga — final state Groq-primary + Groq TPD skip** (commit `479e025`, undo of `5b879a8`): a same-day experiment flipped to Gemini-primary; a live re-triggered run exposed the GH `GEMINI_API_KEY` secret was the old dead key (HTTP 400 "API key not valid") while Groq sat at 99,059/100,000 TPD — run `30716509840` timed out at 15m16s, every source hitting "Both providers failed" + Slack alerts. Secret synced via `gh secret set` (SET OK, length 53); run `30728426220` validated both keys and queued post 337, but hit the 15-min cap because the blend-mode 65s Groq TPM waits were firing on Gemini-served calls. Direct Gemini live test confirmed HTTP 200 (billing unlink took effect) AND exposed the structural constraint: **gemini-3.5-flash free tier caps at 20 requests/day** (`generate_content_free_tier_requests, limit: 20`; a 50s wait still 429'd) — not engineerable, too small for 4 runs/day × 4 categories. Felix's decision: Groq Llama 3.3 70B (100K TPD) is primary, Gemini is backup capacity only. Implemented in `479e025`: `parseGroqTpd()`/`groqTpdExhausted()` parse Groq's `tokens per day (TPD): Limit X, Used Y` error format and cache module-level — once ≥95% of daily limit is learned, Groq's 3×65s retry loop is skipped entirely and Gemini is called directly; `lastServedProvider` tracker gates the blend-mode 65s TPM wait to Groq-served calls only. All three commits pushed. Post 337 ("Content Creators Confront the Cognitive Cost of Generative AI") queued in `pending_image`/cloudflare — publishes on next Phase 2 run. |

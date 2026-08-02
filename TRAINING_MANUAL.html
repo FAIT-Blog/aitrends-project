@@ -407,6 +407,8 @@ li { margin-bottom: 6px; }
     <li><a href="#ch41">Session #32 (cont.) — TPM Limits: Process One at a Time, Not All at Once</a></li>
     <li><a href="#chapter-42">Session #33 — When the Meter Is Running</a></li>
     <li><a href="#chapter-43">Session #34 — When the Gate and the Prompt Disagree</a></li>
+    <li><a href="#chapter-44">Sizing Providers to Their True Quotas</a></li>
+    <li><a href="#chapter-45">The Earliest Documentation Style Is the Standard</a></li>
   </ol>
 </div>
 
@@ -6843,12 +6845,478 @@ for (let catIdx = 0; catIdx &lt; categoryEntries.length; catIdx++) {
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
+<div class="chapter" id="chapter-44">
+  <div class="chapter-num">Chapter 44</div>
+  <h2>Sizing Providers to Their True Quotas</h2>
+
+  <p>This chapter covers the four threads of Session #35 (2 August 2026): the switch of the default
+  image provider to Cloudflare Workers AI, the alignment of Phase 1's word-count gate with the
+  publisher's, the discovery that Gemini's free tier is structurally capped at 20 requests/day — the
+  discovery that permanently settled the provider order as Groq-primary — and the new mandatory rule
+  that CLAUDE.md changes must be mirrored in full in both TRAINING_MANUAL.html and SESSION_LOG.html.</p>
+
+  <div class="callout info">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Why this chapter is also a compliance demonstration</strong>
+      <p>Section 44.5 of this chapter is the TRAINING_MANUAL.html half of the new "mirror rule" that
+      Session #35 added to CLAUDE.md. The CLAUDE.md edit (40 insertions / 23 deletions across 7
+      sections) and its SESSION_LOG.html record are the other two halves. All three were written as
+      one unit — per the rule's own order of operations.</p>
+    </div>
+  </div>
+
+  <h3>44.1 Cloudflare Workers AI Becomes the Image Default</h3>
+
+  <p>AI Horde had been the default image provider since Session #30 (SDXL quality, ~30-minute queue
+  wait, anonymous, "free forever"). Session #35 replaced it as default with Cloudflare Workers AI.
+  The deciding factors:</p>
+
+  <table>
+    <tr><th>Provider</th><th>Quality</th><th>Cost</th><th>Latency</th></tr>
+    <tr><td>AI Horde (old default)</td><td>SDXL</td><td>Free</td><td>~30 min queue (anonymous)</td></tr>
+    <tr><td><strong>Cloudflare Workers AI (new default)</strong></td><td>FLUX Schnell</td><td>~10,000 neurons/day free, no credit card</td><td>Synchronous — buffer returned in Phase 2</td></tr>
+    <tr><td>Fal.ai (upgrade path)</td><td>FLUX Schnell</td><td>$0.003/image</td><td>Async queue</td></tr>
+  </table>
+
+  <p>Implementation was deliberately split across three commits so each concern was isolated:</p>
+
+  <ul>
+    <li><code>310e87b</code> — the new provider itself: <code>image-providers/cloudflare.js</code>
+    (FLUX Schnell via Cloudflare Workers AI, credentials from <code>CLOUDFLARE_API_TOKEN</code> +
+    <code>CLOUDFLARE_ACCOUNT_ID</code>).</li>
+    <li><code>1b3d9a2</code> — Phase 2 wiring: <code>complete.yml</code> gained the two Cloudflare
+    env vars mapped from GitHub Secrets.</li>
+    <li><code>fd97753</code> — hygiene: <code>.gitignore</code> entries and a <code>.DS_Store</code>
+    cleanup.</li>
+  </ul>
+
+  <p>The <code>IMAGE_PROVIDER</code> GitHub secret was set to <code>cloudflare</code> (it overrides
+  the code default in <code>image-providers/index.js</code>, which reads
+  <code>process.env.IMAGE_PROVIDER || 'cloudflare'</code>).</p>
+
+  <div class="tip">
+    <strong>Why mid-flight provider switches are safe:</strong> Phase 2 (<code>complete.js</code>)
+    reads the provider stored on each <code>pending_posts</code> row — <em>not</em> the current
+    <code>IMAGE_PROVIDER</code> env var. A post queued under AI Horde is still processed by AI Horde
+    even after the default flips to Cloudflare. Switching providers mid-flight never breaks queued
+    posts; the switch applies only to posts queued after it.</div>
+
+  <h3>44.2 Phase 1 Now Enforces the 400-Word Gate Before Queueing</h3>
+
+  <p>Session #34 fixed the <em>prompt</em> side of the quality-gate contradiction (the prompts told
+  Gemini "no minimum" while <code>publisher.js</code> rejected anything under 400 words). Session #35
+  fixed the <em>pipeline</em> side: content was still being generated, images were still being queued,
+  and only then — at Phase 2 — was the gate applied. That meant every short post wasted a full image
+  generation on content that could never publish.</p>
+
+  <p>Commit <code>84fa17a</code> added a word-count gate to <code>scout.js</code>, implemented to
+  match <code>publisher.js</code> exactly:</p>
+
+  <pre><code>// Count words in generated HTML content — matches publisher.js's quality gate
+// exactly (strip tags, split on whitespace). Used to reject short digests in
+// Phase 1 BEFORE any image generation, instead of wasting a Cloudflare image
+// on content that Phase 2 will reject.
+function contentWordCount(html) {
+  return (html || '').replace(/&lt;[^&gt;]*&gt;/g, '').split(/\s+/).filter(Boolean).length
+}
+
+// Phase 1 quality-gate threshold — MUST match publisher.js:39 exactly
+const MIN_DIGEST_WORDS = 400</code></pre>
+
+  <p>Every Phase 1 path — RSS digest, blend digest, editorial — now runs the digest through
+  <code>contentWordCount()</code> before anything is queued. Short content gets exactly one
+  expansion retry (a <code>RETRY INSTRUCTION</code> is passed back into the same prompt, which
+  overrides the length guidance and asks for a fuller synthesis from the source facts), then a hard
+  stop. Editorial rows that still fail call <code>failEditorialRow()</code> — terminal, no silent
+  re-loop (this kills the Session #19 "editorial row never dies" pattern at the source rather than
+  patching it downstream).</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✅</div>
+    <div class="callout-body">
+      <strong>Why gate before generating, not after</strong>
+      <p>Rejecting in Phase 1 saves an entire image generation per bad post (Cloudflare neurons +
+      Phase 2 processing time + a failed-posts row to clean up). It also makes the failure visible
+      immediately in the Phase 1 run log, instead of surfacing hours later as a Phase 2 failure.</p>
+    </div>
+  </div>
+
+  <h3>44.3 The 20-Requests-Per-Day Discovery That Settled Provider Order</h3>
+
+  <p>At the start of the day the provider order was Groq-primary (established in Session #32 as an
+  emergency mode when the Gemini key was dead). Session #35 briefly experimented with flipping it to
+  Gemini-primary (commit <code>5b879a8</code>) — with Groq as the fallback — to test whether the
+  fresh Gemini key could carry primary duty now that billing had been unlinked. Two live runs
+  exposed the reality:</p>
+
+  <h4>The stale-secret run: 30716509840 (timeout)</h4>
+
+  <p>The first re-triggered run timed out at <strong>15m16s</strong> — the GHA job cap. The failure
+  signature was consistent: every source hit "Both providers failed" with Slack alerts firing. The
+  root cause was a combination of two exhausted/dead paths at once:</p>
+
+  <ol>
+    <li><strong>Groq TPD near-exhausted:</strong> at 99,059 / 100,000 tokens per day (ratio 0.991).</li>
+    <li><strong>GH <code>GEMINI_API_KEY</code> was the old dead key:</strong> HTTP 400 "API key not
+    valid". The GitHub Actions secret had never been updated after the Session #29 rotation — only
+    the local <code>.env</code> had the working key.</li>
+  </ol>
+
+  <p>With the primary near its cap and the fallback dead, the run burned its entire 15-minute budget
+  on retries. This was the first concrete evidence that the GH secret was stale — the local
+  <code>.env</code> worked fine when validated directly.</p>
+
+  <h4>The Gemini cap itself: 20 requests/day</h4>
+
+  <p>The GH secret was synced to the working local <code>.env</code> value via
+  <code>gh secret set</code> (verified "SET OK", length 53). A direct Gemini live test then confirmed
+  two things at once:</p>
+
+  <ul>
+    <li><strong>The billing unlink had taken effect:</strong> a raw <code>generateContent</code> call
+    returned HTTP 200 (<code>finishReason: STOP</code>, model <code>gemini-3.5-flash</code>).</li>
+    <li><strong>Gemini free tier has a hard structural cap of 20 requests/day.</strong> Confirmed via
+    the 429 body:
+    <pre><code>Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests,
+limit: 20, model: gemini-3.5-flash</code></pre>
+    A 50-second wait was tried and it still returned 429 — this is a daily cap, not a transient
+    per-minute throttle.</li>
+  </ul>
+
+  <p>That cap is not engineerable away. A 4-run/day × 4-category blend pipeline needs well over 20
+  LLM calls per day — even the blend path alone can exceed it in a single run. This structural fact
+  made the decision unambiguous.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Felix's decision (2026-08-02): Groq is primary, Gemini is backup capacity only.</strong>
+      <p>Groq Llama 3.3 70B's 100,000 TPD free tier is the only provider sized for primary duty across
+      4 runs/day × 4 categories. Gemini's 20/day budget cannot carry primary duty, so it serves
+      strictly as backup capacity once Groq is exhausted. The same-day Gemini-primary experiment
+      (<code>5b879a8</code>) was undone.</p>
+    </div>
+  </div>
+
+  <h3>44.4 The Final State: Groq-Primary + Groq TPD Skip + Provider-Aware Wait</h3>
+
+  <p>Commit <code>479e025</code> implemented the decision and added two protections. The first is a
+  <em>TPD pre-check</em> that stops Groq's own retry loop from wasting time against a provider at its
+  daily cap. Groq reports its budget exhaustion in the error message itself, in a parseable format:</p>
+
+  <pre><code>... on tokens per day (TPD): Limit 100000, Used 99059, Requested 2793.
+Please try again in 26m40.128s.</code></pre>
+
+  <p>The new parsing code in <code>gemini.js</code> caches that number module-level and uses it to
+  skip Groq's retry loop on every subsequent call in the same run:</p>
+
+  <pre><code>let groqTpd = { used: 0, limit: 0 }
+function parseGroqTpd(message) {
+  const m = /tokens per day \(TPD\): Limit (\d+), Used (\d+)/i.exec(message || '')
+  if (m) {
+    groqTpd = { used: parseInt(m[2], 10), limit: parseInt(m[1], 10) }
+    return true
+  }
+  return false
+}
+function groqTpdExhausted() {
+  return groqTpd.limit &gt; 0 &amp;&amp; groqTpd.used / groqTpd.limit &gt;= 0.95
+}</code></pre>
+
+  <p>Inside <code>callGeminiWithFallback()</code>, the check happens <em>before</em> the retry loop
+  starts:</p>
+
+  <pre><code>if (groqTpdExhausted()) {
+  // Learned from an earlier call this run — Groq is at its daily cap.
+  // Skip its retry loop entirely, go straight to Gemini.
+  console.log(`  ⚠️  Groq already near TPD limit (${groqTpd.used}/${groqTpd.limit}) — skipping Groq, using Gemini directly`)
+} else {
+  // ... the 3×65s retry loop (unchanged) ...
+}</code></pre>
+
+  <p>The second protection is <em>provider-aware</em> waiting. Session #33 had added a 65-second
+  TPM-cooldown wait between blended sources to respect Groq's per-minute token window. That wait is
+  only meaningful when Groq actually served the call — but it was firing unconditionally whenever
+  <code>GROQ_API_KEY</code> existed, so a Gemini-served run burned 65 seconds per source for nothing.
+  The run <code>30728426220</code> hit the 15-minute job cap partly because of this. The fix tracks
+  which provider served the last call:</p>
+
+  <pre><code>let lastServedProvider = null
+export function getLastServedProvider() {
+  return lastServedProvider
+}</code></pre>
+
+  <p>Set to <code>'groq'</code> on a successful Groq call, <code>'gemini'</code> on a successful
+  Gemini call. The blend loop's wait is now gated on it:</p>
+
+  <pre><code>if (getLastServedProvider() === 'groq' &amp;&amp; i &lt; bucketList.length - 1) {
+  console.log(`     ⏳ Waiting ${TPM_WAIT_MS / 1000}s for TPM quota reset...`)
+  await new Promise(r =&gt; setTimeout(r, TPM_WAIT_MS))
+}</code></pre>
+
+  <p>Net effect: when Groq is healthy, nothing changes (Groq serves, wait fires, TPM respected). When
+  Groq is exhausted or Gemini is serving, the wasted 65s/source disappears. The two protections are
+  complementary: the TPD skip prevents <em>attempting</em> exhausted Groq calls; the provider-aware
+  wait prevents <em>padding</em> around the calls that do get made.</p>
+
+  <h4>Post-337 note</h4>
+
+  <p>Run <code>30728426220</code> queued post 337 ("Content Creators Confront the Cognitive Cost of
+  Generative AI") into <code>pending_posts</code> (<code>status: pending_image</code>, provider
+  <code>cloudflare</code>) before hitting the 15-minute cap. Phase 2 publishes it on its next hourly
+  cycle — the row carries its own provider, so the pending post is unaffected by any later provider
+  switches.</p>
+
+  <h3>44.5 New Mandatory Rule: CLAUDE.md Changes Must Be Mirrored in Full</h3>
+
+  <p>Immediately after the Session #35 CLAUDE.md update — reported to Felix as "40 insertions / 23
+  deletions across 7 sections" — Felix made a new standing rule, stated in his own words: any
+  modification made on CLAUDE.md must be indicated and listed on the TRAINING_MANUAL.html and the
+  SESSION_LOG.html, and those changes must reflect <em>in full</em> in the other two documents. Not
+  as a summary — in full.</p>
+
+  <p>The rule is now codified in CLAUDE.md Section 9 (SESSION LOG REQUIREMENT) under the heading
+  <strong>"CLAUDE.md changes MUST be mirrored in the other two documents — updated Session #35 (2
+  August 2026)"</strong>. Its core provisions:</p>
+
+  <ul>
+    <li><strong>Scope:</strong> every CLAUDE.md modification — sections added/deleted/renamed,
+    rule changes, pipeline/architecture changes, completed-work entries, to-do status changes,
+    Session History rows, the "Last Updated" header line, even a one-line copy correction.</li>
+    <li><strong>The concrete test:</strong> whenever a CLAUDE.md change is reported (e.g. "40
+    insertions / 23 deletions across 7 sections"), the other two documents must carry the same
+    detail — same code/file references, same before/after, same reasoning. "A summary of a summary
+    is not compliance."</li>
+    <li><strong>Order of operations:</strong> (1) update CLAUDE.md, (2) immediately update
+    SESSION_LOG.html verbatim, (3) immediately update TRAINING_MANUAL.html as a new append-only
+    chapter, (4) only then is the change complete.</li>
+    <li><strong>Why:</strong> the three documents are one teaching system. TRAINING_MANUAL teaches
+    how the system evolved; SESSION_LOG records every turn verbatim; CLAUDE.md is the living spec.
+    If CLAUDE.md changes without the other two mirroring it, the documents drift and the training
+    material becomes false.</li>
+  </ul>
+
+  <p><strong>This chapter is itself the TRAINING_MANUAL.html half of that mirror.</strong> The same
+  Session #35 content exists as a verbatim SESSION_LOG.html entry (session-35 block) and in CLAUDE.md
+  (header line, Sections 3/6/7/10, and the new Section 9 rule). Written together, in the same
+  session, per the rule's own order of operations.</p>
+
+  <h3>44.6 The CLAUDE.md Update Itself — What Changed Across the 7 Sections</h3>
+
+  <p>So the mirror record is complete, here is the full inventory of what the Session #35 CLAUDE.md
+  update changed (the "40 insertions / 23 deletions across 7 sections"):</p>
+
+  <ol>
+    <li><strong>Header</strong> — "Last Updated" line advanced to 2026-08-02 (Session #35), listing
+    the Cloudflare provider, Phase 1 gate alignment, Groq-primary revert, GEMINI_API_KEY secret sync,
+    the Gemini 20 req/day cap, and the new mirror rule.</li>
+    <li><strong>Section 2 (How the two parts connect)</strong> — the pipeline diagram's steps 7-12
+    updated: step 7 now reads "Generates digest via Groq Llama 3.3 70B (primary) / gemini-3.5-flash
+    (fallback), grounded strictly in the source (ONE STORY ONLY), 400-1000 words"; step 8 names
+    Cloudflare (synchronous, image buffer in Phase 2); step 12 notes Phase 2 is hourly.</li>
+    <li><strong>Section 3 (Brand Identity)</strong> — the Cover Image Style block retitled from
+    "HuggingFace FLUX.1-schnell" to "Cloudflare Workers AI → Supabase Storage"; added the
+    <code>IMAGE_PROVIDER</code> provider-switch explanation and the "Phase 2 uses the provider stored
+    on each pending_posts row" rule.</li>
+    <li><strong>Section 6 (Scout Agent)</strong> — the Critical Rules' provider rules rewritten:
+    <code>GROQ_API_KEY</code> is now documented as PRIMARY (100,000 TPD, ≥95% TPD skip) and
+    <code>GEMINI_API_KEY</code> as FALLBACK (hard 20 req/day cap, structural); pipeline steps 7-9 and
+    the file-structure comment for <code>gemini.js</code> updated; env vars gained
+    <code>GROQ_API_KEY</code>, <code>IMAGE_PROVIDER</code>, <code>CLOUDFLARE_API_TOKEN</code>,
+    <code>CLOUDFLARE_ACCOUNT_ID</code>; the GH Secrets list updated to match; the Slack scopes list
+    gained <code>chat:write</code> and the Session #19 "incomplete scopes" warning was replaced with
+    the Session #24 "fixed" note; three new "What Has Been Built" bullets added (Cloudflare provider,
+    Phase 1 gate alignment, Groq-primary + TPD skip).</li>
+    <li><strong>Section 7 (Master To-Do List)</strong> — four new ✅ completed entries added to the
+    🔴 Critical list: Phase 1 quality gate aligned, Cloudflare image default, Groq-primary + TPD skip
+    (with the 20 req/day proof), and the GHA GEMINI_API_KEY secret sync.</li>
+    <li><strong>Section 9 (SESSION LOG REQUIREMENT)</strong> — the new "CLAUDE.md changes MUST be
+    mirrored in the other two documents" rule (covered in 44.5 above).</li>
+    <li><strong>Section 10 (Session History)</strong> — a full S35 row added covering all four
+    threads, with commit SHAs and run IDs.</li>
+  </ol>
+
+  <h3>44.7 Lessons</h3>
+
+  <ol>
+    <li><strong>Verify every provider's free tier is a budget, not a guarantee.</strong> Gemini's
+    free tier is capped at 20 requests/day — a number far below what a 4-run × 4-category pipeline
+    needs. Read the actual quota error body before architecting around a provider.</li>
+    <li><strong>Provider order must match quota reality.</strong> The Gemini-primary experiment was
+    never going to survive contact with a real run — 20/day is a backup-capacity budget, not a
+    primary one. Groq's 100,000 TPD is the only free tier sized for the job.</li>
+    <li><strong>Parse the provider's own error messages for quota state.</strong> Groq literally
+    reports "Limit 100000, Used 99059" in the error text. Turning that into a cached
+    <code>groqTpdExhausted()</code> check converts a 15-minute time-out into a skipped retry loop.</li>
+    <li><strong>A wait added for one provider must be gated to that provider.</strong> The Session
+    #33 65s TPM wait was correct for Groq but silently burned a minute per source when Gemini served
+    the calls. Any provider-specific throttle needs a "who actually served this?" tracker.</li>
+    <li><strong>GitHub Secrets can silently diverge from .env.</strong> The GH <code>GEMINI_API_KEY</code>
+    was never updated after the Session #29 rotation. Every secret changed locally must also be
+    re-synced to GitHub Secrets — and verified, not assumed.</li>
+    <li><strong>Gate content in Phase 1, not Phase 2.</strong> Rejecting a short digest before image
+    generation saves the Cloudflare neurons and the failed-posts row. The failure surfaces instantly
+    in the run that made it, not hours later.</li>
+    <li><strong>The three documents are one teaching system.</strong> CLAUDE.md, SESSION_LOG.html,
+    and TRAINING_MANUAL.html must move together. A CLAUDE.md change with no mirror in the other two
+    is an incomplete change — which is now a written rule, not a habit.</li>
+  </ol>
+
+  <div class="tip">
+    <strong>One-line summary:</strong> Session #35 sized every provider to its true free-tier quota
+    — Cloudflare for images, Groq as primary LLM with a TPD pre-skip, Gemini demoted to backup capacity
+    behind its hard 20-requests/day cap — and made the documentation a single atomic unit by mandating
+    that CLAUDE.md changes be mirrored in full in the training manual and session log.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+<div class="chapter" id="chapter-45">
+  <div class="chapter-num">Chapter 45</div>
+  <h2>The Earliest Documentation Style Is the Standard</h2>
+
+  <p>This chapter documents a documentation rule. It was added in Session #35 (2 August 2026) after
+  Felix reviewed the manual and the session log and found that the later chapters and sessions no
+  longer looked like the earliest ones. His instruction was to declare the earliest style the
+  standard on all three documents — CLAUDE.md, TRAINING_MANUAL.html, and SESSION_LOG.html — and to
+  comply with it henceforth. This chapter is written in that earliest style, on purpose, so it
+  serves as a live demonstration of what the rule demands.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>What Felix saw</strong>
+      <p>Chapters 1–21 have a clean colour combination, clear indentation, uniform orientation,
+      consistent font types and sizes, and clean margins. Chapters 29 onward drifted: headings like
+      "Chapter 40 — ..." and "Session #N — ..." blur whether a section is a chapter or a session,
+      and several classes used later are undefined in the stylesheet, so those sections render
+      unstyled. The same happened in SESSION_LOG.html: Sessions 1–14 are uniform; later sessions
+      are not.</p>
+    </div>
+  </div>
+
+  <h3>What the Earliest Style Looks Like</h3>
+
+  <p>The reference model for the manual is Chapters 1–21. Every one of them opens with the same two
+  elements:</p>
+
+  <pre><code>&lt;div class="chapter" id="ch1"&gt;
+  &lt;div class="chapter-num"&gt;Chapter 1&lt;/div&gt;
+  &lt;h2&gt;What is Vibe-Coding?&lt;/h2&gt;
+&lt;/div&gt;</code></pre>
+
+  <p>The chapter number lives in the <code>chapter-num</code> element — a small uppercase label in
+  the brand blue. The <code>h2</code> is a clean descriptive title with no "Chapter N —" prefix and
+  no "Session #N —" prefix. Everything after that uses only CSS classes that are actually defined in
+  the <code>&lt;style&gt;</code> block:</p>
+
+  <ul>
+    <li>Paragraphs, <code>h3</code>, <code>h4</code>, and styled tables</li>
+    <li>Callouts: <code>.callout.info</code>, <code>.callout.warn</code>, <code>.callout.success</code>, <code>.callout.danger</code></li>
+    <li>Numbered steps: <code>.steps</code> / <code>.step</code> / <code>.step-num</code> / <code>.step-content</code></li>
+    <li>Inline tips: <code>.tip</code> (a bordered left-accent note)</li>
+    <li>Badges: <code>.badge-blue</code>, <code>.badge-gold</code>, <code>.badge-green</code>, <code>.badge-red</code>, <code>.badge-purple</code></li>
+    <li>Diagrams and syntax-coloured code: <code>.diagram</code>, <code>.kw</code>, <code>.fn</code>, <code>.str</code>, <code>.cmt</code>, <code>.num</code>, <code>.cls</code>, <code>.var</code></li>
+  </ul>
+
+  <p>Indentation is two spaces throughout. Colours come from the <code>:root</code> palette, never
+  from inline <code>style=</code> overrides. Body text is the system sans-serif stack at 15px; code
+  is monospace at 0.82rem.</p>
+
+  <h3>What Went Wrong in Later Chapters</h3>
+
+  <table>
+    <tr><th>Drift</th><th>Where it appeared</th><th>Why it looks broken</th></tr>
+    <tr><td>"Chapter N — Title" inline in the <code>h2</code></td><td>Chapter 40 onward</td><td>No <code>chapter-num</code> element — the number and title blur together</td></tr>
+    <tr><td>"Session #N — Title" in the <code>h2</code></td><td>Chapters 29–39</td><td>Ambiguous whether a section is a chapter or a session</td></tr>
+    <tr><td><code>.chapter-number</code>, <code>.chapter-date</code>, <code>.chapter-summary</code></td><td>Chapters 15/16/19/20, 22, 25+</td><td>Undefined in CSS — content renders unstyled</td></tr>
+    <tr><td>Inline <code>style=</code> on wrappers</td><td>SESSION_LOG Session #15</td><td>Breaks the uniform look the CSS classes provide</td></tr>
+  </table>
+
+  <h3>The Rule (as written into CLAUDE.md Section 9)</h3>
+
+  <p>The full rule was added to CLAUDE.md under "Documentation style standard — the earliest style
+  is the standard (updated Session #35, 2 August 2026)". Its core provisions, in summary:</p>
+
+  <ol>
+    <li><strong>The earliest style is the standard.</strong> TRAINING_MANUAL Chapters 1–21 and
+    SESSION_LOG Sessions 1–14 are the reference model. Later content is not the model.</li>
+    <li><strong>Chapter headings:</strong> <code>&lt;div class="chapter-num"&gt;Chapter N&lt;/div&gt;</code>
+    plus a clean descriptive <code>&lt;h2&gt;</code>. Never "Chapter N — ..." or "Session #N — ..."
+    inside the <code>h2</code>.</li>
+    <li><strong>Defined classes only:</strong> use only CSS classes that exist in the
+    <code>&lt;style&gt;</code> block. Never invent classes like <code>.chapter-number</code>,
+    <code>.chapter-date</code>, or <code>.chapter-summary</code>. If a visual element is needed and
+    no class exists, add its CSS definition first, then use it.</li>
+    <li><strong>Two-space indentation</strong>, consistent margins, the <code>:root</code> palette,
+    no inline style overrides.</li>
+    <li><strong>SESSION_LOG turns:</strong> every turn is a <code>.turn user</code> or
+    <code>.turn assistant</code> pair with a <code>.label</code> and a <code>.bubble</code>,
+    separated by <code>&lt;hr&gt;</code>, with Felix's words verbatim and every tool call's full
+    output recorded in <code>&lt;pre&gt;&lt;code&gt;</code>.</li>
+    <li><strong>Compliance test:</strong> if a new entry would look out of place next to Chapter 1
+    or Session 1, it is not finished.</li>
+  </ol>
+
+  <div class="callout success">
+    <div class="callout-icon">✅</div>
+    <div class="callout-body">
+      <strong>Scope note</strong>
+      <p>This rule is forward-looking. Existing chapters and sessions remain as historical record per
+      the manual's append-only convention. New entries must conform. Felix may later ask for a
+      one-time restyle pass of the drifted later chapters and sessions.</p>
+    </div>
+  </div>
+
+  <h3>How to Write a Compliant Chapter</h3>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content"><strong>Open the chapter.</strong> Use
+      <code>&lt;div class="chapter" id="chapter-N"&gt;</code> with a
+      <code>&lt;div class="chapter-num"&gt;Chapter N&lt;/div&gt;</code> and a clean
+      <code>&lt;h2&gt;</code>. No number inside the title.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content"><strong>Use defined classes.</strong> Paragraphs, headings, tables,
+      callouts, steps, tips, badges, diagrams, and syntax-coloured code — all from the existing
+      stylesheet.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content"><strong>Keep the palette and type.</strong> Brand colours from
+      <code>:root</code>, system font at 15px, monospace code at 0.82rem, two-space indentation.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content"><strong>Close like Chapter 1.</strong> End the content, close the
+      <code>&lt;div class="chapter"&gt;</code>. Use the <code>.tip</code> class for a one-line
+      summary — not the undefined <code>.chapter-summary</code>.</div>
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>One-line summary:</strong> The earliest documentation style — TRAINING_MANUAL Chapters
+    1–21 and SESSION_LOG Sessions 1–14 — is now the declared standard on all three documents; new
+    entries must match it exactly, and this chapter is written as proof that the rule is enforceable.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 1 August 2026 — Chapter 43 added: Session #34 quality-gate
-    prompt contradiction fix (zero posts July 18-Aug 1), Phase 2 moved to hourly,
-    stale failed posts deleted, podcast cron-job.org trigger revived.
+    Last updated: 2 August 2026 — Chapter 45 added: the earliest documentation style
+    is the standard (TRAINING_MANUAL Chapters 1–21, SESSION_LOG Sessions 1–14).
+    Chapters 44 covers Session #35: Cloudflare image provider, Phase 1 quality-gate
+    alignment, Groq-primary + TPD skip decision, Gemini 20 req/day cap, and the rule
+    that CLAUDE.md changes must be mirrored in full in TRAINING_MANUAL.html +
+    SESSION_LOG.html.
   </p>
 </div>
 
