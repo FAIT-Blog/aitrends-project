@@ -12533,9 +12533,12 @@ pushed to FAIT-Blog/scout-agent origin/main</code></pre>
       <code>generateDigest()</code>/<code>generateBlendedDigest()</code> in gemini.js and to
       gemini-podcast.js, so Phase 1 produces gate-passing content directly.</p>
 
-      <p>Post <strong>344</strong> ("How Content Creators Are Confronting the Cognitive Cost of
-      Generative AI") was the first post through the aligned pipeline — passed both Phase 1 and Phase 2
-      gates live, published. Deleted the 6 stale Cloudflare-era failed <code>pending_posts</code> rows
+      <p>Post <strong>344</strong> ("Building Africa's Industrial Base: Terra Industries and Miva Partner
+      to Train Drone Engineers") was the first post through the aligned pipeline — passed both Phase 1
+      and Phase 2 gates live, published 2026-08-03 12:00:23. <em>(Correction 4 Aug: the original S36
+      note mis-titled post 344 as the "Content Creators" post; that title was post 337, a deleted stale
+      row that never published — verified against the live DB: pending id 344 = Terra/Miva.)</em>
+      Deleted the 6 stale Cloudflare-era failed <code>pending_posts</code> rows
       (337, 339-343) whose stored content can never pass the current gate (Phase 2 never regenerates
       content) — failed count dropped 16 → 10.</p>
     </div>
@@ -12631,6 +12634,89 @@ pending detail page  → FAIL gate badge with reasons shown</code></pre>
   </div>
 
 </div><!-- end session-36 -->
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+<div class="session" id="session-37">
+
+  <h2>Session #37 — 4 Aug 2026 — Admin login verification + doc correction</h2>
+  <p class="meta">Follow-up to Session #36. Felix logged in successfully to the admin panel for the first
+  time. Post-344 title discrepancy discovered via live DB queries and corrected across all three docs.</p>
+
+  <div class="turn user">
+    <div class="label">Felix</div>
+    <div class="bubble">
+      <p>Done — Vercel password set and redeployed</p>
+    </div>
+  </div>
+
+  <!-- TURN 2 -->
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — verify admin login</div>
+    <div class="bubble">
+      <p>Verification steps performed:</p>
+      <h4>Bash: check Vercel deployment status</h4>
+      <pre><code>gh api "repos/FAIT-Blog/aitrends-ng/deployments/5731258537/statuses"
+→ state=success, created=2026-08-04T03:28:16Z (redeploy green)</code></pre>
+      <h4>Bash: test login endpoint live</h4>
+      <pre><code>GET /admin        → 307 → /admin/login
+POST login wrong  → 401 (not 500 — auth active)
+POST login empty  → 401 (not 500 — auth active)</code></pre>
+    </div>
+  </div>
+
+  <!-- TURN 3 -->
+
+  <div class="turn user">
+    <div class="label">Felix</div>
+    <div class="bubble">
+      <p>I logged in successfully!
+      I really love what you did and how you designed it.
+      Very nice</p>
+    </div>
+  </div>
+
+  <!-- TURN 4 -->
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — post-344 title discrepancy correction</div>
+    <div class="bubble">
+      <p>Proceeded with Part B-2 (doc discrepancy fix). Investigated the claim that "post 344 =
+      'Content Creators Are Confronting the Cognitive Cost of Generative AI'" across all three docs.</p>
+      <h4>Live DB verification (Supabase REST queries)</h4>
+      <pre><code>pending_posts id 344 = {
+  "title": "Building Africa's Industrial Base: Terra Industries and Miva Partner to Train Drone Engineers",
+  "status": "published",
+  "provider": "cloudflare",
+  "created_at": "2026-08-03T11:05:19.858875+00:00"
+}
+
+posts table (matching uuid bc35fc93):
+  title: "Building Africa's Industrial Base: Terra Industries and Miva Partner to Train Drone Engineers"
+  status: published
+  published_at: 2026-08-03T12:00:23.448+00:00</code></pre>
+      <p>"Content Creators" title does NOT exist in <code>posts</code> or <code>pending_posts</code>.
+      The title was <strong>post 337</strong> (queued Aug 2, Session #35), which was among the 6 stale
+      rows deleted in Session #36 (337, 339-343). The live DB confirms post 344 = Terra/Miva, not
+      Content Creators.</p>
+      <h4>Phase 2 GHA log confirmation</h4>
+      <pre><code>Phase 2 run 30811744277:
+  Published: https://www.aitrends.ng/post/building-africas-industrial-base-terra-industries-and-miva-partner-to-train
+  (2026-08-03T12:00:23.8174794Z)</code></pre>
+      <h4>Doc corrections applied (all three files)</h4>
+      <ul>
+        <li><strong>CLAUDE.md</strong> line 739 (Critical): corrected post 344 title + added dated correction note (Session #36 follow-up, 4 Aug). Also updated the admin panel entry from ⚠️ "temp-test-password-2026 only" → ✅ "live, Felix logged in successfully" (deployment 5731258537, success).</li>
+        <li><strong>CLAUDE.md</strong> line 987 (S36 session-history row): corrected post 344 title with correction note (4 Aug).</li>
+        <li><strong>SESSION_LOG.html</strong> lines 12536–12540: corrected inline with dated correction note.</li>
+        <li><strong>TRAINING_MANUAL.html</strong> lines 7381–7383: corrected inline with dated correction note.</li>
+      </ul>
+      <p>CLAUDE.md pushed to GitHub. SESSION_LOG.html + TRAINING_MANUAL.html committed locally only
+      (per Section 9 strategy).</p>
+    </div>
+  </div>
+
+</div><!-- end session-37 -->
 
 </div>
 </body>

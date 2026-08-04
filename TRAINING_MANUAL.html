@@ -7378,9 +7378,12 @@ export function evaluateQualityGate(title, content) {
     <p>With the gate unified, Felix's improved editorial instructions were applied verbatim to
     <code>gemini.js</code>'s <code>generateDigest()</code>/<code>generateBlendedDigest()</code> and to
     <code>gemini-podcast.js</code>, so Phase 1 now produces gate-passing content directly instead of
-    relying on a retry loop. Post <strong>344</strong> ("How Content Creators Are Confronting the
-    Cognitive Cost of Generative AI") was the first post through the aligned pipeline — it passed both
-    Phase 1 and Phase 2 gates live and published.</p>
+    relying on a retry loop. Post <strong>344</strong> ("Building Africa's Industrial Base: Terra
+    Industries and Miva Partner to Train Drone Engineers") was the first post through the aligned
+    pipeline — it passed both Phase 1 and Phase 2 gates live and published (2026-08-03 12:00:23).
+    <em>(Correction 4 Aug: the original Chapter 46 wording mis-titled post 344 as the "Content Creators"
+    post; that title was post 337, a deleted stale row that never published — verified against the live
+    DB.)</em></p>
 
     <h3>46.2 Homepage Category Counts Stop Fetching Every Row</h3>
 
@@ -7496,16 +7499,82 @@ export async function getCategoryCounts() {
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
+  <div class="chapter" id="chapter-47">
+    <div class="chapter-num">Chapter 47</div>
+    <h2>Admin Panel Goes Live — and the Post-344 Title Discrepancy</h2>
+
+    <p>Session #37 (4 August 2026) was a short verification pass: Felix set a real
+    <code>ADMIN_PASSWORD</code> in Vercel, redeployed, and logged in to the admin panel for the
+    first time. Everything worked — the panel loads, the overview shows status/category counts,
+    and Felix confirmed the UI design.</p>
+
+    <h3>47.1 Live Verification</h3>
+    <ul>
+      <li>Deployment 5731258537 (<code>1eca1e5</code>) confirmed <code>state=success</code> after
+      Vercel Redeploy (2026-08-04T03:28:16Z).</li>
+      <li><code>GET /admin</code> → 307 → <code>/admin/login</code> ✅</li>
+      <li><code>POST /api/admin/login</code> (wrong password) → 401, not 500 ✅</li>
+      <li>Felix logged in via browser — confirmed all admin pages load correctly ✅</li>
+    </ul>
+
+    <h3>47.2 Post-344 Title Discrepancy Found and Corrected</h3>
+    <p>Investigating the pipeline status surfaced a factual error in the Session #36 documentation.
+    The Session #36 entries claimed post <strong>344</strong> was titled "How Content Creators Are
+    Confronting the Cognitive Cost of Generative AI" and was the first post through the aligned
+    pipeline. Live DB queries revealed:</p>
+    <ul>
+      <li><strong>pending_posts id 344</strong> = "Building Africa's Industrial Base: Terra Industries
+      and Miva Partner to Train Drone Engineers" (status published, created 2026-08-03T11:05,
+      published 2026-08-03T12:00:23).</li>
+      <li>"Content Creators Confront the Cognitive Cost of Generative AI" was <strong>post 337</strong>
+      — queued in Session #35 and deleted as a stale failed row in Session #36 (one of the 337,
+      339–343 set). It never published.</li>
+      <li>Phase 2 GHA run 30811744277 confirmed the live publish: <code>Published:
+      https://www.aitrends.ng/post/building-africas-industrial-base-terra-industries-and-miva-partner-to-train</code>.</li>
+    </ul>
+
+    <div class="callout info">
+      <strong>Correction applied across all three documents</strong>
+      <p>CLAUDE.md (lines 739 and 987), SESSION_LOG.html (lines 12536–12540), and this chapter
+      (lines 7381–7383) were all corrected with dated correction notes. CLAUDE.md was pushed to
+      GitHub; the HTML pair committed locally only.</p>
+    </div>
+
+    <div class="callout warn">
+      <strong>Pipeline status (4 Aug 2026): both providers exhausted simultaneously</strong>
+      <p>Scout Agent (Phase 1) failing on 6 of the last 7 runs. Root cause from GHA run logs:
+      Groq near its TPD cap (<code>99529/100000</code> → "skipping Groq, using Gemini directly")
+      while Gemini 429s on <code>generate_content_free_tier_requests</code> (20 req/day hard cap).
+      <code>❌ Both providers failed. Gemini: 429</code> per category → no posts queued. Phase 2
+      (publish) is healthy — all runs success, but the queue is empty. Only 2 posts published since
+      Aug 1: "Bridging the Gender Gap in AI" (pending 338, Aug 2) and "Building Africa's Industrial
+      Base" (pending 344, Aug 3). Remedies awaiting Felix's decision: reduce cadence (2 runs/day),
+      move Gemini to paid tier, or implement a skip-and-wait pattern.</p>
+    </div>
+
+    <div class="tip">
+      <strong>Lesson:</strong> When a session's documentation makes a factual claim about a live DB
+      row, verify the row before the next session trusts it. A post-ID ↔ title mismatch is exactly
+      the kind of silent error that can compound if left unchecked — future sessions would propagate
+      the wrong title into new documentation.
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>Mirror-rule compliance note:</strong> This Chapter 47 is the TRAINING_MANUAL.html half of
+    the Session #37 record. CLAUDE.md (header, admin panel entry updated, post-344 corrections) and
+    SESSION_LOG.html (Session #37 entry) are the other halves.
+  </div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 3 August 2026 — Chapter 46 added: Session #36 — the single-source
-    quality gate, the homepage category-count query optimisation, and the admin panel
-    MVP that lets Felix review every stage of the pipeline.
-    Chapters 44 covers Session #35: Cloudflare image provider, Phase 1 quality-gate
-    alignment, Groq-primary + TPD skip decision, Gemini 20 req/day cap, and the rule
-    that CLAUDE.md changes must be mirrored in full in TRAINING_MANUAL.html +
-    SESSION_LOG.html.
+    Last updated: 4 August 2026 — Chapter 47 added: Session #37 — admin panel goes live,
+    post-344 title discrepancy corrected, pipeline status (both providers exhausted).
+    Chapter 46 covers Session #36: the single-source quality gate, the homepage
+    category-count query optimisation, and the admin panel MVP.
   </p>
 </div>
 
