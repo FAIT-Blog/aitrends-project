@@ -7308,11 +7308,200 @@ export function getLastServedProvider() {
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
+  <div class="chapter" id="chapter-46">
+    <div class="chapter-num">Chapter 46</div>
+    <h2>One Quality Gate, One Query, One Review Room</h2>
+
+    <p>This chapter covers the three threads of Session #36 (3 August 2026): the extraction of the
+    quality gate into a single shared module (killing the two-phase gate drift that had been silently
+    killing posts at Phase 2), the optimisation of the homepage category-count queries, and the first
+    ever admin panel for AITrends.ng — the long-deferred backlog item that gives Felix a
+    password-protected review room for every stage of the pipeline.</p>
+
+    <div class="callout info">
+      <div class="callout-icon">💡</div>
+      <div class="callout-body">
+        <strong>Why this chapter also demonstrates the mirror rule</strong>
+        <p>Per the Session #35 rule, the CLAUDE.md changes for Session #36 (admin routes, key files,
+        env var, session-history row, to-do entries) and their SESSION_LOG.html record are the other
+        two halves of this chapter. All three were written as one unit, in the order the rule
+        prescribes: CLAUDE.md → SESSION_LOG.html → TRAINING_MANUAL.html.</p>
+      </div>
+    </div>
+
+    <h3>46.1 The Quality Gate Becomes One Shared Module</h3>
+
+    <p>Since Session #32 the quality gate had lived as <em>duplicated copies</em>: a full version in
+    <code>publisher.js</code> (Phase 2) and shorter copies in <code>scout.js</code> and
+    <code>scout-podcast.js</code> (Phase 1). Duplication drifted. Phase 1's shorter gate let content
+    through that Phase 2's full gate (literal "Why this matters" heading + 400–2500 words) then
+    rejected. Session #36 extracted the gate into one shared module:</p>
+
+    <pre><code>// quality-gate.js — the single source of truth for the post quality gate.
+// Imported by publisher.js (Phase 2), scout.js and scout-podcast.js (Phase 1).
+// A future rule change is one edit, not three.
+export const MIN_DIGEST_WORDS = 400
+
+export function contentWordCount(html) {
+  return (html || '').replace(/&lt;[^&gt;]*&gt;/g, '').split(/\s+/).filter(Boolean).length
+}
+
+export function evaluateQualityGate(title, content) {
+  const reasons = []
+  const words = contentWordCount(content)
+  if (words &lt; MIN_DIGEST_WORDS) reasons.push(`too short (${words} words, min ${MIN_DIGEST_WORDS})`)
+  if (words &gt; 2500) reasons.push(`too long (${words} words, max 2500)`)
+  const lower = (content || '').toLowerCase()
+  if (!lower.includes('why this matters')) reasons.push('missing "Why this matters" closing')
+  // ... banned words checks ...
+  return { pass: reasons.length === 0, reasons, words }
+}</code></pre>
+
+    <p>Both phases now import the same gate. The refactor immediately proved its worth: aligning the
+    two phases exposed posts <strong>337, 339–343</strong> (Cloudflare-era, queued 2 August) dying at
+    Phase 2 — their stored content had no literal "Why this matters" heading and was under 400 words,
+    so the publisher gate rejected them while Phase 1's earlier shorter gate had let them through.
+    Phase 2 never regenerates content; it publishes what Phase 1 stored. Those posts could never
+    pass, so the 6 stale failed rows were deleted (failed count dropped 16 → 10).</p>
+
+    <div class="callout warn">
+      <div class="callout-icon">⚠️</div>
+      <div class="callout-body">
+        <strong>The two-phase gate drift was the exact class of bug the single-source refactor exists
+        for</strong>
+        <p>The gate and the prompts had to agree (the Session #34 lesson). The gate copies across two
+        phases had to agree too — and they didn't, for a full day of Cloudflare-era posts. Anything
+        that must stay in sync across phases belongs in one imported module, not two pasted copies.</p>
+      </div>
+    </div>
+
+    <p>With the gate unified, Felix's improved editorial instructions were applied verbatim to
+    <code>gemini.js</code>'s <code>generateDigest()</code>/<code>generateBlendedDigest()</code> and to
+    <code>gemini-podcast.js</code>, so Phase 1 now produces gate-passing content directly instead of
+    relying on a retry loop. Post <strong>344</strong> ("How Content Creators Are Confronting the
+    Cognitive Cost of Generative AI") was the first post through the aligned pipeline — it passed both
+    Phase 1 and Phase 2 gates live and published.</p>
+
+    <h3>46.2 Homepage Category Counts Stop Fetching Every Row</h3>
+
+    <p>The homepage sidebar shows per-category post counts. The old implementation fetched every
+    published row (~300+ posts) per page load just to count them. Session #36 replaced that with five
+    parallel <code>head</code> count queries — HTTP 206-style partial reads that ask the database for
+    metadata only, not the full rows:</p>
+
+    <pre><code>// lib/categoryCounts.ts — lightweight sidebar counts
+export async function getCategoryCounts() {
+  const categories = ['ai-models', 'anthropic', 'industry', 'tools', 'ai']
+  const queries = categories.map((category) =
+    supabase.from('posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'published')
+      .eq('category', category))
+  const results = await Promise.all(queries)
+  // returns { 'ai-models': 60, anthropic: 28, industry: 167, tools: 47, ai: 14 }
+}</code></pre>
+
+    <p>Verified live after deploy: time-to-first-byte dropped to 3.17s and the sidebar counts rendered
+    60/28/167/47/14. The pages that consume the old "fetch everything" helper were switched to this
+    module.</p>
+
+    <h3>46.3 The Admin Panel MVP — The Deferred Backlog Item</h3>
+
+    <p>Felix asked for a blueprint before any code (and it was confirmed none existed — admin
+    dashboard was a documented backlog item since Session #13). After the blueprint, he approved the
+    MVP build. The goal: a password-protected review room where Felix can see every stage of the
+    pipeline — published posts, the pending queue, and the failed rows — without touching Supabase.</p>
+
+    <h4>Routes built</h4>
+
+    <table>
+      <tr><th>Route</th><th>Purpose</th></tr>
+      <tr><td><code>/admin</code></td><td>Overview — status + category counts, latest published, queue</td></tr>
+      <tr><td><code>/admin/posts</code></td><td>Published/draft list with publish/unpublish/delete</td></tr>
+      <tr><td><code>/admin/posts/[id]</code></td><td>Full post review (meta, cover, tags, sources, content)</td></tr>
+      <tr><td><code>/admin/pending</code></td><td>Queue with status filters (pending_image/generating/failed)</td></tr>
+      <tr><td><code>/admin/pending/[id]</code></td><td>Queued-post review + quality-gate pass/fail badge + retry/delete</td></tr>
+      <tr><td><code>/admin/login</code></td><td>Sign-in page</td></tr>
+    </table>
+
+    <h4>Auth design — stateless, no database</h4>
+
+    <ol>
+      <li><strong>Single <code>ADMIN_PASSWORD</code> env var.</strong> Login POSTs the password to
+      <code>/api/admin/login</code>, compared with <code>crypto.timingSafeEqual()</code> plus an
+      in-memory brute-force throttle.</li>
+      <li><strong>Stateless HMAC-SHA256 token.</strong> On success the server issues a signed token
+      (HMAC of the password) in an httpOnly <code>aitrends_admin</code> cookie, 12-hour expiry.
+      Verification needs no database — just recompute the HMAC.</li>
+      <li><strong>Route-group guard.</strong> <code>app/admin/(panel)/layout.tsx</code> checks the
+      cookie and redirects to <code>/admin/login</code> when missing. <code>/admin/api/*</code> routes
+      check it themselves and return 401.</li>
+    </ol>
+
+    <h4>The gate-aware retry</h4>
+
+    <p>The retry button (<code>PATCH /api/admin/pending/[id]</code>) resets a row to
+    <code>pending_image</code>, <code>attempts = 0</code>, <code>updated_at</code> for the next hourly
+    Phase 2 run — but it is <strong>blocked with HTTP 422 + reasons when the stored content fails the
+    quality gate</strong>. Verified live: retrying post 320 returned
+    <code>too short (128 words, min 400); missing "Why this matters" closing</code>. A retry can never
+    silently fail at publish again — the panel tells Felix exactly why, up front. A mirrored
+    <code>lib/qualityGate.ts</code> on the frontend renders the same pass/fail badge Phase 2 uses, so
+    the badge always matches reality.</p>
+
+    <div class="callout success">
+      <div class="callout-icon">✅</div>
+      <div class="callout-body">
+        <strong>Tested locally before shipping</strong>
+        <p>Build + lint clean. Dev server flow: unauthenticated <code>/admin</code> → 307 redirect to
+        login; wrong password → 401; correct password → 200; post PATCH without cookie → 401. Then the
+        dev server was killed. Production deploy pushed as commit <code>1eca1e5</code> (18 files, 1371
+        insertions).</p>
+      </div>
+    </div>
+
+    <h4>What happens to the 10 held failed posts</h4>
+
+    <p>Felix's explicit decision: the 10 AI Horde-era failed posts (ids 171, 317–320, 331–335) are
+    <strong>held, not deleted</strong>. None can pass the current gate — the 403- and 654-word ones
+    lack the "Why This Matters" heading, the rest are under 400 words — so only Delete makes sense
+    once Felix reviews them in the panel. The admin panel exists precisely so that review can happen
+    without a SQL session.</p>
+
+    <div class="callout warn">
+      <div class="callout-icon">⚠️</div>
+      <div class="callout-body">
+        <strong>Action required before production use</strong>
+        <p><code>ADMIN_PASSWORD</code> is only a temp value (<code>temp-test-password-2026</code>) in
+        the gitignored <code>.env.local</code>. A real value must be set in Vercel env before the panel
+        is usable in production — otherwise <code>/api/admin/login</code> returns 500 ("Admin auth not
+        configured").</p>
+      </div>
+    </div>
+
+    <div class="tip">
+      <strong>One-line summary:</strong> Session #36 gave the pipeline one shared quality gate (so the
+      two phases can never disagree again), one fast count query (5 parallel head-counts instead of
+      fetching 300+ rows), and one admin review room for Felix — with a gate-aware retry that refuses
+      to re-queue content that can never pass.
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>Mirror-rule compliance note:</strong> This Chapter 46 is the TRAINING_MANUAL.html half of
+    the Session #36 record. CLAUDE.md (header, routes, key files, env var, session-history row, to-do
+    entries) and SESSION_LOG.html (Session #36 entry) are the other halves — written as one unit per
+    the rule.
+  </div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 2 August 2026 — Chapter 45 added: the earliest documentation style
-    is the standard (TRAINING_MANUAL Chapters 1–21, SESSION_LOG Sessions 1–14).
+    Last updated: 3 August 2026 — Chapter 46 added: Session #36 — the single-source
+    quality gate, the homepage category-count query optimisation, and the admin panel
+    MVP that lets Felix review every stage of the pipeline.
     Chapters 44 covers Session #35: Cloudflare image provider, Phase 1 quality-gate
     alignment, Groq-primary + TPD skip decision, Gemini 20 req/day cap, and the rule
     that CLAUDE.md changes must be mirrored in full in TRAINING_MANUAL.html +

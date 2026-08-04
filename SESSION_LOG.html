@@ -12506,6 +12506,132 @@ $ git push origin main
 
 </div><!-- end session-35 -->
 
+<!-- ═══════════════════ SESSION 36 — 3 August 2026 ═══════════════════ -->
+<div class="session" id="session-36">
+<h2>Session #36 — 3 August 2026</h2>
+<p class="session-meta">scout-agent + aitrends.ng + docs · single-source quality gate (quality-gate.js), podcast/editorial "Why This Matters" compliance, 6 stale failed posts deleted, homepage category-count query optimized, admin panel MVP built (18 files), 10 AI Horde-era failed posts held for Felix's review</p>
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — single-source quality gate (commit e06a907)</div>
+    <div class="bubble">
+      <p>The quality-gate logic had been duplicated as separate copies in <code>publisher.js</code>
+      (Phase 2) and <code>scout.js</code>/<code>scout-podcast.js</code> (Phase 1), and the two copies
+      had drifted. Extracted into one shared <code>quality-gate.js</code> with its own
+      <code>evaluateQualityGate()</code>, <code>contentWordCount()</code>, and
+      <code>MIN_DIGEST_WORDS = 400</code> — both phases import the same gate, so a future rule change
+      is one edit, not three.</p>
+
+      <h4>Bash: git log — verification of aligned gate</h4>
+      <pre><code>commit e06a907 — "fix: single-source quality gate (quality-gate.js)"
+pushed to FAIT-Blog/scout-agent origin/main</code></pre>
+
+      <p>Alignment immediately exposed posts <strong>337/339-343</strong> (Cloudflare-era, queued 2
+      Aug) dying at Phase 2: their content had no literal "Why this matters" heading and was &lt;400
+      words — the publisher gate rejected them while Phase 1's earlier shorter gate had let them
+      through. That two-phase gate drift was exactly the class of bug the single-source refactor was
+      for. Applied Felix's improved editorial instructions verbatim to
+      <code>generateDigest()</code>/<code>generateBlendedDigest()</code> in gemini.js and to
+      gemini-podcast.js, so Phase 1 produces gate-passing content directly.</p>
+
+      <p>Post <strong>344</strong> ("How Content Creators Are Confronting the Cognitive Cost of
+      Generative AI") was the first post through the aligned pipeline — passed both Phase 1 and Phase 2
+      gates live, published. Deleted the 6 stale Cloudflare-era failed <code>pending_posts</code> rows
+      (337, 339-343) whose stored content can never pass the current gate (Phase 2 never regenerates
+      content) — failed count dropped 16 → 10.</p>
+    </div>
+  </div>
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — homepage category counts optimized (commit 2e39f76)</div>
+    <div class="bubble">
+      <p>New <code>lib/categoryCounts.ts</code> — 5 parallel <code>head</code> count queries (HTTP
+      206-style partial reads) replace fetching every published row (~300+ posts) per page load.
+      Both <code>page.tsx</code> and <code>category/[slug]/page.tsx</code> wired to it. Deployed and
+      verified: live TTFB 3.17s; sidebar counts 60/28/167/47/14.</p>
+    </div>
+  </div>
+
+  <div class="turn user">
+    <div class="label">Felix</div>
+    <div class="bubble">
+      Is there an admin backend to review these? If not, blueprint one for me first.
+    </div>
+  </div>
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — blueprint delivered, none existed</div>
+    <div class="bubble">
+      <p>Verified no admin backend exists anywhere in the codebase — it's the documented backlog item
+      (Section 7 🔵 Later, since Session #13). Delivered a full blueprint: routes, auth model
+      (<code>ADMIN_PASSWORD</code> env var → timing-safe compare → stateless HMAC session cookie),
+      data helpers, and the gate-aware retry design.</p>
+    </div>
+  </div>
+
+  <div class="turn user">
+    <div class="label">Felix</div>
+    <div class="bubble">
+      Hold the 10 failed posts until the panel exists — and build the MVP.
+    </div>
+  </div>
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — admin panel MVP built (commit 1eca1e5, 18 files, +1371)</div>
+    <div class="bubble">
+      <h4>Files added</h4>
+      <ul>
+        <li><code>lib/adminAuth.ts</code> — timing-safe password compare, stateless HMAC-SHA256 session token, httpOnly <code>aitrends_admin</code> cookie verify (12h).</li>
+        <li><code>lib/qualityGate.ts</code> — mirror of scout-agent <code>quality-gate.js</code> so the badge matches Phase 2 exactly.</li>
+        <li><code>lib/adminData.ts</code> — data helpers (counts, posts, pending queue).</li>
+        <li><code>app/api/admin/login</code>, <code>/logout</code>, <code>/posts/[id]</code> (PATCH/DELETE), <code>/pending/[id]</code> (PATCH retry/DELETE).</li>
+        <li><code>app/admin/(auth)/login/</code>, <code>app/admin/(panel)/layout.tsx</code> guard + overview, <code>/posts</code>, <code>/posts/[id]</code>, <code>/pending</code>, <code>/pending/[id]</code>.</li>
+        <li><code>components/admin/</code> — <code>AdminNav.tsx</code>, <code>AdminUI.tsx</code>, <code>PostActions.tsx</code>, <code>PendingActions.tsx</code>.</li>
+      </ul>
+
+      <h4>Gate-aware retry verified</h4>
+      <p>Retry (<code>PATCH /api/admin/pending/[id]</code>) resets <code>status='pending_image'</code>,
+      <code>attempts=0</code>, <code>updated_at</code> for the next hourly Phase 2 run — but is blocked
+      with <strong>HTTP 422 + reasons</strong> when the stored content fails the quality gate. Tested:
+      post 320 → <code>too short (128 words, min 400); missing "Why this matters" closing</code>. A
+      retry can never silently fail at publish again.</p>
+
+      <h4>Local test results (dev server, killed after)</h4>
+      <pre><code>unauthed /admin      → 307 redirect to /admin/login
+wrong password       → 401
+correct password     → 200 (session cookie set)
+posts PATCH no cookie → 401
+pending detail page  → FAIL gate badge with reasons shown</code></pre>
+
+      <p><strong>Felix decision recorded:</strong> the 10 AI Horde-era failed posts (171, 317-320,
+      331-335) are <strong>held, not deleted</strong> — none pass the current gate (403/654-word ones
+      lack "Why This Matters"; the rest &lt;400 words), so only Delete makes sense once reviewed in
+      the panel. <strong>⚠️ Action needed:</strong> <code>ADMIN_PASSWORD</code> is only a temp value
+      (<code>temp-test-password-2026</code>) in gitignored <code>.env.local</code> — needs a real
+      value in Vercel env before the panel is usable in production.</p>
+    </div>
+  </div>
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — doc mirror (CLAUDE.md → SESSION_LOG.html → TRAINING_MANUAL.html)</div>
+    <div class="bubble">
+      <p>Per the Session #35 mirror rule, this session's CLAUDE.md changes were written as one unit
+      across all three documents:</p>
+      <ul>
+        <li><strong>CLAUDE.md</strong> — header updated (Session #36, 2026-08-03); Pages/Routes table
+        gained the admin routes; Key Files section restructured (admin components moved into
+        <code>components/admin/</code>, admin lib files + app dirs added); <code>ADMIN_PASSWORD</code>
+        added to frontend env vars; "What Has Been Built" gained admin panel + homepage-count entries;
+        scout File Structure + pipeline step 8 updated for <code>quality-gate.js</code>; 🔴 Critical
+        gained single-source-gate + admin-panel entries; session-history row S36 added.</li>
+        <li><strong>SESSION_LOG.html</strong> — this Session #36 entry.</li>
+        <li><strong>TRAINING_MANUAL.html</strong> — append-only Chapter 46 "One Quality Gate, One
+        Query, One Review Room" + footer updated (3 August 2026).</li>
+      </ul>
+    </div>
+  </div>
+
+</div><!-- end session-36 -->
+
 </div>
 </body>
 </html>
