@@ -12718,6 +12718,274 @@ posts table (matching uuid bc35fc93):
 
 </div><!-- end session-37 -->
 
+<div class="session" id="session-38">
+
+  <h2>Session #38 — 4 Aug 2026 — Story Worthiness Score (SWS) gate built + integrated</h2>
+  <p class="meta">scout-agent + docs. Felix approved the SWS architecture and four refinements (rename, structured
+  diagnostics, rollout modes, rebalanced weighting). Option C weights + confidence classification approved.
+  Gate integrated into scout.js STEP 7, validation harness verified in all three modes, commit pushed.</p>
+
+  <!-- TURN 1 -->
+
+  <div class="turn user">
+    <div class="label">Felix</div>
+    <div class="bubble">
+      <p>I approve the overall architecture and the insertion point. [Refinement 1] use "Story Worthiness Score"
+      (SWS) internally... [Refinement 2] give each skip a structured breakdown (Richness, Fact Density, Source
+      Diversity, Editorial Potential) plus the specific reason(s)... [Refinement 3] rollout modes — observe
+      (score/log only), shadow (log would-skip, still generate), enforce (skip)... [Refinement 4] rebalance the
+      weighting — evaluate whether fact density and editorial potential should carry slightly more influence
+      than raw source volume, since a concise but information-rich report can often produce a better article
+      than a long promotional press release.</p>
+    </div>
+  </div>
+
+  <!-- TURN 2 -->
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — apply refinements 1–3 + rebuild validation harness</div>
+    <div class="bubble">
+      <p>Applied refinements 1–3 directly to the module:</p>
+      <h4>Rename (refinement 1) + structured report (refinement 2) + modes (refinement 3)</h4>
+      <p>New module <code>scout-agent/story-worthiness.js</code> (supersedes the working-copy
+      <code>worthiness.js</code>, which was never committed and is now deleted). Exports:</p>
+      <pre><code>export const STORY_WORTHINESS_CONFIG = {
+  mode: 'observe',                    // observe | shadow | enforce
+  weights: { richness: 0.30, facts: 0.30, diversity: 0.20, potential: 0.20 },
+  minScore: 55,
+  ...
+}
+export function assessStoryWorthiness(input) { /* → { pass, score, signals, reasons, warnings } */ }
+export function storyWorthinessReport(verdict) { /* → { scoreLine, breakdown[4], reasons } */ }
+export function storySignature(title, text)    { return extractEntities(...) }
+export function sharedEntityCount(a, b)        { ... }
+export function storiesOverlap(a, b)           { title-token rule: ≥3 shared tokens OR ≥2 tokens + ≥1 entity }</code></pre>
+      <h4>Bash: remove superseded module + migrate validation harness</h4>
+      <pre><code>rm scout-agent/worthiness.js
+# .validate-sws.mjs rewritten: imports assessStoryWorthiness / storySignature /
+# storyWorthinessReport / STORY_WORTHINESS_CONFIG, exercises MODE=observe|shadow|enforce,
+# replays real run 30879318255 (Alibaba industry, Alibaba-via-anthropic dup, OpenAI math,
+# reward-model, thin summary, fluff PR, long fluff PR).</code></pre>
+      <h4>Bash: observe-mode run (first pass)</h4>
+      <pre><code>node .validate-sws.mjs
+➡️ GENERATE  industry  | Alibaba Qwen3.8-Max     SWS 91/100 (HIGH)   [87|100|90|83]
+➡️ GENERATE  anthropic | Alibaba dup             SWS 91/100 (HIGH)
+   reasons: same story already generated this run — overlaps "Alibaba unveils..."
+➡️ GENERATE  ai-models | OpenAI math             SWS 65/100          [76|48|90|50]
+➡️ GENERATE  tools     | reward-model            SWS 69/100          [69|56|90|67]
+➡️ GENERATE  SINGLE    | Thin RSS summary        SWS 14/100  SKIP    [0|3|30|33]
+➡️ GENERATE  SINGLE    | Fluff PR                SWS 37/100  SKIP    [30|30|30|67]
+➡️ GENERATE  SINGLE    | LONG fluff PR           SWS 59/100  PASS ⚠️ [100|32|30|67]</code></pre>
+      <p>Two findings: (1) the long-fluff PR row was <em>also</em> flagged as a cross-category duplicate —
+      test-data artifact, because I'd given it the same title as the short fluff PR. Fixed by renaming to
+      "Vendor unveils enterprise transformation platform" to isolate the weighting demonstration.
+      (2) Under current weights the long fluff PR <strong>passes (59)</strong> — the exact volume-vs-facts
+      case Felix flagged.</p>
+      <h4>Bash: all three modes</h4>
+      <pre><code>MODE=observe  → every story GENERATE, scores/breakdowns/reasons logged
+MODE=shadow   → ⚠️ GENERATE (shadow would-SKIP) for anthropic dup, thin summary, fluff PR
+MODE=enforce  → ⏭️ SKIP for the same three; long fluff PR still PASS (59) under current weights
+SUMMARY: 3/7 would-be skips, ~11 LLM calls saved if enforced</code></pre>
+    </div>
+  </div>
+
+  <!-- TURN 3 -->
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — weighting proposal computed</div>
+    <div class="bubble">
+      <p>Computed exact scores under candidate reweightings from the real signal values:</p>
+      <pre><code>story        | current 0.30/0.30/0.20/0.20 | C 0.20/0.35/0.20/0.25 | B 0.15/0.40/0.15/0.30
+Alibaba      | 91 PASS                     | 91 PASS               | 91 PASS
+OpenAI math  | 65 PASS                     | 63 PASS               | 59 PASS
+Reward model | 69 PASS                     | 68 PASS               | 66 PASS
+Thin summary | 14 SKIP                     | 15 SKIP               | 16 SKIP
+Fluff PR     | 37 SKIP                     | 41 SKIP               | 41 SKIP
+LONG fluff   | 59 PASS ⚠️                  | 54 SKIP ✅            | 52 SKIP</code></pre>
+      <p>Both B and C flip the problem case; C matches "slightly more influence", keeps diversity at 0.20.
+      Edge checks for C: rich-but-number-light interview 66→63 PASS, dense medium 62→63 PASS, long
+      rich+fact-dense 78→77 PASS — no false rejects.</p>
+      <h4>Question to Felix — which weighting?</h4>
+      <pre><code>Option C (Recommended): richness 0.20, facts 0.35, diversity 0.20, potential 0.25
+Option B (aggressive):  richness 0.15, facts 0.40, diversity 0.15, potential 0.30
+Keep current weights:   0.30/0.30/0.20/0.20 — long fluff PR stays a pass (59)</code></pre>
+    </div>
+  </div>
+
+  <!-- TURN 4 -->
+
+  <div class="turn user">
+    <div class="label">Felix (interrupted)</div>
+    <div class="bubble">
+      <p>Please ask the question again. I clicked by mistake that's why I interupted the process.</p>
+    </div>
+  </div>
+
+  <!-- TURN 5 -->
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — re-asked the weighting question</div>
+    <div class="bubble">
+      <p>Re-asked the identical weighting question.</p>
+    </div>
+  </div>
+
+  <!-- TURN 6 -->
+
+  <div class="turn user">
+    <div class="label">Felix</div>
+    <div class="bubble">
+      <p>I approve Option C.</p>
+      <p>The revised weighting aligns well with the editorial philosophy we want for AITrends. It shifts
+      emphasis away from raw source volume and toward factual richness and editorial potential, while
+      preserving source diversity as a meaningful signal.</p>
+      <p>The simulation is convincing: all genuinely worthy stories continue to pass. Thin stories continue
+      to be rejected. The long, volume-padded press release is now correctly rejected.</p>
+      <p>Please treat these weights as v1 calibration values rather than permanent constants. As we accumulate
+      real production data, we'll revisit them using evidence from the logs instead of assumptions.</p>
+      <p>One additional refinement: include a simple confidence classification alongside the Editorial
+      Worthiness Score (for example: High, Medium, Low) based on the final score's distance from the
+      threshold. This is for diagnostics only and should not affect the decision logic.</p>
+      <p>With those refinements, I'm happy to proceed with the scout.js integration.</p>
+    </div>
+  </div>
+
+  <!-- TURN 7 -->
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — Option C weights + confidence classification</div>
+    <div class="bubble">
+      <h4>Edit: story-worthiness.js — config weights → Option C + confidence bands</h4>
+      <pre><code>weights: {
+  richness:  0.20,
+  facts:     0.35,
+  diversity: 0.20,
+  potential: 0.25,
+},
+minScore: 55,
+confidence: {
+  highDelta:   15,  // |score - minScore| >= 15 → High
+  mediumDelta: 5,   // |score - minScore| >= 5  → Medium; otherwise Low
+},</code></pre>
+      <h4>Edit: story-worthiness.js — confidenceLevel() (diagnostics only)</h4>
+      <pre><code>export function confidenceLevel(score) {
+  const { minScore, confidence: { highDelta, mediumDelta } } = STORY_WORTHINESS_CONFIG
+  const distance = Math.abs(score - minScore)
+  if (distance >= highDelta) return 'high'
+  if (distance >= mediumDelta) return 'medium'
+  return 'low'
+}</code></pre>
+      <p>Verdict now returns <code>confidence</code>; the report scoreLine renders it, e.g.
+      <code>SWS 54/100 (pass threshold 55, confidence LOW)</code>. Header comment updated: weights are
+      v1 <em>calibration</em> values (revisit from real logs), and confidence is explicitly "never part of
+      the decision logic".</p>
+      <h4>Bash: re-validate under Option C</h4>
+      <pre><code>Config: minScore=55, weights={"richness":0.2,"facts":0.35,"diversity":0.2,"potential":0.25}
+Alibaba    91/100 HIGH   (PASS)
+Alibaba dup 91/100 HIGH  (BLOCKED as duplicate, ~9 blend calls saved)
+OpenAI math 63/100 MEDIUM (PASS)
+Reward model 68/100 MEDIUM (PASS)
+Thin RSS summary 15/100 HIGH   (SKIP — the historical failure mode)
+Fluff PR        39/100 HIGH   (SKIP)
+LONG fluff PR   54/100 LOW    (SKIP — the weighting-motivation case, now fixed)
+SUMMARY: 4/7 would-be skips, ~12 LLM calls saved if enforced</code></pre>
+      <p>Long fluff PR drops 59 → 54 and is rejected; the LOW confidence label correctly flags it as the
+      marginal call worth eyeballing.</p>
+    </div>
+  </div>
+
+  <!-- TURN 8 -->
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — scout.js integration (4 edits)</div>
+    <div class="bubble">
+      <h4>Edit 1 — import</h4>
+      <pre><code>import { assessStoryWorthiness, storySignature, storyWorthinessReport, STORY_WORTHINESS_CONFIG } from './story-worthiness.js'</code></pre>
+      <h4>Edit 2 — tracker init before STEP 0.5</h4>
+      <pre><code>// ── Story Worthiness Score (SWS) — cross-category duplicate tracker ─────────
+// Every story queued THIS run (editorial Step 0.5 + RSS STEP 7) is recorded
+// here. The SWS gate at STEP 7 checks incoming RSS stories against this list,
+// so the same story arriving via a different feed/category (e.g. Alibaba Qwen
+// in both industry and anthropic) is detected BEFORE it burns N+1 blend LLM
+// calls. Editorial content is NEVER gated by SWS — but it IS tracked, so the
+// RSS loop won't duplicate a story Felix already had us write.
+const queuedStoriesThisRun = []</code></pre>
+      <h4>Edit 3 — editorial tracker push (after consumeEditorialRows)</h4>
+      <pre><code>queuedStoriesThisRun.push({
+  title: digest.title,
+  entities: storySignature(digest.title, item.content || item.instruction || ''),
+})</code></pre>
+      <h4>Edit 4 — the STEP 7 gate (before any Groq/Gemini call)</h4>
+      <pre><code>const swsInput = {
+  title: topArticle.title || '',
+  primaryText: topArticle.fullText || topArticle.summary || '',
+  hasFullText: Boolean(topArticle.fullText),
+  primaryDomain: extractDomain(topArticle.link),
+  bucketList,
+  clusterScore: topArticle.clusterScore || 0,
+  queuedStoriesThisRun,
+}
+const swsVerdict = assessStoryWorthiness(swsInput)
+const swsReport = storyWorthinessReport(swsVerdict)
+const swsMode = STORY_WORTHINESS_CONFIG.mode
+console.log(`  [SWS ${swsMode}] ${swsReport.scoreLine}`)
+for (const line of swsReport.breakdown) console.log(`    ${line}`)
+if (swsReport.reasons.length) console.log(`    reasons: ${swsReport.reasons.join(' | ')}`)
+
+if (swsMode === 'enforce' && !swsVerdict.pass) {
+  console.log(`  ⏭️  SKIPPED_BEFORE_GENERATION — story worthiness ${swsVerdict.score}/100 below ${STORY_WORTHINESS_CONFIG.minScore} (confidence ${swsVerdict.confidence}) — marking ${category} articles seen`)
+  for (const article of capped) {
+    await markSeen(article.feedUrl, article.guid, article.title, null)
+  }
+  continue
+}
+if (swsMode === 'shadow' && !swsVerdict.pass) {
+  console.log(`  ⚠️  [SWS shadow] would-SKIP (${swsVerdict.score}/100) — generating anyway for comparison`)
+}</code></pre>
+      <h4>Edit 5 — RSS tracker push (after queue success)</h4>
+      <pre><code>queuedStoriesThisRun.push({
+  title: digest.title,
+  entities: storySignature(digest.title, topArticle.fullText || topArticle.summary || ''),
+})</code></pre>
+      <h4>Bash: syntax + import smoke test</h4>
+      <pre><code>node --check scout.js && node --check story-worthiness.js && node --check .validate-sws.mjs
+→ ALL SYNTAX OK
+node --input-type=module -e "await import('./scout.js').then(m => console.log(Object.keys(m)))"
+→ scout.js loaded OK — exports: runScout</code></pre>
+    </div>
+  </div>
+
+  <!-- TURN 9 -->
+
+  <div class="turn assistant">
+    <div class="label">Claude Code — commit + push scout-agent</div>
+    <div class="bubble">
+      <h4>Bash: commit</h4>
+      <pre><code>git add scout.js story-worthiness.js .validate-sws.mjs
+git commit -m "feat: story worthiness gate (SWS) — zero-LLM pre-generation screen
+
+Deterministic module story-worthiness.js scores each RSS story (richness 0.20 /
+facts 0.35 / diversity 0.20 / potential 0.25, minScore 55, confidence label)
+before any Groq/Gemini call at STEP 7. Blocks thin stories that previously
+produced rejected <400-word drafts (July 23-Aug 1) and same-run cross-category
+duplicates (e.g. Alibaba Qwen in both industry + anthropic) before they burn
+N+1 blend LLM calls. Rollout modes: observe (default) / shadow / enforce.
+Editorial Step 0.5 and podcast pipeline never gated, but editorial stories are
+tracked so RSS can't duplicate Felix's picks. Validation harness replays real
+run 30879318255."
+→ [main 27e1944] feat: story worthiness gate (SWS) — zero-LLM pre-generation screen
+git push origin main
+→ e06a907..27e1944  main -> main  (FAIT-Blog/scout-agent)</code></pre>
+      <h4>Docs mirroring</h4>
+      <p>CLAUDE.md updated: Last Updated header (Session #38), SWS entry added to the Critical/completed
+      section, <code>story-worthiness.js</code> added to the Scout file-structure listing, pipeline STEP 7
+      annotated with the SWS gate, Session #38 row appended to the history table. SESSION_LOG.html and
+      TRAINING_MANUAL.html updated per Section 9 — CLAUDE.md pushed, HTML pair committed locally only.</p>
+    </div>
+  </div>
+
+</div><!-- end session-38 -->
+
 </div>
 </body>
 </html>

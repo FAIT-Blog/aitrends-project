@@ -7568,11 +7568,127 @@ export async function getCategoryCounts() {
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
+  <div class="chapter" id="chapter-48">
+    <div class="chapter-num">Chapter 48</div>
+    <h2>The Story Worthiness Score (SWS) Gate — Spending Generation Tokens Only on Stories That Can Win</h2>
+
+    <p>Session #38 (4 August 2026) built the missing <em>front</em> of the pipeline's quality defence.
+    Every gate so far ran at the <em>end</em> — the Phase 1 quality gate and the Phase 2 publisher gate
+    both reject content <em>after</em> a Groq/Gemini call produced it. In the July 23–Aug 1 window,
+    thin stories consumed expensive generation tokens, produced rejected &lt;400-word drafts, then were
+    deleted by hand. The Story Worthiness Score answers the same question cheaply and <em>early</em>:
+    "does this story have enough real material to support a 400-word post?" — scored deterministically,
+    with <strong>zero LLM calls</strong>, on source material Scout has already fetched.</p>
+
+    <h3>48.1 The Gate's Position and Guarantees</h3>
+    <ul>
+      <li>Runs at the <strong>start of STEP 7</strong> in <code>scout.js</code> — after full-text fetch
+      (STEP 5) and the Tavily same-story bucket (STEP 6), before any Groq/Gemini call.</li>
+      <li><strong>Deterministic:</strong> pure regex + entity counting over already-fetched text. Same
+      input → same score, always. Every skip is auditable.</li>
+      <li><strong>Configurable:</strong> every weight, threshold, and flag lives in
+      <code>STORY_WORTHINESS_CONFIG</code> — the scoring functions contain no business constants.</li>
+      <li><strong>Never blocks the editorial path (Step 0.5) or the podcast pipeline.</strong> Felix's
+      editorial content always wins. But editorial stories <em>are</em> tracked, so the RSS loop can't
+      duplicate a story Felix already had us write.</li>
+      <li>Existing safety nets are untouched: the 400-word floor, one-time expansion retry,
+      hallucination prevention, and blend rules still apply after generation. SWS only prevents
+      <em>reaching</em> them with source material that can never pass.</li>
+    </ul>
+
+    <h3>48.2 The Scoring Model</h3>
+    <p>Four weighted sub-signals, each 0–100, composited against <code>minScore: 55</code>:</p>
+    <table>
+      <tr><th>Signal</th><th>Weight</th><th>What it measures</th></tr>
+      <tr><td><code>richness</code></td><td>0.20</td><td>How much real source text exists — ramps 300 → 1500 chars; a bare RSS summary (no extracted body) caps at 50.</td></tr>
+      <tr><td><code>facts</code></td><td>0.35</td><td>Fact density — numbers ×4, unique entities ×2, quotes ×2, reporting verbs ×1, per 1000 chars (target 30).</td></tr>
+      <tr><td><code>diversity</code></td><td>0.20</td><td>Independent sources covering the same story — 30/60/90 for 1/2/3+ domains, +10 cluster bonus.</td></tr>
+      <tr><td><code>potential</code></td><td>0.25</td><td>Which of the 6 editorial elements (what-happened, why-it-matters, who's-affected, opportunities, risks, watch-next) the text supports.</td></tr>
+    </table>
+    <p><strong>Option C weights (Felix, Session #38):</strong> richness trimmed from 0.30 → 0.20, facts
+    and potential raised. The rationale came from a live failure in the simulation — a long,
+    volume-padded press release scored 59/100 (PASS) under the old weights purely on raw length, then
+    correctly failed at 54/100 (SKIP) under Option C. These are <strong>v1 calibration values</strong>,
+    not permanent constants — they get revisited from real production logs once observe/shadow modes
+    accumulate data.</p>
+    <div class="callout info">
+      <strong>Confidence classification (diagnostics only)</strong>
+      <p>Each verdict carries a <code>high</code> / <code>medium</code> / <code>low</code> label based
+      on distance from the 55 threshold (±15 = high, ±5 = medium, else low). It is never part of the
+      decision logic — pass/skip is purely score ≥ 55 plus hard blocks. Its purpose is to flag marginal
+      calls (like the 54/100 long fluff PR at LOW confidence) for human eyeballing rather than
+      over-trusting an exact number.</p>
+    </div>
+
+    <h3>48.3 Hard Blocks (independent of score)</h3>
+    <ul>
+      <li>No source text at all (no full text, no summary, no blend content).</li>
+      <li>Same story already generated earlier in this run — the <strong>cross-category duplicate</strong>.
+      The Alibaba Qwen3.8-Max story arrived in <em>both</em> industry and anthropic feeds in the real
+      05:00 UTC run; the second copy would have burned ~9 blend LLM calls before it was caught.</li>
+    </ul>
+    <div class="callout warn">
+      <strong>The dedup rule is title-token-keyed, not entity-only</strong>
+      <p>Entity overlap alone is too loose: two <em>different</em> stories both mentioning "OpenAI" and
+      "Anthropic" were falsely merged during validation. The working rule: <code>storiesOverlap()</code>
+      requires ≥3 shared title tokens, OR ≥2 shared title tokens + ≥1 shared entity.</p>
+    </div>
+
+    <h3>48.4 Rollout Modes — observe → shadow → enforce</h3>
+    <p><code>STORY_WORTHINESS_CONFIG.mode</code> controls the blast radius:</p>
+    <ul>
+      <li><code>observe</code> (default) — calculate + log scores and the structured breakdown only;
+      never affects the pipeline.</li>
+      <li><code>shadow</code> — log the would-skip verdict but still generate; a full dry-run against
+      production data.</li>
+      <li><code>enforce</code> — perform the skip (mark articles seen + continue to the next category).</li>
+    </ul>
+    <p>Recommended rollout: observe (collect) → shadow (compare) → enforce (act). The gate shipped in
+    <strong>observe</strong> mode.</p>
+
+    <h3>48.5 The Validation Harness — Evidence Before Trust</h3>
+    <p><code>.validate-sws.mjs</code> replays real run <code>30879318255</code> (2026-08-04 05:00 UTC,
+    71 fresh articles) plus the documented thin-story failure pattern. Results under Option C:</p>
+    <table>
+      <tr><th>Story</th><th>Score</th><th>Confidence</th><th>Verdict</th></tr>
+      <tr><td>Alibaba Qwen3.8-Max (industry, queued in real run)</td><td>91</td><td>HIGH</td><td>PASS</td></tr>
+      <tr><td>Same Alibaba story via anthropic feed</td><td>91</td><td>HIGH</td><td>BLOCKED — duplicate (~9 blend calls saved)</td></tr>
+      <tr><td>OpenAI 10 math advances</td><td>63</td><td>MEDIUM</td><td>PASS</td></tr>
+      <tr><td>LLM reward-model research</td><td>68</td><td>MEDIUM</td><td>PASS</td></tr>
+      <tr><td>Thin RSS summary only (historical failure mode)</td><td>15</td><td>HIGH</td><td>SKIP</td></tr>
+      <tr><td>Fluff press release</td><td>39</td><td>HIGH</td><td>SKIP</td></tr>
+      <tr><td>Long volume-padded press release</td><td>54</td><td>LOW</td><td>SKIP — the weighting-motivation case, now fixed</td></tr>
+    </table>
+    <p>Run with <code>MODE=shadow</code> or <code>MODE=enforce</code> to observe the mode behaviour.</p>
+    <div class="callout warn">
+      <strong>What SWS cannot fix</strong>
+      <p>Quota exhaustion. In the real run, anthropic/ai-models/tools reached generation and failed on
+      429s (Groq TPD near cap, Gemini 20-requests/day free-tier ceiling) — not on worthiness. SWS's
+      savings are cross-category duplicates and thin/fluff stories, not provider capacity.</p>
+    </div>
+
+    <div class="tip">
+      <strong>Lesson:</strong> Cheap screens belong at the <em>front</em> of an expensive pipeline.
+      Every thin story the SWS catches in observe/shadow mode is a Groq/Gemini call (and later a manual
+      deletion) that never happens once enforce mode is switched on.
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>Mirror-rule compliance note:</strong> This Chapter 48 is the TRAINING_MANUAL.html half of
+    the Session #38 record. CLAUDE.md (Last Updated header, Critical SWS entry, file-structure +
+    pipeline-step updates, S38 history row) and SESSION_LOG.html (Session #38 entry) are the other
+    halves.
+  </div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
-    Last updated: 4 August 2026 — Chapter 47 added: Session #37 — admin panel goes live,
-    post-344 title discrepancy corrected, pipeline status (both providers exhausted).
+    Last updated: 4 August 2026 — Chapter 48 added: Session #38 — Story Worthiness Score (SWS) gate,
+    Option C weights + confidence classification, observe/shadow/enforce rollout, scout.js integration.
+    Chapter 47 covers Session #37: admin panel goes live, post-344 title discrepancy corrected.
     Chapter 46 covers Session #36: the single-source quality gate, the homepage
     category-count query optimisation, and the admin panel MVP.
   </p>
