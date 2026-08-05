@@ -13372,6 +13372,65 @@ git push origin main → 27e1944..0cba603 main -> main</code></pre>
       </div>
     </div>
 
+    <!-- TURN 4 -->
+
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>Excellent work. This post-mortem answers the right questions with evidence rather than assumptions, and it
+        confirms that our recent engineering work is paying off. The most important conclusion is that Story Worthiness
+        Assessment has been validated. We are no longer wasting generation calls on thin or unpublishable stories, and
+        there were no quality-gate failures in this run. The remaining inefficiencies are primarily orchestration issues
+        rather than generation issues. Please proceed with: A–D, E (LLM Request Ledger), Mirror the documentation.</p>
+        <p>Observations:</p>
+        <p>1. Quota exhaustion should become a hard stop — the sentinel bug is now a functional defect rather than an
+        optimisation opportunity. Once quota exhaustion is confirmed, the pipeline should stop immediately instead of
+        continuing with work that cannot succeed.</p>
+        <p>2. Duplicate detection should move earlier — please move duplicate detection ahead of Tavily enrichment
+        wherever practical. There is little value in spending enrichment resources on a story that will later be
+        recognised as a duplicate.</p>
+        <p>3. Fail fast — the blend abort proposal aligns with the overall engineering philosophy. If the blend clearly
+        cannot succeed after several consecutive failures, terminate it early and continue with the next candidate.</p>
+        <p>4. The LLM Request Ledger is now a core component — treat the ledger as permanent infrastructure rather than
+        debugging instrumentation. Every LLM request should become traceable so future optimisation decisions are based
+        on measured evidence instead of reconstructed logs.</p>
+        <p>5. Future investigation (do not implement yet) — evaluate whether blend mode should remain fixed at eight
+        digests; investigate whether it could become adaptive (minimum required sources, target confidence, maximum cap).
+        Objective: stop digest generation once sufficient evidence has been gathered rather than always consuming the
+        maximum. Add it to the engineering backlog for future evaluation.</p>
+      </div>
+    </div>
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p>Confirmed that all approved items had already landed in commit <code>0cba603</code> (pushed to
+        FAIT-Blog/scout-agent): A once-per-run fallback alert, B quota stop sentinel actually thrown, C cross-category
+        dedup before search, D blend abort threshold (<code>MAX_CONSECUTIVE_DIGEST_FAILURES = 3</code>), E LLM Request
+        Ledger (<code>llm_request_ledger</code> + <code>logLlmRequest()</code>, fail-silent, keyed by
+        <code>GITHUB_RUN_ID</code>), plus the podcast-path wiring and the docs mirror.</p>
+        <p><strong>Observation 1–3</strong> (hard stop / earlier dedup / fail fast) map exactly onto fixes B, C and D —
+        already implemented and verified (syntax + module smoke tests, commit <code>0cba603</code>). No further code
+        change needed.</p>
+        <p><strong>Observation 4</strong> (ledger = permanent infrastructure): recorded as such in the docs — added a
+        Critical Rule to Section 6 ("The LLM Request Ledger is permanent infrastructure (Session #40)… never remove it
+        or make its failures fatal") and a matching line to Section 8 "What Claude Code Must NOT Do" (never remove the
+        <code>llm_request_ledger</code> telemetry — must stay fail-silent, every request must keep being recorded).</p>
+        <p><strong>Observation 5</strong> (adaptive blend — do not implement): added to the 🔵 Later engineering backlog
+        as "Adaptive blend digest count (Session #40 — evaluate only, DO NOT implement yet)", noting the evaluation
+        dimensions Felix specified (minimum required sources, target-confidence signal, maximum cap), the current
+        fixed-8 behaviour (<code>MAX_SOURCES = 8</code> in <code>generateBlendedDigest</code>'s source loop), and the
+        future evidence base (SWS confidence bands + the ledger's measured per-call outcomes).</p>
+        <h4>Bash: CLAUDE.md commit + push</h4>
+        <pre><code>git commit -m "docs: S40 approval notes — ledger as permanent infra (Critical Rules + Must Not Do) + adaptive-blend backlog item"
+→ [main 02b0914]
+git push origin main → ec65ea6..02b0914 main -> main</code></pre>
+        <h4>Docs mirroring</h4>
+        <p>SESSION_LOG Session #40 TURN 4 (this turn) + TRAINING_MANUAL Chapter 51 committed locally only, per the
+        split-commit rule.</p>
+      </div>
+    </div>
+
   </div>
 
 </div>

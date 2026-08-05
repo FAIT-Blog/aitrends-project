@@ -7797,6 +7797,9 @@ pending_posts now: 321 rows total, 0 failed</code></pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
+    Last updated: 5 August 2026 — Session #40 approval follow-up: Felix confirmed A–E (ledger = permanent
+    infrastructure, added to Critical Rules + Must Not Do) and logged the adaptive-blend evaluation as a
+    backlog item (Chapter 51).
     Last updated: 5 August 2026 — Session #40: run post-mortem of 30967158949 → fixes A–E (once-per-run
     fallback alert, quota stop sentinel, cross-category dedup before search, blend abort threshold,
     LLM Request Ledger) committed in 0cba603; Chapter 50 added.
@@ -7927,6 +7930,67 @@ pending_posts now: 321 rows total, 0 failed</code></pre>
       Session #40 record. CLAUDE.md (Last Updated header, Section 6 A–E entry, 🔴 Critical entry, S40 history row,
       commit ec65ea6 pushed) and SESSION_LOG.html (Session #40 entry) are the other halves. Scout-agent code is
       commit 0cba603 on FAIT-Blog/scout-agent.
+    </div>
+  </div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+  <div class="chapter" id="chapter-51">
+    <div class="chapter-num">Chapter 51</div>
+    <h2>The Post-Mortem Verdict: Validation, Hard Stops, and the Adaptive-Blend Backlog Item</h2>
+
+    <p>Session #40's approval turn (5 August 2026) is a useful record of what a good post-mortem verdict looks like:
+    Felix confirmed the audit's core conclusions, endorsed the fixes as already shipped, elevated the ledger to
+    permanent infrastructure, and converted the one "future idea" into a scoped backlog item rather than a hidden
+    code change.</p>
+
+    <h3>51.1 What Felix Confirmed</h3>
+    <ul>
+      <li><strong>SWS is validated.</strong> The run no longer wasted generation calls on thin or unpublishable
+      stories, and there were zero quality-gate failures — the remaining inefficiencies were orchestration (quota
+      stopping, duplicate searches, doomed blends), not generation.</li>
+      <li><strong>Quota exhaustion is a hard stop, not an optimisation.</strong> Observation 1 framed the sentinel bug
+      as a <em>functional defect</em> — once quota is confirmed dead, continuing any work that cannot succeed is a
+      defect. This maps to fix B (already shipped).</li>
+      <li><strong>Duplicate detection belongs before enrichment.</strong> Observation 2: don't spend Tavily on a story
+      that will later be recognised as a duplicate. Maps to fix C (already shipped).</li>
+      <li><strong>Fail fast.</strong> Observation 3 endorses the blend abort threshold as the house engineering
+      philosophy. Maps to fix D (already shipped).</li>
+      <li><strong>The ledger is core infrastructure.</strong> Observation 4 elevated <code>llm_request_ledger</code>
+      from "debugging instrumentation" to permanent infrastructure — every LLM request stays traceable so decisions
+      are based on measured evidence. Recorded in CLAUDE.md as a Section 6 Critical Rule and a Section 8 Must-Not-Do
+      item (never remove it; must stay fail-silent).</li>
+    </ul>
+
+    <h3>51.2 The Backlog Item: Adaptive Blend Digest Count</h3>
+    <p>Observation 5 was explicitly <em>not</em> a build request: evaluate whether
+    <code>generateBlendedDigest()</code> should stop being fixed at 8 source digests and become adaptive. It is logged
+    in CLAUDE.md's 🔵 Later engineering backlog with the evaluation dimensions Felix specified:</p>
+    <ol>
+      <li><strong>Minimum required sources</strong> — how many digests are required before synthesis is even possible.</li>
+      <li><strong>Target confidence</strong> — a signal that enough evidence has been gathered to synthesise well.</li>
+      <li><strong>Maximum cap</strong> — an upper bound on spend so an adaptive rule can never exceed today's worst case.</li>
+    </ol>
+    <div class="callout info">
+      <strong>Why this is worth evaluating:</strong> today every blend burns up to 8 digest calls even when the first
+      3–4 sources already cover the story. The evidence base for the future adaptive rule already exists: the SWS
+      confidence bands (High/Medium/Low) and the ledger's measured per-call outcomes. Nothing is implemented — the item
+      is deliberately parked until a future evaluation session.
+    </div>
+
+    <div class="callout warn">
+      <strong>Engineering discipline note:</strong> Felix's framing "add to the engineering backlog for future
+      evaluation, do not implement yet" is the correct boundary between an idea and a feature. The backlog entry
+      captures the <em>objective</em> (stop digest generation once sufficient evidence is gathered) and the evaluation
+      dimensions, so a future session can evaluate without re-deriving intent — while the "DO NOT implement yet" marker
+      stops a well-meaning assistant from pre-emptively building it.
+    </div>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 51 is the TRAINING_MANUAL.html half of the Session #40
+      approval follow-up. CLAUDE.md (Section 6 Critical Rule + Section 8 Must-Not-Do for the ledger, 🔵 Later
+      adaptive-blend backlog item, commit 02b0914 pushed) and SESSION_LOG.html (Session #40 TURN 4) are the other
+      halves. Scout-agent code remains commit 0cba603 — this follow-up made no code changes.
     </div>
   </div>
 
