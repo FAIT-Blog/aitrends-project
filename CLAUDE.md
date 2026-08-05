@@ -814,7 +814,7 @@ silently deleted, per Felix's instruction to point out discrepancies with commen
 ### 🔵 Later (after system is perfected)
 - [ ] Connect newsletter subscribers to an email sending tool (Buttondown or Beehiiv — free tier for < 1000 subscribers)
 - [ ] Social media auto-posting (Twitter/X, LinkedIn on each Scout publish)
-- [ ] Admin dashboard on aitrends.ng (view, delete, manage posts without going into Supabase)
+- [x] ~~**Admin dashboard on aitrends.ng**~~ — **Done, Session #36 (1eca1e5), live Session #37.** This item had been carried forward in 🔵 Later since the Session #13 backlog; the admin panel MVP was built 3 Aug 2026 (overview, posts list/review, pending queue with quality-gate badge + retry/delete, password login via `ADMIN_PASSWORD` + httpOnly cookie) and verified live 4 Aug 2026 (Felix logged in successfully). The remaining admin ideas that might resurface (e.g. richer analytics views) are tracked at issue level, not here.
 - [ ] Render deployment for Scout (replace unreliable GHA cron — `index.js` daemon already written)
 - [ ] YouTube transcript proxy for GHA IP ranges
 - [ ] PDF ingestion (manual paste is current fallback)
