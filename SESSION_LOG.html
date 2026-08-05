@@ -13241,6 +13241,139 @@ git push origin main → 1eca1e5..8bc2587 main -> main (FAIT-Blog/aitrends-ng)  
 
   </div>
 
+  <div class="session" id="session-40">
+
+    <h2>Session #40 — 5 Aug 2026 — Post-mortem of run 30967158949 + fixes A–E (quota stop / alert dedupe / LLM Request Ledger)</h2>
+    <p class="meta">scout-agent + aitrends.ng + docs. Felix opened with "What did we do so far?", then posed a
+    9-question audit against a single complete pipeline run (36 LLM calls / 25 Gemini 429s / 4 Tavily searches /
+    29 Slack alerts / 4 blog outputs / 1 post published). I reconstructed the full call ledger from GH Actions logs +
+    Supabase, answered all 9 questions, Felix approved fixes A–E, and I implemented them (commit <code>0cba603</code>)
+    + mirrored all three docs.</p>
+
+    <!-- TURN 1 -->
+
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>What did we do so far?</p>
+      </div>
+    </div>
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p>Summarised Session #39: the live pipeline audit (posts 345–348 landed Aug 3–5; post 348 body spot-check
+        passed — grounded facts, clean h3s, "Why this matters" closing, 5 sources), Verify OG meta tags closed (all 10
+        social tags on post 348), Part C closed (the 10 held AI Horde-era failed posts deleted — <code>pending_posts</code>
+        now 0 failed rows), and the admin detail-page delete 404 fix (commit <code>8bc2587</code>, pushed, auto-deployed).</p>
+      </div>
+    </div>
+
+    <!-- TURN 2 -->
+
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>Continued with the 9-question post-mortem audit of run 30967158949 — a single complete run from the GH
+        Actions log. Asked how many LLM calls were made, how many succeeded vs failed, why there were 29 Slack alerts,
+        whether Scout stops when quota is exhausted, whether Gemini is retried on failure, why the Volta story was
+        searched twice, and what the actual token spend vs published value was.</p>
+      </div>
+    </div>
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p>Full post-mortem delivered. Evidence assembled by replaying the run log and correlating against live
+        Supabase (gemini_quota_cooldown row, pending_posts row 348, llm call stream from the GHA step output).</p>
+        <p><strong>Answers to the 9 questions:</strong> the run made <strong>36 LLM calls</strong> (9 per category × 4
+        categories — industry blend 8 sources, anthropic blend 8, ai-models blend 8, tools blend 8). <strong>11/36
+        succeeded</strong> — 7 Groq digests for industry + 1 industry synthesis + 1 anthropic digest + 1 ai-models digest
+        + 1 tools digest. <strong>25/36 were Gemini 429 quota responses</strong> (all remaining digests). <strong>4 Tavily
+        searches</strong> ran (industry, anthropic, ai-models, tools) — the anthropic search was a byte-identical duplicate
+        of industry's Volta query. <strong>29 Slack alerts</strong> fired: 25 from <code>notifyGeminiFallback()</code>
+        on every 429 + 4 real fallback events (the once-per-run dedupe that was supposed to exist did not). <strong>1 post
+        published</strong> (348, Anthropic/Volta, via the Groq-blend synthesis path) from <strong>4 blog outputs</strong>
+        (3 additional digests were produced but never became posts — blend with ≤4 sources aborted after source 8 died).</p>
+        <p><strong>Verdicts:</strong> (1) Scout does <em>not</em> stop on quota — the <code>GEMINI_QUOTA_EXHAUSTED</code>
+        sentinel is checked at scout.js 359/675/682 but was <em>never thrown</em> by gemini.js (the generic "Both providers
+        failed. Gemini: 429…" was thrown instead), so the mid-run break never fired. (2) Gemini is <em>not</em> retried —
+        the 3×65s retry machinery never fired that run (it only applies to Groq); 27 LLM calls + 3 Tavily searches burned
+        after quota death. (3) The Volta double-search is SWS's overlap detection running <em>after</em> the Tavily search
+        — by the time SWS sees the duplicate it's already been searched. (4) Gemini success isn't possible mid-quota (hard
+        20 req/day free cap), so the 1 published post could only come from the Groq path. Token estimates ≈ gross
+        13.4k/31.5k, net 1.79k/12.35k — ~1.9k tokens of published value per 10.6k of junk spend.</p>
+        <p><strong>Recommendations approved by Felix (all four A–D + E):</strong></p>
+        <p><strong>A — once-per-run fallback alert:</strong> dedupe <code>notifyGeminiFallback()</code> to fire at most
+        once per run via <code>fallbackAlertSentThisRun</code> + <code>maybeNotifyFallbackOnce()</code> in gemini.js.</p>
+        <p><strong>B — quota stop sentinel actually thrown:</strong> <code>callGeminiWithFallback()</code> sets the
+        cooldown (<code>setGeminiQuotaCooldown()</code> returns true only for a NEW cooldown), alerts only when
+        <code>isNewCooldown</code>, and throws <code>GEMINI_QUOTA_EXHAUSTED</code> so scout.js's existing break fires.
+        (Verified: the run-start cooldown skip at scout.js:216 is gated on <code>!GROQ_API_KEY</code> and thus dead in
+        production since Groq is primary — only the mid-run break can stop a quota-dead run.)</p>
+        <p><strong>C — cross-category dedup before search:</strong> scout.js STEP 5b now checks
+        <code>storiesOverlap()</code> against <code>queuedStoriesThisRun</code> BEFORE the Tavily search and marks the
+        capped articles seen + skips the category, so anthropic can never re-search a story industry just queued.</p>
+        <p><strong>D — blend abort threshold:</strong> <code>generateBlendedDigest()</code>'s source loop aborts with the
+        sentinel after <code>MAX_CONSECUTIVE_DIGEST_FAILURES = 3</code> consecutive digest failures instead of finishing
+        all 8 sources then synthesizing.</p>
+        <p><strong>E — LLM Request Ledger:</strong> new <code>llm_request_ledger</code> Supabase table +
+        <code>logLlmRequest()</code> in memory.js records every Groq/Gemini attempt (provider, model,
+        input/output token estimates at ~4 chars/token, success, error_type, retry_attempt, duration_ms, purpose,
+        category, story_title) keyed by <code>GITHUB_RUN_ID</code> — fail-silent telemetry so an insert never blocks the
+        pipeline. <code>new Response(geminiText, {status: 200})</code> restores the caller <code>.json()</code> contract
+        after the Gemini body is consumed for token estimation.</p>
+      </div>
+    </div>
+
+    <!-- TURN 3 -->
+
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</p>
+      </div>
+    </div>
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p>Finished the implementation and shipped it.</p>
+        <h4>Bash: syntax + module smoke test (scout-agent)</h4>
+        <pre><code>node --check gemini.js && node --check gemini-podcast.js && node --check memory.js \
+  && node --check scout.js && node --check scout-podcast.js && node --check slack.js
+→ ALL SYNTAX OK
+
+node -e imports → memory.js OK (logLlmRequest, setGeminiQuotaCooldown)
+                → gemini.js OK (callGeminiWithFallback, generateBlendedDigest)
+                → scout.js OK (runScout) | scout-podcast.js OK (runPodcastScout)
+                → gemini-podcast.js OK (generatePodcastDigest)</code></pre>
+        <p><strong>Implementation notes (final form):</strong> Fix C's model uses the SWS duplicate helpers on the
+        in-run tracker; the tracker push sits right after the "queueing" log (scout.js:670), so a later category's STEP 5b
+        check sees it. The ledger row spreads <code>{ run_id, timestamp, input_tokens_est, output_tokens_est, success,
+        retry_attempt, ...entry }</code> — computed fields first, entry spread after (callers pass no conflicting keys).
+        The ledger's <code>story_title</code> column carries the string title, not an id. Groq's non-retryable
+        <code>throw err</code> path also records to the ledger. The podcast path was wired too: gemini-podcast passes
+        ledger context (<code>category: 'ai'</code>, storyTitle, purpose) and scout-podcast now breaks the channel loop
+        on the quota sentinel (with a dedicated <code>quotaExhausted</code> summary branch) instead of burning
+        transcript + thumbnail + a doomed call per remaining channel.</p>
+        <h4>Bash: commit + push (scout-agent)</h4>
+        <pre><code>git commit -m "fix: quota stop + alert dedupe + cross-category dedup + LLM request ledger (S40)"
+→ [main 0cba603] 5 files changed, 186 insertions(+), 16 deletions(-)
+git push origin main → 27e1944..0cba603 main -> main</code></pre>
+        <h4>Migration (Felix — one-time, blocks the ledger)</h4>
+        <p>Run <code>aitrends.ng/supabase/add-llm-request-ledger.sql</code> in the Supabase SQL Editor, then
+        <code>NOTIFY pgrst, 'reload schema';</code> — same PostgREST schema-cache step as every new table. Until then the
+        ledger inserts fail silently (by design) and the pipeline is unaffected.</p>
+        <h4>Docs mirroring</h4>
+        <p>CLAUDE.md updated (header → Session #40; Section 6 "What Has Been Built" A–E entry; 🔴 Critical entry; S40
+        history row) and pushed (<code>ec65ea6</code>). SESSION_LOG Session #40 + TRAINING_MANUAL Chapter 50 committed
+        locally only, per the split-commit rule.</p>
+      </div>
+    </div>
+
+  </div>
+
 </div>
 </body>
 </html>

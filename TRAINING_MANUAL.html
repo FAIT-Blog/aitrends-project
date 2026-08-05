@@ -7797,6 +7797,9 @@ pending_posts now: 321 rows total, 0 failed</code></pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
+    Last updated: 5 August 2026 — Session #40: run post-mortem of 30967158949 → fixes A–E (once-per-run
+    fallback alert, quota stop sentinel, cross-category dedup before search, blend abort threshold,
+    LLM Request Ledger) committed in 0cba603; Chapter 50 added.
     Last updated: 5 August 2026 — Session #39: admin detail-page delete 404 fixed (8bc2587, router.replace
     after delete), Part C closed (10 held failed posts deleted — queue at 0 failed), Verify OG meta tags
     closed, live pipeline audit (posts 345–348 landed, post 348 quality pass).
@@ -7811,6 +7814,121 @@ pending_posts now: 321 rows total, 0 failed</code></pre>
     category-count query optimisation, and the admin panel MVP.
   </p>
 </div>
+
+  <div class="chapter" id="chapter-50">
+    <div class="chapter-num">Chapter 50</div>
+    <h2>The Run Post-Mortem: Four Quota-Death Defects and the LLM Request Ledger</h2>
+
+    <p>Session #40 (5 August 2026) was an evidence-driven audit of a single complete pipeline run —
+    GH Actions run <code>30967158949</code> — followed by fixes A–E. The run made <strong>36 LLM calls</strong>
+    (9 per category × 4 categories), of which only <strong>11 succeeded</strong>; the other 25 were Gemini 429 quota
+    responses. It fired <strong>29 Slack alerts</strong> and published <strong>1 post</strong> (348, the Anthropic/Volta
+    story, via the Groq-blend synthesis path). The audit was possible only because the run's full log was replayed and
+    correlated against live Supabase — the same labour fix E (the ledger) removes for every future run.</p>
+
+    <h3>50.1 The Four Defects the Audit Exposed</h3>
+    <ol class="steps">
+      <li>
+        <div class="step-num">A</div>
+        <div class="step-content">
+          <p><strong>Alert storm.</strong> <code>notifyGeminiFallback()</code> fired on <em>every</em> Gemini 429 —
+          25 quota events + 4 genuine fallback events = 29 webhooks in one run. The alert was meant to be a rare
+          signal, not a per-request log line.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">B</div>
+        <div class="step-content">
+          <p><strong>Quota never stopped the run.</strong> <code>GEMINI_QUOTA_EXHAUSTED</code> was checked in
+          scout.js (lines 359/675/682) but was <em>never thrown</em> by gemini.js — the generic "Both providers
+          failed. Gemini: 429…" was thrown instead. The mid-run break never fired, so 27 LLM calls + 3 Tavily
+          searches burned after quota death. A checked-but-never-thrown sentinel is a dead sentinel.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">C</div>
+        <div class="step-content">
+          <p><strong>Duplicate search before duplicate detection.</strong> The anthropic category re-ran the
+          byte-identical Tavily query ("Anthropic signs 10B deal cloud startup Volta") for a story industry had just
+          queued as post 348. SWS's overlap detection does catch same-run duplicates — but it runs <em>after</em>
+          the search, so it can only save the generation calls, never the search.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">D</div>
+        <div class="step-content">
+          <p><strong>Doomed blend completion.</strong> <code>generateBlendedDigest()</code> ground through all 8
+          sources before failing, even after it was clear the quota was dead.</p>
+        </div>
+      </li>
+    </ol>
+
+    <h3>50.2 The Fixes (commit 0cba603)</h3>
+    <ul>
+      <li><strong>A — once-per-run fallback alert:</strong> <code>fallbackAlertSentThisRun</code> +
+      <code>maybeNotifyFallbackOnce()</code> in gemini.js dedupe the alert to one webhook per run. The
+      <code>notifyGeminiFallback</code> call inside the shared call remains per-event by design — it is the
+      daily-run dedupe (own once-per-day flag), not a global dedupe.</li>
+      <li><strong>B — sentinel actually thrown:</strong> <code>callGeminiWithFallback()</code> now calls
+      <code>setGeminiQuotaCooldown()</code> (returns <code>true</code> only for a NEW cooldown), alerts only when
+      <code>isNewCooldown</code>, then <code>throw new Error('GEMINI_QUOTA_EXHAUSTED')</code>. scout.js's existing
+      category-loop check breaks out of remaining categories — no more wasted work after quota death. Note: the
+      run-start cooldown skip is gated on <code>!GROQ_API_KEY</code>, so it is dead in production (Groq is primary);
+      the mid-run break is the only thing that can stop a quota-dead run.</li>
+      <li><strong>C — cross-category dedup before search:</strong> scout.js STEP 5b checks
+      <code>storiesOverlap()</code> against <code>queuedStoriesThisRun</code> BEFORE the Tavily search and marks the
+      capped articles seen + skips the category.</li>
+      <li><strong>D — blend abort threshold:</strong> <code>MAX_CONSECUTIVE_DIGEST_FAILURES = 3</code> consecutive
+      digest failures in <code>generateBlendedDigest()</code>'s source loop aborts with the sentinel instead of
+      finishing all 8 sources.</li>
+      <li><strong>E — LLM Request Ledger:</strong> see 50.3.</li>
+    </ul>
+
+    <h3>50.3 The LLM Request Ledger — Making Spend Auditable</h3>
+    <p>New <code>llm_request_ledger</code> Supabase table + <code>logLlmRequest()</code> in memory.js. Every Groq
+    attempt and every Gemini attempt from <code>callGeminiWithFallback()</code> is recorded: provider, model,
+    <code>input_tokens_est</code>/<code>output_tokens_est</code> (estimated at ~4 chars/token — precise enough for
+    relative comparison), success, error_type, retry_attempt, duration_ms, purpose, category, story_title — keyed by
+    <code>GITHUB_RUN_ID</code>.</p>
+    <div class="callout info">
+      <strong>Design rule:</strong> the ledger is <em>fail-silent by design</em>. An insert failure must never take
+      the pipeline down — the recording is wrapped in try/catch on both sides. If you see "memory.logLlmRequest error"
+      in logs, the ledger is down but the pipeline is fine. Before the ledger exists in the DB, inserts fail silently
+      and the pipeline is unaffected — that is intended (the migration is Felix's manual step, see 50.4).
+    </div>
+    <p>The <code>new Response(geminiText, {status: 200})</code> reconstruction is what makes the ledger possible
+    without breaking callers: the Gemini response body is consumed once to estimate output tokens, then a fresh
+    <code>Response</code> is returned so every caller can still <code>.json()</code> it. This mirrors the existing
+    <code>normaliseGroqResponse()</code> pattern.</p>
+    <p><strong>Podcast path wired too:</strong> gemini-podcast passes ledger context (<code>category: 'ai'</code>,
+    storyTitle, purpose). scout-podcast stops the channel loop on the quota sentinel instead of burning transcript +
+    thumbnail + a doomed call per remaining channel — the same class of fix as B, applied to the podcast loop.</p>
+
+    <h3>50.4 Usage Notes</h3>
+    <ol>
+      <li><strong>Migration required (Felix — one-time):</strong> run <code>aitrends.ng/supabase/add-llm-request-ledger.sql</code>
+      in the Supabase SQL Editor, then <code>NOTIFY pgrst, 'reload schema';</code> — the same PostgREST schema-cache
+      reload every new table needs (Sessions #18 and #22). Until then the ledger inserts fail silently.</li>
+      <li><strong>Querying:</strong> filter by <code>run_id</code> (equals a GH Actions run id) to see a single run's
+      full call ledger — the exact data Session #40 had to reconstruct by hand from logs.</li>
+      <li><strong>Estimates are estimates:</strong> token counts use ~4 chars/token. Good for relative comparison and
+      per-run totals, not for billing reconciliation.</li>
+    </ol>
+
+    <div class="callout warn">
+      <strong>Lesson:</strong> a checked-but-never-thrown error sentinel (B) and a per-event alert that should have
+      been once-per-run (A) are both silent-failure-adjacent bugs — they make the pipeline look like it is
+      protecting itself when it isn't. The audit that found them was only possible because the run left a full log;
+      fix E ensures the next audit is a SQL query, not an afternoon of log archaeology.
+    </div>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 50 is the TRAINING_MANUAL.html half of the
+      Session #40 record. CLAUDE.md (Last Updated header, Section 6 A–E entry, 🔴 Critical entry, S40 history row,
+      commit ec65ea6 pushed) and SESSION_LOG.html (Session #40 entry) are the other halves. Scout-agent code is
+      commit 0cba603 on FAIT-Blog/scout-agent.
+    </div>
+  </div>
 
 </div>
 </body>
