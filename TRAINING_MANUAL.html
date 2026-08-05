@@ -7683,9 +7683,123 @@ export async function getCategoryCounts() {
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
+  <div class="chapter" id="chapter-49">
+    <div class="chapter-num">Chapter 49</div>
+    <h2>The Admin Delete 404: A Navigation Bug, Not a Data Bug — and Part C Closes</h2>
+
+    <p>Session #39 (5 August 2026) had four threads: a live pipeline audit, closing the long-standing
+    "Verify OG meta tags" to-do, deleting the 10 held AI Horde-era failed posts (Part C), and fixing the
+    admin detail-page delete 404 Felix reported. The 404 fix is the teaching case — it is the same
+    <em>class</em> of bug the pipeline has seen before: the frontend and the database disagreed about what
+    a route means after the data underneath it changes.</p>
+
+    <h3>49.1 The Bug: router.refresh() on a Route Whose Row Just Disappeared</h3>
+    <p>Deleting a queued post from <code>/admin/pending/[id]</code> worked — the DELETE API call returned
+    success and the row was removed from <code>pending_posts</code>. But the button's success handler then
+    called <code>router.refresh()</code>, which re-runs the server component <em>on the same URL</em>. The
+    server component fetched the row by id, found nothing, called <code>notFound()</code>, and Next.js
+    rendered "404 This page could not be found" instead of returning to the queue list.</p>
+    <div class="callout warn">
+      <strong>Root cause pattern:</strong> a client-side action removed the data a server-rendered route
+      depends on, then refreshed <em>in place</em> instead of navigating away. Any detail page that calls
+      <code>notFound()</code> on a missing row has this hazard for any action that deletes the row.
+    </div>
+    <p>The same bug existed on <code>/admin/posts/[id]</code> — deleting a published post had the identical
+    failure. <code>PostActions</code> is shared between the list page (where <code>router.refresh()</code>
+    is correct after a delete) and the detail page (where it is not), so the fix needed a flag rather than a
+    blanket change.</p>
+
+    <h3>49.2 The Fix: Navigate Away on Delete — Contextually</h3>
+    <p>Two edits in shared components plus one prop on the detail page:</p>
+    <ol class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <p><code>PendingActions.tsx</code> is used only on the pending detail page, so its delete handler
+          unconditionally navigates back to the list — and uses <code>router.replace()</code>, which
+          <em>replaces</em> the dead URL in history instead of pushing a new entry, so the browser back
+          button can never land on the deleted row's 404 again:</p>
+          <pre><code>} else if (action === 'delete') {
+  router.replace('/admin/pending')
+} else {
+  router.refresh()
+}</code></pre>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <p><code>PostActions.tsx</code> gains a <code>redirectAfterDelete</code> prop (default
+          <code>false</code>):</p>
+          <pre><code>} else if (action === 'delete' &amp;&amp; redirectAfterDelete) {
+  router.replace('/admin/posts')
+} else {
+  router.refresh()
+}</code></pre>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <p>The posts detail page passes the flag; the posts list page keeps the default refresh:</p>
+          <pre><code>&lt;PostActions postId={post.id} status={post.status} slug={post.slug} redirectAfterDelete /&gt;</code></pre>
+        </div>
+      </li>
+    </ol>
+    <p>Typecheck (<code>npx tsc --noEmit</code> → exit 0) and <code>npm run build</code> clean. Commit
+    <code>8bc2587</code> pushed to FAIT-Blog/aitrends-ng; Vercel auto-deploys from main.</p>
+
+    <h3>49.3 Part C Closed — the 10 Held Posts Are Gone</h3>
+    <p>Session #36 held the 10 AI Horde-era failed posts for Felix's review. On his instruction ("just do 2
+    only"), the deletion ran with a <code>status=failed</code> guard: list first, abort on any mismatch,
+    then delete. The list came back 8 rows, not 10 — Felix had already deleted ids 334 and 335 himself in
+    the panel (the exact flow where he hit the 404). The remaining 8 (171, 317–320, 331–333) were deleted
+    via direct Supabase REST:</p>
+    <pre><code>DELETE /rest/v1/pending_posts?id=in.(171,317,318,319,320,331,332,333)
+→ HTTP 204 | content-range: */8
+pending_posts now: 321 rows total, 0 failed</code></pre>
+    <div class="callout success">
+      <strong>Result:</strong> <code>pending_posts</code> has zero failed rows for the first time since the
+      July 23–Aug 1 failure window. The queue holds only live <code>pending_image</code>/<code>generating</code>
+      rows.
+    </div>
+
+    <h3>49.4 The Session Around It — Evidence Before Cleanup</h3>
+    <ul>
+      <li><strong>Live pipeline audit:</strong> posts 345–348 landed Aug 3–5 (Anthropic $10B Volta deal,
+      Washington frontier-AI safety framework, SA mining AI, Alibaba Qwen3.8-Max). Post 348 body checked:
+      grounded facts, clean h3s, "Why this matters" closing, 5 sources, no forced phrases — passes the
+      current gate. No general-news drift.</li>
+      <li><strong>Verify OG meta tags closed</strong> (open since Session #14): post 348 served all 10
+      social tags; og:image HTTP 200 <code>image/jpeg</code> 95.6 KB and the webp cover HTTP 200
+      <code>image/webp</code> 72.5 KB from Supabase Storage.</li>
+      <li><strong>Stale "Admin dashboard" 🔵 to-do struck through</strong> — done since Session #36; the
+      item had never been reconciled.</li>
+    </ul>
+
+    <div class="tip">
+      <strong>Lesson:</strong> When a delete succeeds but the page 404s, do not look for a data problem —
+      look at what the button did <em>after</em> the successful fetch. In-place refresh on a route whose
+      server component calls <code>notFound()</code> is always a navigation bug, and the fix is
+      <code>router.replace()</code> to a live route so history cannot resurrect the dead page.
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>Mirror-rule compliance note:</strong> This Chapter 49 is the TRAINING_MANUAL.html half of the
+    Session #39 record. CLAUDE.md (Last Updated header, Session #39 Critical entry, S36 held-posts note
+    annotated, admin-panel entry annotated with 8bc2587, S39 history row) and SESSION_LOG.html (Session #39
+    entry) are the other halves.
+  </div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
+    Last updated: 5 August 2026 — Session #39: admin detail-page delete 404 fixed (8bc2587, router.replace
+    after delete), Part C closed (10 held failed posts deleted — queue at 0 failed), Verify OG meta tags
+    closed, live pipeline audit (posts 345–348 landed, post 348 quality pass).
     Last updated: 5 August 2026 — Session #39 follow-up: live pipeline audit (posts 345–348 landed after
     the quota cliff; post 348 passed the quality gate on body + sources), stale "Admin dashboard" 🔵 to-do
     struck through in CLAUDE.md (done Session #36, live Session #37), "Verify OG meta tags" 🟡 to-do closed

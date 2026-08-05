@@ -13142,6 +13142,103 @@ git push origin main</code></pre>
       </div>
     </div>
 
+    <!-- TURN 5 -->
+
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>From the list, just do 2 only. The rest, keep in view as to-do list.</p>
+        <p>On the admin page, when I deleted any of the rejected/failed post, instead of returning to the
+        list, it displays:" 404 This page could not be found". So, I want you to amend this error. What do
+        you think can be done?</p>
+      </div>
+    </div>
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p>Two tasks: delete the 10 held posts (item 2), and fix the admin-pending delete 404. Answering
+        Felix's "What do you think can be done?" — the 404 is not a data problem; the row was deleted
+        correctly. It is a navigation bug: after a successful delete the detail page's delete button called
+        <code>router.refresh()</code>, which re-ran the server component while still on
+        <code>/admin/pending/[id]</code>; the row was gone, so the component hit <code>notFound()</code> and
+        rendered the 404. The fix is to navigate back to the list (<code>router.replace</code>) instead of
+        refreshing the now-dead route.</p>
+
+        <h4>Read: components/admin/PendingActions.tsx</h4>
+        <pre><code>} else {
+  router.refresh()
+}</code></pre>
+        <p>Confirmed: used only on the pending detail page → delete should always go back to the list.</p>
+
+        <h4>Read: components/admin/PostActions.tsx</h4>
+        <pre><code>} else {
+  router.refresh()
+}</code></pre>
+        <p>Same bug — and this component is shared between the posts list page (where refresh is correct)
+        and the posts detail page (where delete must navigate away). Fix needs a flag, not a blanket change.</p>
+
+        <h4>Read: app/admin/(panel)/pending/[id]/page.tsx + posts/[id]/page.tsx</h4>
+        <pre><code>if (!row) notFound()   // pending detail, line 19
+if (!post) notFound()  // posts detail, line 23
+→ confirmed the 404 root cause in both detail pages</code></pre>
+
+        <h4>Fix 1: PendingActions.tsx — delete → router.replace('/admin/pending')</h4>
+        <pre><code>if (!res.ok) {
+  const data = await res.json().catch(() =&gt; ({}))
+  setError((data as { error?: string }).error || 'Request failed')
+} else if (action === 'delete') {
+  router.replace('/admin/pending')
+} else {
+  router.refresh()
+}</code></pre>
+
+        <h4>Fix 2: PostActions.tsx — new redirectAfterDelete prop</h4>
+        <pre><code>interface Props {
+  postId: string
+  status: 'published' | 'draft'
+  slug: string
+  redirectAfterDelete?: boolean
+}
+export default function PostActions({ postId, status, slug, redirectAfterDelete = false }: Props) {
+...
+} else if (action === 'delete' &amp;&amp; redirectAfterDelete) {
+  router.replace('/admin/posts')
+} else {
+  router.refresh()
+}</code></pre>
+
+        <h4>Fix 3: posts/[id]/page.tsx — pass the flag</h4>
+        <pre><code>&lt;PostActions postId={post.id} status={post.status} slug={post.slug} redirectAfterDelete /&gt;</code></pre>
+
+        <h4>Bash: typecheck + build (aitrends.ng)</h4>
+        <pre><code>npx tsc --noEmit → EXIT 0
+npm run build → clean, all admin routes listed</code></pre>
+
+        <h4>Part C deletion — guarded Supabase REST (scout-agent/.env service key)</h4>
+        <pre><code>Step 1: list ids 171,317-320,331-335
+→ BEFORE: 8 row(s) — all status=failed (#171 Zhipu GLM, #317 SA mining, #318 ServiceNow,
+  #319 US govt science plans, #320 Terence Tao, #331 Pan-African AI, #332 Meta agents, #333 AI revolution)
+  ABORT: row count mismatch  ← 2 already gone
+Step 2: identify missing → #334, #335 already deleted (Felix's own panel deletions)
+Step 3: DELETE id=in.(171,317,318,319,320,331,332,333) with status=failed guard
+→ DELETE HTTP: 204 | content-range: */8
+→ pending_posts now: 321 rows total, 0 failed</code></pre>
+
+        <h4>Bash: commit + push frontend fix</h4>
+        <pre><code>git add "app/admin/(panel)/posts/[id]/page.tsx" components/admin/PendingActions.tsx components/admin/PostActions.tsx
+git commit -m "fix: admin detail-page delete no longer 404s — navigate back to list after delete ..."
+→ [main 8bc2587]
+git push origin main → 1eca1e5..8bc2587 main -> main (FAIT-Blog/aitrends-ng)  ← Vercel auto-deploys</code></pre>
+
+        <h4>Docs mirroring</h4>
+        <p>CLAUDE.md updated (header → Session #39; Session #39 Critical entry; S36 held-posts note annotated
+        with the Session #39 deletion; admin-panel entry annotated with the 8bc2587 bugfix; S39 history row)
+        and pushed. SESSION_LOG + TRAINING_MANUAL Chapter 49 committed locally. Part C closed:
+        <code>pending_posts</code> shows 0 failed rows.</p>
+      </div>
+    </div>
+
   </div>
 
 </div>
