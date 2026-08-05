@@ -356,6 +356,7 @@ NEXT_PUBLIC_SITE_URL=https://aitrends-ng.vercel.app
 - **Always use ES modules** — `package.json` has `"type": "module"`. Never use `require()`
 - **`index.js` is NOT used by GitHub Actions** — GHA calls `scout.js` directly. `index.js` is for VPS/server mode only
 - **Never remove the Gemini fallback or retry logic** — Groq primary (3-attempt retry, 65s delay) with `gemini-3.5-flash` fallback must stay; see the Groq/Gemini quota rules below for the TPD pre-check that skips Groq's retry loop when near its daily cap
+- **The LLM Request Ledger is permanent infrastructure (Session #40)** — `llm_request_ledger` table + `logLlmRequest()` in memory.js must stay. Every Groq/Gemini attempt is recorded (provider, model, token estimates, success, error_type, retry_attempt, duration_ms, purpose, category, story_title, keyed by `GITHUB_RUN_ID`). It is fail-silent by design (an insert failure must never block the pipeline), so optimisation decisions are based on measured evidence, not reconstructed logs. Never remove it or make its failures fatal
 - **Feed categories must match exactly:** `anthropic`, `industry`, `ai-models`, `tools` — must match `VALID_CATEGORIES` in aitrends.ng `/api/posts/create`
 - **`hasSeen()` throws on Supabase error** — intentional. A DB outage must halt the run, not cause duplicate posts
 - **Keep `process.exit(0)` in the GHA run command** — Supabase realtime WebSocket keeps Node alive indefinitely without it
@@ -831,6 +832,7 @@ silently deleted, per Felix's instruction to point out discrepancies with commen
 - [ ] Render deployment for Scout (replace unreliable GHA cron — `index.js` daemon already written)
 - [ ] YouTube transcript proxy for GHA IP ranges
 - [ ] PDF ingestion (manual paste is current fallback)
+- [ ] **Adaptive blend digest count (Session #40 — evaluate only, DO NOT implement yet)** — Felix's explicit request: investigate whether `generateBlendedDigest()` should stop being fixed at 8 source digests and become adaptive. Evaluation dimensions: (a) minimum required sources before synthesis, (b) a target-confidence signal that enough evidence has been gathered, (c) a maximum cap to bound spend. Objective: stop digest generation once sufficient evidence is gathered rather than always consuming the max. Currently every blend burns up to 8 digest calls even when the first 3–4 sources already cover the story. Placeholder in code: `blend.js`/`gemini.js` `generateBlendedDigest` source loop (`MAX_SOURCES = 8`); the SWS confidence bands (High/Medium/Low) and the `llm_request_ledger` (measured per-call outcomes) are the future evidence base for the adaptive rule.
 
 ---
 
@@ -846,6 +848,7 @@ silently deleted, per Felix's instruction to point out discrepancies with commen
 - Never upgrade Prisma to version 7 (applies to BFX project, not AITrends)
 - Never use `require()` in scout-agent — ES modules only (`"type": "module"`)
 - Never remove the Gemini fallback or retry logic in gemini.js
+- Never remove the `llm_request_ledger` telemetry (`logLlmRequest()` in memory.js) — permanent infrastructure since Session #40; it must stay fail-silent and every LLM request must keep being recorded
 - Never use Next.js `<Image>` for Pollinations URLs — use plain `<img>` tag with `onError` gradient fallback
 - Never lower `maxOutputTokens` below 8192 in gemini.js
 - Never call `publishPost()` from `scout.js` — publishing is Phase 2 only (`complete.js`)
