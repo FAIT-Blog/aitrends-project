@@ -7797,6 +7797,9 @@ pending_posts now: 321 rows total, 0 failed</code></pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
+    Last updated: 7 August 2026 — Session #41: P0 optimisation set #1–#5 + per-post ledger
+    instrumentation (SWS enforce, markSeen on generation failure, blend source cap 5, synthesis-only
+    retry, token caps 3000) implemented in scout-agent; Chapter 52 added.
     Last updated: 5 August 2026 — Session #40 approval follow-up: Felix confirmed A–E (ledger = permanent
     infrastructure, added to Critical Rules + Must Not Do) and logged the adaptive-blend evaluation as a
     backlog item (Chapter 51).
@@ -7991,6 +7994,133 @@ pending_posts now: 321 rows total, 0 failed</code></pre>
       approval follow-up. CLAUDE.md (Section 6 Critical Rule + Section 8 Must-Not-Do for the ledger, 🔵 Later
       adaptive-blend backlog item, commit 02b0914 pushed) and SESSION_LOG.html (Session #40 TURN 4) are the other
       halves. Scout-agent code remains commit 0cba603 — this follow-up made no code changes.
+    </div>
+  </div>
+
+  <div class="chapter" id="chapter-52">
+    <div class="chapter-num">Chapter 52</div>
+    <h2>The P0 Optimisation Set: Cutting the Cost of a 36-Call Run</h2>
+
+    <p>Session #40's audit of run 30967158949 proved the pipeline could burn 36 LLM calls to publish one post.
+    Session #41 (7 August 2026) implemented the user-approved P0 batch — five targeted spend cuts plus the
+    instrumentation that turns the <em>next</em> optimisation decision from "reconstructed from logs" into "a SQL
+    query". Every change was grounded in measured evidence from that run, not assumption.</p>
+
+    <h3>52.1 The Five P0 Changes</h3>
+    <ol class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <p><strong>SWS gate flipped observe → enforce</strong> (<code>story-worthiness.js</code>). The
+          observe/shadow data (real run 30879318255 + <code>.validate-sws.mjs</code>) proved the 55 threshold passes
+          every genuinely worthy story (Alibaba Qwen 91, OpenAI 10-math 63, reward-model 68) and skips only the
+          historical failure modes (thin RSS summary 15, fluff PRs 39/54). Enforce now marks those seen + skips BEFORE
+          any Groq/Gemini call — the pre-generation screen the gate was designed for, finally enforced.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <p><strong><code>markSeen</code> on generation failure</strong> (<code>scout.js</code>). New loop-scope
+          <code>generationStarted</code> flag; the category catch block now marks the capped articles seen when the
+          failure happened during/after generation — they would otherwise re-burn LLM calls on the next run. Quota
+          sentinel and pre-generation infra failures (fetch/search) keep their retry-next-run behaviour: the
+          distinction is whether the LLM was ever actually called.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <p><strong>Blend source cap = 5</strong> (<code>gemini.js</code> <code>MAX_BLEND_SOURCES = 5</code>, sliced
+          at the scout.js call site). Every source costs one LLM call + a 65s Groq TPM wait; sources 6+ added spend
+          without adding attribution, because <code>source_urls</code> already caps at 5. Felix chose 5 over 4 to
+          preserve editorial quality.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <p><strong><code>maxOutputTokens</code> capped at 3000</strong> for <code>generateDigest()</code> (was 8192)
+          and <code>synthesizeBlendDigest()</code> (was 8192). The 400–1000-word target needs ~2000 tokens; 8192
+          allowed the 10K-token runaway synthesis that produced a &gt;2500-word draft the gate rejected. Groq's
+          source-digest call stays 2000, the ping stays 5, <code>gemini-podcast.js</code> untouched.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <p><strong>Synthesis-only expansion retry</strong> (<code>gemini.js</code> + <code>scout.js</code>).
+          <code>generateBlendedDigest</code> split into <code>digestBlendSources()</code> (PASS 1, one call per source)
+          + <code>synthesizeBlendDigest()</code> (PASS 2). scout.js caches the PASS 1 digests in
+          <code>blendSourceDigests</code>, so a gate-failed synthesis re-runs PASS 2 ALONE — previously the retry
+          re-ran the whole blend (up to 5 source-digests + 4×65s waits) for zero new source information. The combined
+          <code>generateBlendedDigest()</code> wrapper is kept for external callers.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="callout info">
+      <strong>The synthesis split is the highest-leverage change.</strong> Before P0-5, a gate-failed synthesis
+      discarded all five source digests and re-burned them. Now the expensive evidence-gathering pass (PASS 1) is
+      cached and only the cheap synthesis pass (PASS 2) is re-run — the retry cost drops from "the whole blend" to
+      "one synthesis call".
+    </div>
+
+    <h3>52.2 Per-Post Ledger Instrumentation</h3>
+    <p>The ledger from Session #40 gains the columns and events that make per-post spend JOINable:</p>
+    <ul>
+      <li><strong><code>pending_post_id</code> FK</strong> — backfilled by <code>linkLedgerToPost()</code> in memory.js,
+      which accepts a title OR an array (blend source-digest rows carry per-source titles), so every LLM call behind a
+      published post can be queried in one join.</li>
+      <li><strong><code>blend_sources</code> int</strong> — recorded on the synthesis ledger row; the average across
+      posts gives the blend cost per story.</li>
+      <li><strong><code>gate-check</code> pseudo-purpose event</strong> — <code>provider: 'pipeline'</code>,
+      <code>retry_attempt: -1</code>, reasons in <code>error_type</code> — written when a Phase 1 digest fails the
+      quality gate, so gate-failure reasons are measurable rather than anecdotal.</li>
+      <li><strong><code>publish-outcome</code> events</strong> — from <code>publishPost()</code> (the single Phase 2
+      choke point — complete.js needed no change), covering gate-reject / publish success (story_title = slug) /
+      publish API failure.</li>
+      <li><strong><code>qualityGateFailures()</code></strong> in quality-gate.js returns the reasons array so the
+      events record WHY without re-running the rules; <code>passesQualityGate</code> is now
+      <code>failures.length === 0</code>.</li>
+    </ul>
+    <div class="callout warn">
+      <strong>Migration required (Felix — one-time):</strong> re-run
+      <code>aitrends.ng/supabase/add-llm-request-ledger.sql</code> — now idempotent (<code>CREATE TABLE IF NOT EXISTS</code>
+      contains both new columns, plus <code>ALTER TABLE ... ADD COLUMN IF NOT EXISTS</code> for each) — then
+      <code>NOTIFY pgrst, 'reload schema';</code>. Until then the new-column inserts fail silently (ledger down,
+      pipeline unaffected — the Session #40 fail-silent design).
+    </div>
+
+    <h3>52.3 What This Means for the Adaptive-Blend Backlog Item</h3>
+    <p>Session #40 parked "adaptive blend digest count" in the backlog with the evaluation dimensions Felix specified
+    (minimum required sources, target-confidence signal, maximum cap). Session #41 makes concrete progress on the
+    cap dimension — the fixed max is now 5 (was 8) via <code>MAX_BLEND_SOURCES</code> — and arms the other two
+    dimensions with data: <code>blend_sources</code> on the synthesis ledger rows measures blend cost per story, and
+    the SWS confidence bands are the natural target-confidence signal. The adaptive rule itself is still NOT
+    implemented; the evidence base is now being collected automatically.</p>
+
+    <div class="callout warn">
+      <strong>Backlog deliberately excluded from this sprint</strong> so P0 can be evaluated in isolation: verification
+      overhaul (<code>verify.js</code> <code>isSameStory</code> tighten + app-store domains), pipeline reordering
+      (<code>getRecentDuplicate</code> before search, SWS before Tavily), Scout refactors (dead
+      <code>relevantSourceUrls</code>, full-text fetch for the top article only), timeout redesign (65s waits
+      conditional on observed 429, GHA 15-min cutoff), Tavily <code>max_results: 5</code>, single-source rich-article
+      preference, tools-category starvation fix.
+    </div>
+
+    <div class="tip">
+      <strong>Lesson:</strong> the cheapest LLM call is the one never made. Every P0 change cuts calls that were
+      structurally doomed (quota-dead blends, re-run source digests, thin stories, sources 6+) rather than squeezing
+      a single call's cost — and the new ledger joins are what let a future session measure exactly how much each
+      change saved.
+    </div>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 52 is the TRAINING_MANUAL.html half of the Session
+      #41 record. CLAUDE.md (Last Updated header, 🔴 Critical P0 entry, adaptive-blend backlog item annotated,
+      S41 history row) and SESSION_LOG.html (Session #41 entry) are the other halves. Scout-agent code is
+      <code>node --check</code>-verified but not yet committed (commit follows the three-document mirror).
     </div>
   </div>
 

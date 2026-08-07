@@ -13433,6 +13433,115 @@ git push origin main → ec65ea6..02b0914 main -> main</code></pre>
 
   </div>
 
+  <div class="session" id="session-41">
+    <h2>Session #41 — 7 Aug 2026 — P0 optimisation set #1–#5 + per-post ledger instrumentation</h2>
+    <p class="meta">scout-agent + aitrends.ng + docs. Felix opened with "What did we do so far?". The session
+    implemented the user-approved P0 batch — SWS gate flipped to <code>enforce</code>, <code>markSeen</code> on
+    generation failure, blend source cap <code>MAX_BLEND_SOURCES = 5</code>, <code>maxOutputTokens</code> capped at
+    3000, and the synthesis-only expansion retry (blend split into PASS 1 digest + PASS 2 synthesis) — plus the
+    per-post ledger instrumentation (<code>pending_post_id</code> FK, <code>blend_sources</code> int, <code>gate-check</code>
+    and <code>publish-outcome</code> pseudo-purpose events). All files <code>node --check</code>-verified. No commit yet —
+    the mandatory three-document mirror (CLAUDE.md → SESSION_LOG.html → TRAINING_MANUAL.html) was the remaining step.</p>
+
+    <!-- TURN 1 -->
+
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>What did we do so far?</p>
+      </div>
+    </div>
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p>Summarised the session state: the approved P0 optimisation set #1–#5 had been implemented across the
+        scout-agent, plus the lightweight per-post ledger instrumentation, and the three-document mirror was the only
+        remaining step before commit.</p>
+        <p><strong>P0-1 — SWS gate flipped observe → enforce</strong> (<code>story-worthiness.js</code>): the
+        observe/shadow data (real run 30879318255 + <code>.validate-sws.mjs</code>) proved the 55 threshold passes
+        every genuinely worthy story (Alibaba Qwen 91, OpenAI 10-math 63, reward-model 68) and skips only the
+        historical failure modes (thin RSS summary 15, fluff PRs 39/54). Enforce now marks those seen + skips BEFORE
+        any Groq/Gemini call.</p>
+        <p><strong>P0-2 — <code>markSeen</code> on generation failure</strong> (<code>scout.js</code>): new loop-scope
+        <code>generationStarted</code> flag; the category catch block now marks the capped articles seen when the
+        failure happened during/after generation (they'd re-burn LLM calls next run), while quota sentinel and
+        pre-generation infra failures (fetch/search) keep their retry-next-run behaviour.</p>
+        <p><strong>P0-3 — blend source cap = 5</strong> (<code>gemini.js</code> <code>MAX_BLEND_SOURCES = 5</code>,
+        sliced at the scout.js call site): every source costs one LLM call + a 65s Groq TPM wait; sources 6+ added
+        spend without adding attribution (source_urls already caps at 5). Felix's choice of 5 over 4 to preserve
+        editorial quality.</p>
+        <p><strong>P0-4 — <code>maxOutputTokens</code> capped at 3000</strong> for <code>generateDigest()</code>
+        (was 8192) and <code>synthesizeBlendDigest()</code> (was 8192): the 400–1000-word target needs ~2000 tokens;
+        8192 allowed the 10K-token runaway synthesis that produced a &gt;2500-word draft the gate rejected. Groq's
+        source-digest call stays 2000, the ping stays 5. <code>gemini-podcast.js</code> untouched (separate 8192, out
+        of P0 scope).</p>
+        <p><strong>P0-5 — synthesis-only expansion retry</strong> (<code>gemini.js</code> + <code>scout.js</code>):
+        <code>generateBlendedDigest</code> split into <code>digestBlendSources()</code> (PASS 1, one call per source)
+        + <code>synthesizeBlendDigest()</code> (PASS 2). scout.js caches the PASS 1 digests in
+        <code>blendSourceDigests</code> and a gate-failed synthesis re-runs PASS 2 ALONE — previously the retry re-ran
+        the whole blend (up to 5 source-digests + 4×65s waits burned again for zero new source information). The
+        combined <code>generateBlendedDigest()</code> wrapper is kept for external callers.</p>
+        <p><strong>Instrumentation — per-post ledger joins</strong> (<code>memory.js</code>, <code>publisher.js</code>,
+        <code>scout.js</code>, SQL): new <code>pending_post_id</code> FK (backfilled by <code>linkLedgerToPost()</code>,
+        which accepts a title OR an array — blend source-digest rows carry per-source titles) so per-post LLM
+        calls/tokens are JOINable; <code>blend_sources</code> int on the synthesis row (avg = blend cost per story);
+        <code>gate-check</code> pseudo-purpose event (<code>provider: 'pipeline'</code>, <code>retry_attempt: -1</code>,
+        reasons in <code>error_type</code>) when a Phase 1 digest fails the gate; <code>publish-outcome</code> events
+        in <code>publishPost()</code> covering gate-reject / publish success (story_title = slug) / publish API failure.
+        <code>quality-gate.js</code> gained <code>qualityGateFailures()</code> (reasons array) so the events record WHY
+        without re-running the rules; <code>passesQualityGate</code> is now <code>failures.length === 0</code>. complete.js
+        needed no change — publishPost is the single choke point for both gate and publish outcomes.</p>
+        <p><strong>Migration required:</strong> re-run <code>aitrends.ng/supabase/add-llm-request-ledger.sql</code>
+        (adds <code>pending_post_id bigint</code> + <code>blend_sources int</code> to <code>llm_request_ledger</code>,
+        plus index) then <code>NOTIFY pgrst, 'reload schema';</code>. Until then, <code>logLlmRequest()</code>/
+        <code>linkLedgerToPost()</code> inserts with the new columns fail-silent (ledger stays down, pipeline
+        unaffected).</p>
+        <p><strong>Backlog (evaluating P0 in isolation, NOT in this sprint):</strong> verification overhaul
+        (<code>verify.js</code> <code>isSameStory</code> tighten + app-store domains), pipeline reordering
+        (<code>getRecentDuplicate</code> before search, SWS before Tavily), Scout refactors (dead
+        <code>relevantSourceUrls</code>, fetch full text only for top article), timeout redesign (65s waits conditional
+        on observed 429, GHA 15-min cutoff), Tavily <code>max_results: 5</code>, single-source rich-article preference,
+        tools-category starvation fix.</p>
+        <h4>Bash: syntax verification (scout-agent)</h4>
+        <pre><code>node --check gemini.js && node --check scout.js && node --check memory.js \
+  && node --check publisher.js && node --check story-worthiness.js && node --check quality-gate.js
+→ ALL SYNTAX OK (run from scout-agent/)</code></pre>
+      </div>
+    </div>
+
+    <!-- TURN 2 -->
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p>Completed the CLAUDE.md half of the mandatory three-document mirror (CLAUDE.md → SESSION_LOG.html →
+        TRAINING_MANUAL.html).</p>
+        <h4>Edit: CLAUDE.md — 🔴 Critical section, Session #41 entry inserted above the Session #40 A–E entry</h4>
+        <pre><code>### 🔴 Critical
+- ✅ **P0 optimisation set #1–#5 + per-post instrumentation (Session #41, 7 August 2026)** — the user-approved
+  P0 batch, measured-spend rationale, and the instrumentation that makes the NEXT optimisation decision data-driven.
+  [Full P0-1..P0-5 + instrumentation + migration + backlog detail as mirrored above.]</code></pre>
+        <h4>Edit: CLAUDE.md — 🔵 Later "Adaptive blend digest count" backlog item updated with Session #41 progress</h4>
+        <pre><code>- [ ] **Adaptive blend digest count (Session #40 — evaluate only, DO NOT implement yet)** — ...
+  **Session #41 progress:** the fixed max is now 5 (was 8) via `MAX_BLEND_SOURCES` (P0-3), and `blend_sources`
+  on the ledger synthesis rows + the SWS confidence bands are the future evidence base for the adaptive rule.
+  Placeholder in code: `gemini.js` `digestBlendSources` source loop.</code></pre>
+        <h4>Edit: CLAUDE.md — Session #41 row appended to the Section 10 session history table</h4>
+        <pre><code>| S41 | 7 Aug 2026 | scout-agent + aitrends.ng + docs | **P0 optimisation set #1–#5 + per-post ledger
+  instrumentation** — the user-approved P0 batch (see the 🔴 Critical entry for the full detail). Implemented and
+  `node --check`-verified; no commit yet (documentation mirror first). ... Adaptive blend-count item progressed:
+  fixed max now 5 via `MAX_BLEND_SOURCES`, with `blend_sources` + SWS confidence bands as the future evidence base. |</code></pre>
+        <p>The header line was already updated ("Last Updated: 2026-08-07 (Session #41 — P0 optimisation set #1–#5:
+        SWS enforce, markSeen on generation failure, blend source cap 5, synthesis-only retry, token caps 3000, ledger
+        per-post instrumentation)"). This SESSION_LOG Session #41 entry is the second half of the mirror; the
+        TRAINING_MANUAL.html Chapter 52 is the third half, to be written next, then the scout-agent commit can be
+        created.</p>
+      </div>
+    </div>
+
+  </div>
+
 </div>
 </body>
 </html>
