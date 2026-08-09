@@ -7797,6 +7797,10 @@ pending_posts now: 321 rows total, 0 failed</code></pre>
   <p style="margin-top:12px; font-size:0.75rem">
     This document is a living training manual. Every session adds new lessons.
     The SESSION_LOG.html is the verbatim record. This manual is the synthesised guide.
+    Last updated: 9 August 2026 — Session #42: Gemini multi-part text extraction fix —
+    <code>extractGeminiText()</code> joins all text-bearing <code>parts[]</code> elements (thinking-model answer in a
+    later part), <code>empty_response</code> guard in <code>callGeminiWithFallback()</code>, all four response-parsing
+    call sites fixed, 10-test focused suite; Chapter 53 added.
     Last updated: 7 August 2026 — Session #41: P0 optimisation set #1–#5 + per-post ledger
     instrumentation (SWS enforce, markSeen on generation failure, blend source cap 5, synthesis-only
     retry, token caps 3000) implemented in scout-agent; Chapter 52 added.
@@ -8121,6 +8125,98 @@ pending_posts now: 321 rows total, 0 failed</code></pre>
       #41 record. CLAUDE.md (Last Updated header, 🔴 Critical P0 entry, adaptive-blend backlog item annotated,
       S41 history row) and SESSION_LOG.html (Session #41 entry) are the other halves. Scout-agent code is
       <code>node --check</code>-verified but not yet committed (commit follows the three-document mirror).
+    </div>
+  </div>
+
+  <div class="chapter" id="chapter-53">
+    <div class="chapter-num">Chapter 53</div>
+    <h2>Thinking-Model Parts Parsing: Why Gemini Syntheses Silently Gate-Failed</h2>
+
+    <p>Session #42 (9 August 2026) fixed a parsing bug that had been quietly killing the Gemini fallback for a month.
+    Every Gemini synthesis on 2026-08 — blend PASS 2, editorial digests, the works — was produced but never used:
+    0 of 19 queued, all gate-failed with "no digest produced", while Groq syntheses worked fine. The lesson is a
+    deep one about provider differences: <strong>a 200 response with the wrong shape is not success.</strong></p>
+
+    <h3>53.1 The Bug: <code>parts[0].text</code> Is a Single-Part Assumption</h3>
+
+    <p>gemini-3.5-flash is a <em>thinking</em> model. For complex synthesis requests (blend PASS 2, temperature 0.7,
+    the 3000-token cap from Session #41's P0-4) it streams its reasoning into a <em>sequence</em> of
+    <code>parts[]</code> elements — the earlier parts carry <code>thought</code> fields or empty strings, and the
+    final answer lands in a <em>later</em> part. The old parsing line read only the first element:</p>
+
+    <div class="lang">JavaScript</div>
+    <pre><code><span class="cmt">// the bug — worked for Groq, silently empty for Gemini thinking responses</span>
+<span class="kw">const</span> raw = <span class="var">data</span>?.<span class="var">candidates</span>?.[<span class="num">0</span>]?.<span class="var">content</span>?.<span class="var">parts</span>?.[<span class="num">0</span>]?.<span class="var">text</span> || <span class="str">''</span>;</code></pre>
+
+    <p>Groq never hit this because <code>normaliseGroqResponse()</code> (Session #29) wraps the provider's output in a
+    single part — so <code>parts[0]</code> always held the text. Gemini's multi-part shape exposed the assumption:
+    <code>parts[0].text</code> was <code>''</code>, the digest pipeline received empty input, and the 400-word quality
+    gate correctly rejected every attempt. The provider was working all along; the parser was throwing the answer
+    away. That is why it looked like "Gemini never works" — a classic misdiagnosis that a single honest log line
+    ("extracted 0 chars from a 200") would have caught immediately.</p>
+
+    <h3>53.2 The Fix: One Shared Extractor, Four Call Sites</h3>
+
+    <p>A single helper now owns the extraction contract — filter to text-bearing parts (<code>!p.thought</code>), join
+    them, trim, and keep single-part behaviour byte-identical:</p>
+
+    <div class="lang">JavaScript</div>
+    <pre><code><span class="kw">function</span> <span class="fn">extractGeminiText</span>(<span class="var">data</span>) {
+  <span class="kw">const</span> parts = <span class="var">data</span>?.<span class="var">candidates</span>?.[<span class="num">0</span>]?.<span class="var">content</span>?.<span class="var">parts</span>;
+  <span class="kw">if</span> (!<span class="fn">Array</span>.<span class="fn">isArray</span>(parts)) <span class="kw">return</span> <span class="str">''</span>;
+  <span class="kw">return</span> parts
+    .<span class="fn">filter</span>((p) =&gt; <span class="kw">typeof</span> p.<span class="var">text</span> === <span class="str">'string'</span> &amp;&amp; !p.<span class="var">thought</span>)
+    .<span class="fn">map</span>((p) =&gt; p.<span class="var">text</span>)
+    .<span class="fn">join</span>(<span class="str">'\n'</span>)
+    .<span class="fn">trim</span>();
+}</code></pre>
+
+    <p>All four response-parsing call sites in <code>gemini.js</code> now route through it:
+    <code>generateDigest()</code>, <code>digestBlendSources()</code> (PASS 1), <code>synthesizeBlendDigest()</code>
+    (PASS 2), and <code>generateEditorialDigest()</code>. The two headline functions were already fixed when the
+    session opened; the sibling pair — <code>digestBlendSources()</code> and <code>generateEditorialDigest()</code> —
+    still read <code>parts[0].text</code> and carried the same latent bug. Both were converted to the shared helper.
+    This is the Session #36 lesson (single-source quality gate) applied to parsing: <strong>one contract, shared by
+    every caller, so a provider-shape fix lands everywhere at once.</strong></p>
+
+    <h3>53.3 The Second Bug: Empty 200s Were Logged as Success</h3>
+
+    <p>The ledger (Session #40) recorded every 200 response as <code>success:true</code> — even when extraction
+    produced <code>''</code>. That corrupted the token-waste ledger with phantom successes and made the real failure
+    invisible to the instrumentation built in Session #41. <code>callGeminiWithFallback()</code> now adds an
+    <code>empty_response</code> guard: after extraction, if no usable text remains, the attempt is recorded as
+    <code>success:false</code> / <code>error_type:'empty_response'</code> and throws. Deliberately <strong>no new
+    retry</strong> — an empty response is not a transient 429, and adding retry would burn quota on a deterministic
+    shape. The existing retry architecture (503 / 429 paths) is untouched.</p>
+
+    <h3>53.4 Verification Discipline: Tests That Contact Nothing</h3>
+
+    <p>The focused suite <code>test-gemini-parts.mjs</code> uses <code>node:test</code>'s
+    <code>mock.module</code> to replace <code>node-fetch</code>, <code>./memory.js</code> and <code>./slack.js</code>
+    — no real provider is contacted, so it is runnable anywhere, any time. The <code>memory.js</code> mock pushes
+    every ledger write into an array so assertions can inspect the recorded row directly, proving the empty-response
+    case lands as <code>success:false</code> / <code>error_type:'empty_response'</code>. Ten tests pass, covering:
+    single-part extraction, multi-part join, reasoning-part skip/join, each of the four call sites with the answer in
+    a later part, the empty-200 ledger case, and the Groq-TPD-break→Gemini fallback path:</p>
+
+    <div class="lang">Shell</div>
+    <pre><code>node --experimental-test-module-mocks --test test-gemini-parts.mjs
+  <span class="num">10</span> tests pass, <span class="num">0</span> fail</code></pre>
+
+    <h3>53.5 Scope Discipline and What Was Deliberately Left Alone</h3>
+
+    <p>Felix's scope was narrow and it was respected: only the parsing bug and the ledger guard. No prompt, quota,
+    retry, blend-limit, SWS-threshold, or provider-configuration changes; no new retry; fail-silent ledger preserved.
+    Two out-of-scope spots still read <code>parts[0].text</code> and were <em>flagged, not fixed</em>:
+    <code>gemini-podcast.js:192</code> (the separate 8192-token podcast path) and <code>.validate-blend3.mjs</code>.
+    The podcast pipeline's model and token profile differ enough that a silent conversion would be scope creep; the
+    flag ensures the next session can decide with full context.</p>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 53 is the TRAINING_MANUAL.html half of the Session
+      #42 record. CLAUDE.md (Last Updated header, 🔴 Critical entry, S41-migration "verified applied" annotation,
+      S42 history row) and SESSION_LOG.html (Session #42 entry) are the other halves. Scout-agent code commit follows
+      the three-document mirror per the split rule: code + CLAUDE.md pushed, SESSION_LOG + TRAINING_MANUAL local-only.
     </div>
   </div>
 

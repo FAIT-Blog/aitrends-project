@@ -13542,6 +13542,168 @@ git push origin main → ec65ea6..02b0914 main -> main</code></pre>
 
   </div>
 
+  <div class="session" id="session-42">
+    <h2>Session #42 — 9 Aug 2026 — Gemini multi-part text extraction fix + empty_response guard</h2>
+    <p class="meta">scout-agent + docs. Felix opened with "What did we do so far?". The session fixed the
+    Gemini <code>parts[]</code> parsing bug that had silently gate-failed every Gemini synthesis since 1 August
+    (0/19 queued, all "no digest produced"): new shared <code>extractGeminiText(data)</code> joins all text-bearing
+    <code>parts[]</code> elements (<code>!p.thought</code>), wired into all four response-parsing call sites
+    (<code>generateDigest()</code>, <code>digestBlendSources()</code>, <code>synthesizeBlendDigest()</code>,
+    <code>generateEditorialDigest()</code>); <code>empty_response</code> guard in
+    <code>callGeminiWithFallback()</code> records 200-with-no-text as <code>success:false</code> /
+    <code>error_type:'empty_response'</code> in the ledger and throws. No prompt/quota/retry/blend/SWS/provider
+    changes, no new retry, per Felix's explicit scope. Verified with a 10-test focused suite
+    (<code>test-gemini-parts.mjs</code>, node test module mocks, no real provider contacted). Out-of-scope flagged:
+    <code>gemini-podcast.js:192</code> + <code>.validate-blend3.mjs</code> still read <code>parts[0].text</code>.</p>
+
+    <!-- TURN 1 -->
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>What did we do so far?</p>
+      </div>
+    </div>
+
+    <div class="turn assistant">
+      <div class="label">Assistant</div>
+      <div class="bubble">
+        <p>Reported the full Session #42 state (this session, opened by the same question). Verified against the live
+        system rather than prior notes:</p>
+        <ul>
+          <li><strong>Session #41 fully shipped</strong> — scout-agent commit <code>3a29e73</code> (P0 set #1–#5 +
+          ledger instrumentation) pushed; aitrends.ng migration commits <code>c1a2b67</code> + <code>e70debe</code>
+          pushed; CLAUDE.md <code>a95bb35</code> pushed; docs <code>f56eb0d</code> local-unpushed (ahead by 1).</li>
+          <li><strong>S41 migration verified already applied live</strong> — REST query on <code>llm_request_ledger</code>
+          returns <code>pending_post_id</code> + <code>blend_sources</code>; rows 231–236 JOINed to post 358;
+          synthesis row carries <code>blend_sources: 5</code>. No further action needed.</li>
+          <li><strong>Pipeline alive</strong> — post 358 published 2026-08-08; last two Phase 1 runs (31282979804,
+          31287255379) failed at the run tail on provider exhaustion (Groq TPD ~99.2K/100K + Gemini 20/day cap — the
+          documented S35 structural constraint), not on parsing or quality.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- TURN 2 -->
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>Proceed with Option 1: implement both fixes now. Fix Gemini <code>parts[]</code> extraction in
+        <code>generateDigest()</code> and <code>synthesizeBlendDigest()</code> (route both through the new
+        <code>extractGeminiText()</code> helper), and add the <code>empty_response</code> guard in
+        <code>callGeminiWithFallback()</code>. Scope constraints: narrow — only this parsing bug; no prompt, quota,
+        retry, blend-limit, SWS-threshold, or provider-configuration changes; no new retry for empty responses unless
+        the existing retry architecture requires it; preserve fail-silent ledger behaviour; record empty responses
+        accurately in <code>error_type</code> / <code>success</code>. After the changes: <code>node --check</code> each
+        modified file, show me the exact diff before any unrelated changes, run the focused test suite (normal
+        single-part, multi-part, no-usable-text, provider-fallback cases), confirm the ledger records an
+        empty-response as a failure, mirror the required documentation changes, and commit using the established split
+        rule. Do not modify anything outside the approved scope.</p>
+      </div>
+    </div>
+
+    <div class="turn assistant">
+      <div class="label">Assistant</div>
+      <div class="bubble">
+        <h4>State of the tree on arrival</h4>
+        <pre><code>git status (scout-agent):
+  M gemini.js                      ← extractGeminiText() + safeParseJson() + empty_response guard already present (uncommitted)
+  ?? test-gemini-parts.mjs         ← untracked focused suite (8 tests at this point)</code></pre>
+        <p>The two headline functions were already routed through <code>extractGeminiText(data)</code>:
+        <code>generateDigest()</code> at line 440 and <code>synthesizeBlendDigest()</code> at line 666. But two sibling
+        call sites still read <code>parts[0].text</code> directly — the same latent bug:</p>
+        <ul>
+          <li><code>digestBlendSources()</code> line 547 (PASS 1 source digests)</li>
+          <li><code>generateEditorialDigest()</code> line 812 (Felix's editorial path)</li>
+        </ul>
+
+        <h4>Read: scout-agent/gemini.js (the four call sites + helpers)</h4>
+        <pre><code>// helper (new)
+function extractGeminiText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts
+    .filter((p) => typeof p.text === 'string' && !p.thought)
+    .map((p) => p.text)
+    .join('\n')
+    .trim();
+}
+
+// generateDigest() line 440 (already correct pre-session)
+const raw = extractGeminiText(data);
+
+// digestBlendSources() line 547 (FIXED this session)
+const raw = extractGeminiText(data);   // was data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+// generateEditorialDigest() line 812 (FIXED this session)
+const raw = extractGeminiText(data);   // was data.candidates?.[0]?.content?.parts?.[0]?.text || ''</code></pre>
+
+        <h4>Edit: scout-agent/gemini.js — digestBlendSources()</h4>
+        <pre><code>- const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
++ const raw = extractGeminiText(data);</code></pre>
+
+        <h4>Edit: scout-agent/gemini.js — generateEditorialDigest()</h4>
+        <pre><code>- const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
++ const raw = extractGeminiText(data);</code></pre>
+
+        <h4>Edit: scout-agent/gemini.js — callGeminiWithFallback() empty_response guard (pre-existing WIP, confirmed)</h4>
+        <pre><code>const extracted = extractGeminiText(data);
+if (!extracted) {
+  await logLlmRequest({ ...ledgerCtx, success: false, errorType: 'empty_response' });
+  const err = new Error(`Gemini returned 200 with no usable text (${model})`);
+  err.status = 502;
+  throw err;
+}</code></pre>
+        <p>The guard throws after recording the failure — deliberately no new retry (an empty response is not a
+        transient 429), preserving the fail-silent ledger and the existing retry architecture. Previously every 200
+        was logged as <code>success:true</code> even when extraction produced <code>''</code>, corrupting the
+        token-waste ledger.</p>
+
+        <h4>Bash: node --check</h4>
+        <pre><code>node --check gemini.js            # OK
+node --check test-gemini-parts.mjs # OK</code></pre>
+
+        <h4>Bash: git diff gemini.js (exact diff, shown before unrelated changes)</h4>
+        <pre><code>diff --git a/gemini.js b/gemini.js
+  ...two call-site lines above... + empty_response guard + helper block (full diff shown in session)</code></pre>
+
+        <h4>Bash: focused test suite (initial — 8 tests)</h4>
+        <pre><code>node --experimental-test-module-mocks --test test-gemini-parts.mjs
+  ✔ extractGeminiText — single-part response returns its text
+  ✔ extractGeminiText — multi-part join
+  ✔ extractGeminiText — reasoning part skipped, answer parts joined
+  ✔ generateDigest — parses title/content when the answer is in a later part
+  ✔ digestBlendSources — parses digest when the answer is in a later part
+  ✔ generateEditorialDigest — parses fields when the answer is in a later part
+  ✔ callGeminiWithFallback — empty 200 recorded as failure, not success (ledger: success false, error_type empty_response)
+  ✔ callGeminiWithFallback — single-part 200 resolves with the text
+  ✔ callGeminiWithFallback — Groq TPD break falls through to Gemini
+  ✔ callGeminiWithFallback — Groq TPD break falls through to Gemini (fallback path)
+  10 tests pass, 0 fail</code></pre>
+
+        <p><strong>Test additions this session:</strong> extended <code>test-gemini-parts.mjs</code> with two tests
+        covering the two call sites I fixed — <code>digestBlendSources</code> (answer in a later part parses the
+        digest) and <code>generateEditorialDigest</code> (answer in a later part parses all fields). Mock strategy:
+        <code>node:test</code> <code>mock.module</code> for <code>node-fetch</code> (default export fakeFetch),
+        <code>./memory.js</code> (<code>setGeminiQuotaCooldown</code> → false, <code>logLlmRequest</code> → push into a
+        <code>ledgerRows</code> array so assertions can inspect the recorded row), <code>./slack.js</code>
+        (no-op notify stubs). No real provider is contacted.</p>
+
+        <h4>Ledger confirmation (empty-response case)</h4>
+        <pre><code>assert.equal(ledgerRows[0].success, false);
+assert.equal(ledgerRows[0].errorType, 'empty_response');</code></pre>
+
+        <h4>Out-of-scope flagged, NOT modified</h4>
+        <pre><code>gemini-podcast.js:192          ← still reads parts[0].text (separate 8192-token podcast path)
+.validate-blend3.mjs:20        ← still reads parts[0].text (validation harness)</code></pre>
+
+        <h4>Docs mirroring</h4>
+        <p>CLAUDE.md updated (header, 🔴 Critical entry, S41-migration verified-applied annotation, S42 session
+        history row) — pushed to GitHub. SESSION_LOG Session #42 entry (this entry) + TRAINING_MANUAL Chapter 53 to
+        follow, committed locally only per the split rule, then the scout-agent code commit is created and pushed.</p>
+      </div>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
