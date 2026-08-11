@@ -8220,6 +8220,206 @@ pending_posts now: 321 rows total, 0 failed</code></pre>
     </div>
   </div>
 
+  <div class="chapter" id="chapter-54">
+    <div class="chapter-num">Chapter 54</div>
+    <h2>The Closed Source Registry: From Open-World Probing to Curated Governance</h2>
+
+    <p>Sessions #43–#44 (9–10 August 2026) answered the question that keeps recurring in this project's history:
+    <em>where do Scout's sources come from, and who is accountable for their health?</em> The pipeline spent months
+    accumulating feeds in <code>feeds.js</code> through a series of ad-hoc sessions — some dead for over a year, some
+    pointing at wrong-shaped feeds, some fabricated relevance. Session #43 prototyped an open-world probe (a
+    <code>GENERAL</code> registry auto-discovering sources from the live scouting surface). Session #44 reversed that
+    into a <strong>closed-world registry</strong>: a curated Supabase table whose rows are the only authoritative
+    source list, an explicit seed script that owns the diff, and an observability layer that measures every source
+    against its actual production footprint. This is the governance layer that ad-hoc <code>feeds.js</code> edits
+    never had.</p>
+
+    <h3>54.1 Why Closed-World Beats Auto-Discovery</h3>
+
+    <p>The open-world probe (Session #43) auto-discovered sources from the live scouting surface — RSS feeds, scraped
+    pages, whatever the pipeline touched. That is the opposite of what a governed pipeline needs: if discovery is
+    automatic, the source list becomes a by-product of runtime behaviour, which means nobody decides what belongs.
+    The whole point of the registry is <strong>accountability through a single diffable list</strong>. A source enters
+    only by explicit seed addition (Felix-approved, <code>added_by='felix'</code>); it is tracked, monitored, and
+    measured. The pipeline never auto-adds, never auto-monitors, and never derives its source list from runtime
+    observations. Only seed-defined sources exist, and only curated sources can feed Phase 1.</p>
+
+    <h3>54.2 The Data Model: Registry, Seed, Explicit Seed Script</h3>
+
+    <p>The <code>curated_source_registry</code> table carries the full governance shape: <code>tier</code>
+    (<code>core</code> · <code>specialist</code> · <code>regional</code> · <code>general</code> ·
+    <code>discovery</code>), <code>role</code> (<code>evidence</code> · <code>first-party</code> ·
+    <code>discovery</code>), <code>feed_type</code> (<code>rss</code> · <code>full-site-filtered</code> ·
+    <code>none</code>), <code>enabled</code>/<code>deferred</code> booleans, and a free-text
+    <code>special_handling</code> column that records the history of each feed's remediation (so a source's
+    health-story is stored next to the source itself, not scattered across session logs).</p>
+
+    <div class="lang">Shell</div>
+    <pre><code><span class="cmt"># the three files that own the registry</span>
+aitrends.ng/supabase/add-curated-source-registry.sql   <span class="cmt"># DDL</span>
+scout-agent/registry.seed.json                         <span class="cmt"># the curated universe (v2: 22, v3: 21)</span>
+scout-agent/seed-registry.js                           <span class="cmt"># explicit seed, --apply guarded</span>
+scout-agent/.validate-registry.mjs                     <span class="cmt"># pre-write validation harness</span></code></pre>
+
+    <p><code>seed-registry.js</code> is deliberately explicit. Run without <code>--apply</code> it prints a read-only
+    diff against the live table; only <code>--apply</code> writes. The seed is idempotent (upsert by
+    <code>source_name</code>) and the validation harness refuses malformed seeds (JSON errors, missing fields, bad
+    enums, duplicate names). This mirrors the project's earlier lesson from Sessions #22/#27: database state that
+    exists without a scripted path to recreate it is just unverified manual work.</p>
+
+    <h3>54.3 Observability With Hard Rules: registry-observe.js</h3>
+
+    <p><code>registry-observe.js</code> turns the registry into a measured system. It loads registry + scout_memory
+    titles, fetches each enabled source, clusters items by normalised title, and reports freshness, staleness,
+    <code>new_candidates</code> (never-seen titles), <code>overlap_with_production</code>,
+    <code>story_clusters</code>, and <code>estimated_llm_calls_avoided</code> — the number of Groq calls each dedup
+    hit saves. The baseline (9 Aug) measured 17 enabled sources, 2,244 items, 14 new candidates, 25 LLM calls
+    avoided. The Stage 1A report (10 Aug) re-measured after remediation: 15 enabled, 36 fresh, 13 candidates, and a
+    health split of <code>STALE 10 · FEEDLESS 5 · QUIET 3 · HEALTHY 2 · DEFERRED 2</code>.</p>
+
+    <p>The hard rules are the point, and they are structural, not aspirational: <strong>zero DB writes, zero LLM
+    calls, no prompting, no auth headers, no monitoring of non-curated domains.</strong> Observability must never
+    itself change state or spend quota — otherwise the measurement corrupts the thing being measured. This is the
+    same discipline as the LLM Request Ledger (Session #40): telemetry that fails silent and never blocks.</p>
+
+    <h3>54.4 Feed Remediation: Health States and Six Corrections</h3>
+
+    <p>Stage 1's most valuable output was the health taxonomy and the six corrections it forced. Health states:
+    <code>HEALTHY</code> (fresh content in window), <code>STALE</code> (content but no fresh), <code>FEEDLESS</code>
+    (no machine-readable feed), <code>QUIET</code> (feed exists but silent), <code>BLOCKED</code> (fetch blocked/4xx),
+    <code>DEFERRED</code> (intentionally not ingested). Corrected in Stage 1A: <strong>AIBase.ng AI News</strong>,
+    <strong>iAfrica</strong> and <strong>Google AI</strong> moved to <code>full-site-filtered</code>; the
+    <strong>WeeTracker</strong> tag feed replaced with the full-site feed; <strong>Techpoint Africa</strong> and
+    <strong>IT News Nigeria AI</strong> marked <code>FEEDLESS</code>. A feed that can't be fetched, or a site that no
+    longer publishes, is now a visible, categorized problem instead of a silent contributor to thin categories.</p>
+
+    <h3>54.5 Governance: What Belongs, What Gets Removed</h3>
+
+    <p>The registry's value is only as good as its removal discipline. Session #45 ratified the first removals on the
+    evidence Stage 1A produced: <strong>IT News Nigeria AI</strong> was deleted outright (category feed ~16 months
+    stale, site apparently defunct, no fresh content anywhere on the domain surface), and the registry settled at 21
+    curated sources. The workflow for every future change is fixed: propose in the seed, show the read-only diff,
+    get Felix's explicit approval, apply with <code>--apply</code>, and mirror the change into the three documents.
+    <code>feeds.js</code> becomes DEPRECATED (Session #45 wires the production path to the registry) — but the
+    governance rule outlives any particular file: <strong>a source is not a source because code touches it; it is a
+    source because the registry says so.</strong></p>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 54 is the TRAINING_MANUAL half of the Session #44
+      record (reconstructed from artifacts — see the provenance note in the SESSION_LOG entry). CLAUDE.md (registry
+      section, <code>feeds.js</code> DEPRECATED, S43/S44 session rows, MUST-NOT rules) and SESSION_LOG.html (Session
+      #44 entry) are the other halves. Session #45's Stage 2 implementation and the three corrections are recorded in
+      Chapter 55 and the Session #45 log entry.
+    </div>
+  </div>
+
+  <div class="chapter" id="chapter-55">
+    <div class="chapter-num">Chapter 55</div>
+    <h2>Stage 2: Wiring the Registry into Production</h2>
+
+    <p>Session #45 (11 August 2026) is where the registry stops being a monitoring artifact and becomes the actual
+    source of truth for Scout's Phase 1. It executes the three corrections Stage 1A produced, resolves the design
+    question of <em>how</em> the registry can feed production without breaking categories, and builds the telemetry
+    that proves the switch works. The chapter that follows is the working record of that execution.</p>
+
+    <h3>55.1 The Three Ratified Corrections, Executed</h3>
+
+    <p>Stage 1A produced a removal recommendation and a correction; Session #45 ratified and executed both.
+    <strong>IT News Nigeria AI</strong> was confirmed defunct across its whole domain surface (category page and
+    homepage both return HTTP 200 but publish nothing fresh since early 2025; category feed ~16 months stale; full-site
+    feed ~5 months stale) — removed from <code>registry.seed.json</code> v3 and deleted from the database (row id 8).
+    The seed now defines 21 sources. <strong>WeeTracker AI's</strong> <code>monitoring_url</code> was corrected to the
+    full-site feed <code>https://weetracker.com/feed/</code> and applied to the DB via
+    <code>npm run seed:registry -- --apply</code> (1 row updated, 0 deleted). With those two done, the curated registry
+    was formally adopted as the canonical closed-world source list — the feed list is now governed by the seed, not by
+    code touching <code>feeds.js</code>.</p>
+
+    <h3>55.2 The Design Constraint: the Registry Cannot Go It Alone (Yet)</h3>
+
+    <p>The naive wiring is registry-only: drop <code>feeds.js</code> and read Phase 1 feeds purely from the table.
+    Inspecting the live rows before writing any code exposed why that fails today. The registry's feed-bearing enabled
+    rows split by category as: <code>industry</code> 10, <code>ai-models</code> 4, <code>anthropic</code> 1,
+    <code>tools</code> 0. There is <strong>no <code>tools</code> feed at all</strong> and only a single
+    <code>anthropic</code> feed. A registry-only switch would (a) kill the <code>tools</code> category outright and
+    (b) break <code>anthropic</code>'s <code>MIN_ARTICLES=2</code> because a single feed can only ever supply one
+    story per run. The correct wiring, and the one Felix's "curated-first pipeline wiring" instruction describes, is a
+    three-layer resolution:</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content"><strong>Curated-first.</strong> Every enabled registry row with a <code>feed_url</code>
+        becomes a production feed; its category is authoritative and <code>registryId</code> is carried through so every
+        feed traces back to its registry row.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content"><strong>Gap-fill.</strong> <code>feeds.js</code> entries whose <code>feed_url</code> is
+        not already in the set are appended with <code>registryId = null</code>. This is what keeps <code>tools</code>
+        alive and gives <code>anthropic</code> its second feed while the registry universe grows.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content"><strong>Pure fallback.</strong> If the registry read errors or returns no feed-bearing
+        enabled rows, the pipeline degrades to the full <code>feeds.js</code> list untouched. <code>loadScoutSources()</code>
+        never throws — a source-resolution failure must not take the pipeline down.</div>
+      </div>
+    </div>
+
+    <p>The merged production set works out to ~15 curated + ~16 gap-filled feeds (~31 total), and duplicate
+    <code>feed_url</code>s are collapsed to the first (curated) occurrence via a normalised key (trim, trailing-slash
+    strip, lowercase).</p>
+
+    <h3>55.3 The Resolver: sources.js</h3>
+
+    <p>All three layers live in one new module, <code>scout-agent/sources.js</code>, exporting
+    <code>loadScoutSources()</code>. <code>scout.js</code> STEP 1 was rewired from
+    <code>for (const feed of feeds)</code> to <code>const feedList = await loadScoutSources()</code>, and the consumer
+    still reads <code>feed.url</code> / <code>feed.source</code> / <code>feed.category</code> exactly as before — the
+    change is confined to where the list comes from, not what it looks like. <code>feeds.js</code> itself is untouched
+    in content; it only gained a DEPRECATED banner. The governance rule stands: <em>change the seed, never edit
+    <code>feeds.js</code> to add or remove sources.</em></p>
+
+    <h3>55.4 Run Tracking: Evidence That Survives the Next Run</h3>
+
+    <p>The observe report is regenerated on every run, which erased the evidence of the previous observation. Stage 2a
+    fixes that with two anchors and one append-only log:</p>
+
+    <ul>
+      <li><strong><code>registry-observe-history.jsonl</code></strong> — one summary line per run (totals +
+      <code>deltas</code>), appended. The write is fail-silent (try/caught) because telemetry must never gate the
+      observation that produced it — the same philosophy as the LLM Request Ledger.</li>
+      <li><strong><code>registry-observe-report-baseline-before-stage1a.json</code></strong> — the preserved 9 Aug
+      snapshot becomes the permanent <code>vs_baseline</code> anchor, so every future run reports drift against the
+      pre-remediation state, not just against its immediate predecessor.</li>
+      <li><strong><code>report.comparison</code></strong> — <code>previous_run</code>, <code>baseline</code> +
+      <code>baseline_generated_at</code>, and null-safe <code>vs_previous</code>/<code>vs_baseline</code> deltas
+      (a missing previous run yields nulls, not a crash), printed as a <code>── STAGE 2 TRACKING ──</code> console
+      section.</li>
+    </ul>
+
+    <p>The first tracked run (11 Aug 19:50 UTC) wrote history line 1 and produced the baseline drift:
+    <code>items +6 · fresh +74 · candidates +41 · calls avoided +38</code> — the post-correction registry pulls
+    materially more fresh material into the funnel than the pre-Stage-1A state.</p>
+
+    <h3>55.5 Verification Discipline</h3>
+
+    <p>Stage 2 shipped with the same evidence discipline as Session #42's fix: <code>node --check</code> on all four
+    edited/new files (catching a duplicate <code>const t</code> collision the check flagged, renamed to
+    <code>totals</code>), a new focused suite <code>test-sources.mjs</code> (3 tests — curated-first merge with
+    feed_url dedup and gap-fill ordering; registry-error fallback; empty-registry fallback — all pass under
+    <code>node --experimental-test-module-mocks</code>), and one live read-only observation run to prove the tracking
+    path end-to-end. A source-resolution change of this kind is a production-path change: it deserved the same
+    test-mocks-and-live-check treatment the extraction fix got.</p>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 55 is the TRAINING_MANUAL half of the Session #45
+      record. CLAUDE.md (Stage 2 note in the Curated Source Registry section, S45 session row, file-structure
+      additions) and SESSION_LOG.html (Session #45 entry) are the other halves. Commits follow the split rule:
+      CLAUDE.md + scout-agent code pushed to GitHub, SESSION_LOG + TRAINING_MANUAL committed locally.
+    </div>
+  </div>
+
 </div>
 </body>
 </html>

@@ -13704,6 +13704,239 @@ assert.equal(ledgerRows[0].errorType, 'empty_response');</code></pre>
     </div>
   </div>
 
+  <div class="session" id="session-44">
+    <h2>Session #44 — 9–10 Aug 2026 — Closed source registry: Stage 0 seed, Stage 1 observe, Stage 1A feed remediation</h2>
+    <p class="meta"><strong>Provenance note:</strong> Sessions #43 (registry design) and #44 (implementation) were
+    never captured in these documents at the time. Per the append-only convention, this entry is a
+    <em>reconstructed record</em> — built from the git history (commits <code>5f7b630</code> + <code>867c4c9</code>,
+    both pushed to <code>origin/main</code>), the report JSON artifacts, <code>registry.seed.json</code>, the
+    registry SQL migration, and the seed/validation scripts. No verbatim Felix turns are reproduced because no
+    verbatim transcript survives; the work itself is documented in full from the artifacts. The three corrections
+    listed at the end (IT News Nigeria removal, WeeTracker URL fix, curated-adoption) were <em>ratified by Felix in
+    Session #45</em> and executed there — they are recorded in this entry's change history because they are the
+    direct outcome of Stage 1A's findings, per the three-document mirror rule.</p>
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p><strong>Session #44 built the closed-source registry for Scout's Phase 1:</strong> a curated
+        <code>curated_source_registry</code> Supabase table whose contents are the only authoritative source list for
+        the pipeline, plus an observability layer that measures each source against its actual production footprint
+        (freshness, candidate yield, LLM calls avoided). This reverses the Session #43 <code>GENERAL</code> open-world
+        probe (auto-discovered sources from the live scouting surface) into a <strong>closed-world model</strong>:
+        only seed-defined sources are tracked, only curated sources can feed the pipeline, and the pipeline never
+        auto-adds or monitors anything outside the registry.</p>
+
+        <h4>Stage 0 — the registry, the seed, the explicit seed script (commit <code>5f7b630</code>, pushed)</h4>
+        <p>New Supabase table <code>curated_source_registry</code> (SQL at
+        <code>aitrends.ng/supabase/add-curated-source-registry.sql</code>). Columns: <code>id</code> (bigint PK),
+        <code>source_name</code>, <code>domain</code>, <code>monitoring_url</code>, <code>feed_url</code>,
+        <code>tier</code> (<code>core</code> · <code>specialist</code> · <code>regional</code> · <code>general</code> ·
+        <code>discovery</code>), <code>role</code> (<code>evidence</code> · <code>first-party</code> ·
+        <code>discovery</code>), <code>category</code>, <code>designation</code>, <code>enabled</code> bool,
+        <code>deferred</code> bool, <code>feed_type</code> (<code>rss</code> · <code>full-site-filtered</code> ·
+        <code>none</code>), <code>special_handling</code> text, <code>added_by</code> (<code>felix</code> ·
+        <code>scout</code>), <code>created_at</code>, <code>updated_at</code>.</p>
+        <p><code>registry.seed.json</code> v2 seeded 22 sources — the full curated universe: the legacy
+        <code>feeds.js</code> sources plus regional/discovery sources (Axios Automation &amp; AI, BBC AI) whose
+        <code>deferred=true</code> + <code>role=discovery</code> + <code>feed_type=none</code> mark them as tracked-but-not-ingested
+        by design. <code>seed-registry.js</code> is an <em>explicit</em> seed script: run without <code>--apply</code>
+        it prints a read-only diff (inserts/updates vs the live table), with <code>--apply</code> it upserts by
+        <code>source_name</code>. A validation harness (<code>.validate-registry.mjs</code>) checks JSON parseability,
+        required fields, enum values, and duplicate <code>source_name</code>s before any write. This replaced the
+        Session #43 <code>add-source-registry.sql</code> (GENERAL open-world probe).</p>
+
+        <h4>Stage 1 — observe: comparing the curated universe to the production footprint</h4>
+        <p>New <code>registry-observe.js</code> produces <code>registry-observe-report.json</code>: it loads the
+        registry + <code>scout_memory</code> titles, fetches each enabled source, groups items into story clusters by
+        normalised title, and reports per-source freshness, staleness, <code>new_candidates</code> (titles not yet
+        seen by the pipeline), <code>overlap_with_production</code>, <code>story_clusters</code>, and an
+        <code>estimated_llm_calls_avoided</code> figure (each dedup hit = one Groq call not burned). Hard rules baked
+        in: <strong>zero DB writes, zero LLM calls, no prompting, no auth, no monitoring of non-curated domains</strong> —
+        pure observability. Baseline report (<code>registry-observe-report-baseline-before-stage1a.json</code>, 9 Aug
+        21:03 UTC):</p>
+        <pre><code>registry_sources: 22        enabled_ingested: 17
+items_discovered: 2244     fresh: 38            stale: 2206
+new_candidates: 14         overlap_with_production: 4
+story_clusters: 13         blend_eligible: 1
+estimated_llm_calls_avoided: 25</code></pre>
+
+        <h4>Stage 1A — feed remediation + source health states (commit <code>867c4c9</code>, pushed)</h4>
+        <p>Stage 1 exposed the real problem: the registry's feeds were stale, defunct, or wrong-shaped. Stage 1A
+        introduced a source-health taxonomy and corrected six feeds:</p>
+        <ul>
+          <li><strong>Health states:</strong> <code>HEALTHY</code> (fresh content in window) ·
+          <code>STALE</code> (old content, no fresh) · <code>FEEDLESS</code> (no machine-readable feed at all) ·
+          <code>QUIET</code> (feed exists but silent) · <code>BLOCKED</code> (fetch blocked/4xx) ·
+          <code>DEFERRED</code> (intentionally not ingested).</li>
+          <li><strong>AIBase.ng AI News:</strong> category feed
+          (<code>/category/ai-artificial-intelligence/feed/</code>) is stale; corrected to the
+          <code>full-site-filtered</code> feed type.</li>
+          <li><strong>iAfrica, Google AI:</strong> corrected to <code>full-site-filtered</code>.</li>
+          <li><strong>WeeTracker AI:</strong> the old <code>/tag/ai/</code> feed was a tag filter; corrected to the
+          full-site feed <code>https://weetracker.com/feed/</code>.</li>
+          <li><strong>Techpoint Africa:</strong> marked <code>FEEDLESS</code> — no reliable machine-readable feed
+          found.</li>
+          <li><strong>IT News Nigeria AI:</strong> marked <code>FEEDLESS</code> — category feed newest April 2025
+          (~16 months stale), site apparently defunct (see the approved correction below).</li>
+        </ul>
+        <p>Stage 1A report (<code>registry-observe-report.json</code>, 10 Aug 05:19 UTC):</p>
+        <pre><code>registry_sources: 22        enabled_ingested: 15
+items_discovered: 2238     fresh: 36            stale: 2202
+new_candidates: 13         overlap_with_production: 6
+story_clusters: 12         blend_eligible: 0
+estimated_llm_calls_avoided: 24
+source_health: STALE 10 · FEEDLESS 5 · QUIET 3 · HEALTHY 2 · DEFERRED 2</code></pre>
+
+        <h4>Approved corrections (ratified Session #45, executed there)</h4>
+        <ul>
+          <li><strong>IT News Nigeria AI — removed.</strong> Confirmed defunct across the whole domain surface
+          (category page + homepage both return 200 but no fresh content since early 2025; category feed ~16 months
+          stale; full-site feed ~5 months stale). Removed from <code>registry.seed.json</code> v3 and deleted from the
+          DB (id 8). Registry now 21 sources.</li>
+          <li><strong>WeeTracker AI — <code>monitoring_url</code> corrected</strong> to
+          <code>https://weetracker.com/feed/</code>, applied to the DB via <code>npm run seed:registry -- --apply</code>
+          (1 row updated).</li>
+          <li><strong>Curated registry formally adopted</strong> as the canonical closed-world source list for Scout's
+          Phase 1. Stage 2 (Session #45) wires the production path to it and marks <code>feeds.js</code> DEPRECATED.</li>
+        </ul>
+
+        <h4>Docs mirroring</h4>
+        <p>This Session #44 entry is the SESSION_LOG half of the registry record; TRAINING_MANUAL Chapter 54 and the
+        CLAUDE.md registry section (S43/S44 session-history rows, <code>feeds.js</code> DEPRECATED annotation,
+        MUST-NOT rules) are the other halves. Session #45 executes the corrections above, implements Stage 2
+        (dedup-by-feed_url + registry-fed production path + report tracking), and completes the three-document mirror
+        with its own entry and chapter.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="session" id="session-45">
+    <h2>Session #45 — 11 Aug 2026 — Curated registry adopted + Stage 2 production wiring</h2>
+    <p class="meta"><strong>Provenance note:</strong> this entry is a session record reconstructed from the session's
+    tool artifacts (commands, file reads, edits, live verification output). Felix's verbatim turns are not available
+    in the working summary; the decision points that ARE known verbatim from the ratified items (IT News Nigeria
+    removal, WeeTracker URL fix, curated-adoption, and the "curated-first pipeline wiring" instruction) are marked as
+    such. Per the append-only convention, nothing in the Session #44 record was rewritten — this entry is the
+    execution record that closes that thread.</p>
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p><strong>Session #45 is the execution session:</strong> it ratifies the three corrections Stage 1A produced
+        (IT News Nigeria removal, WeeTracker URL fix, curated-registry adoption), then implements <strong>Stage 2</strong>
+        — wiring Scout's Phase 1 production path to the <code>curated_source_registry</code> table with a curated-first,
+        dedup-by-<code>feed_url</code> resolver, and marking <code>feeds.js</code> DEPRECATED as the fallback surface.
+        It also extends <code>registry-observe.js</code> with append-only run history and drift tracking vs the
+        previous run and the preserved Stage 1A baseline.</p>
+
+        <h4>Step 1 — the three ratified corrections, executed</h4>
+        <ul>
+          <li><strong>IT News Nigeria AI — removed from the seed and the DB.</strong> Read the exact entry format from
+          <code>registry.seed.json</code>, removed the ITN object (keeping the next source, "The Tech News Nigeria AI",
+          intact), re-validated JSON. <code>npm run seed:registry -- --apply</code> reported
+          <code>21 rows upserted (0 new, 1 updated)</code>. The ITN row (id 8) was then deleted from the live table
+          via a small throwaway script (<code>_del-itn.mjs</code>, removed afterward) — verified
+          <code>TOTAL 21 / ENABLED 19 / WITH FEED 15</code>.</li>
+          <li><strong>WeeTracker AI <code>monitoring_url</code> — corrected</strong> to
+          <code>https://weetracker.com/feed/</code> (the 1 row the seed update reported).</li>
+          <li><strong>Curated registry formally adopted</strong> as the canonical closed-world source list for Phase 1
+          (ratified Session #45). <code>feeds.js</code> is henceforth DEPRECATED — see Stage 2.</li>
+        </ul>
+
+        <h4>Step 2 — design check before Stage 2 wiring: can the pipeline go registry-ONLY?</h4>
+        <p>Before touching code, the live registry rows were inspected (read-only): 21 sources, 15 enabled with a
+        <code>feed_url</code>. Category spread of feed-bearing rows: <code>industry</code> 10 (TechCabal AI, AIBase.ng,
+        iAfrica, IT News Africa, WeeTracker, CAJ News, The Tech News Nigeria, The Verge AI, TechCrunch AI,
+        RuntimeWire AI), <code>ai-models</code> 4 (OpenAI, Google AI, Google DeepMind, Hugging Face),
+        <code>anthropic</code> 1 (Anthropic News), <code>tools</code> 0.</p>
+        <p><strong>Critical finding:</strong> the registry has <em>no</em> <code>tools</code> feed and only
+        <em>one</em> <code>anthropic</code> feed. A registry-ONLY switch would (a) kill the <code>tools</code> category
+        entirely and (b) break <code>anthropic</code>'s <code>MIN_ARTICLES=2</code> (only one feed to draw from). The
+        correct wiring is therefore <strong>curated-first + feeds.js gap-fill + pure fallback</strong> — matching
+        Felix's "curated-first pipeline wiring" instruction. The merged production set ends up ~15 curated + ~16
+        gap-filled feeds (~31 total).</p>
+
+        <h4>Step 3 — Stage 2b/2c: sources.js (new), scout.js wiring, feeds.js DEPRECATED banner</h4>
+        <pre><code>// scout-agent/sources.js — CANONICAL source resolution for Scout Phase 1 (Session #45, Stage 2)
+// Resolution rule (curated-first, dedup by feed_url):
+//   1. Every enabled registry row with a feed_url becomes a production feed.
+//      The registry's category is authoritative; registryId is carried through.
+//   2. feeds.js entries whose feed_url is NOT already in the set are appended
+//      with registryId = null (the DEPRECATED fallback surface filling gaps).
+//   3. Duplicate feed_urls are collapsed to the first (curated) occurrence.
+//   loadScoutSources() NEVER throws: every failure path degrades to feeds.js.</code></pre>
+        <p>Implementation details: <code>normUrl()</code> trims + strips trailing slashes + lowercases before dedup;
+        the registry read is wrapped so an error or empty result logs
+        <code>⚠️ curated_source_registry unavailable (...) — falling back to DEPRECATED feeds.js</code> and returns the
+        full feeds.js list untouched (registryId all null). Success path logs
+        <code>📋 Production feeds: N total (X curated registry + Y feeds.js gap-fill, deduped by feed_url)</code>.
+        <code>scout.js</code> STEP 1 was rewired:</p>
+        <pre><code>- import feeds from './feeds.js'
++ import { loadScoutSources } from './sources.js'
+...
+- for (const feed of feeds) {
++ const feedList = await loadScoutSources()
++ for (const feed of feedList) {</code></pre>
+        <p>The consumer reads <code>feed.url</code> / <code>feed.source</code> / <code>feed.category</code> exactly as
+        before — verified by grep — so no downstream change was needed. <code>feeds.js</code> gained a DEPRECATED
+        banner in its header comment (canonical list = curated_source_registry; feeds.js is gap-fill/fallback only).
+        A grep for bare <code>feeds</code> references in <code>scout.js</code> now returns only comments.</p>
+
+        <h4>Step 4 — Stage 2a: append-only history + drift tracking in registry-observe.js</h4>
+        <p>The observe report is regenerated every run, so each run erased the evidence of the last. Stage 2a adds
+        telemetry that survives:</p>
+        <ul>
+          <li><code>HISTORY_FILE = registry-observe-history.jsonl</code> — append-only; each run writes one summary
+          line (totals + <code>deltas</code>). The write is try/caught and <strong>fail-silent</strong> — a history
+          failure must never break the observation (same philosophy as the LLM Request Ledger).</li>
+          <li><code>BASELINE_FILE = registry-observe-report-baseline-before-stage1a.json</code> — the preserved 9 Aug
+          21:03 UTC snapshot becomes the permanent <code>vs_baseline</code> anchor.</li>
+          <li><code>report.comparison</code> block: <code>previous_run</code>, <code>baseline</code> +
+          <code>baseline_generated_at</code>, <code>vs_previous</code> / <code>vs_baseline</code> deltas (null-safe —
+          a missing previous run yields null deltas, not a crash), <code>history_file</code> +
+          <code>history_runs</code>.</li>
+          <li>Console section <code>── STAGE 2 TRACKING ──</code> prints the drift summary.</li>
+          <li><code>.gitignore</code>: <code>registry-observe-history.jsonl</code> added (like the report, it is a
+          runtime artifact).</li>
+        </ul>
+        <p>The <code>delta()</code> helper is null-safe per key, and <code>signed()</code> renders
+        <code>+N</code>/<code>-N</code>/<code>n/a</code>. The baseline JSON was captured before the accidental rerun
+        overwrote the Stage 1A report, so it remains the pristine 9 Aug snapshot — 21,697 bytes.</p>
+
+        <h4>Step 5 — verification (all passed)</h4>
+        <ul>
+          <li><code>node --check</code> on <code>sources.js</code>, <code>scout.js</code>,
+          <code>registry-observe.js</code>, <code>feeds.js</code> — all clean (one duplicate-<code>const t</code>
+          collision between the tracking block and the console section was caught by the check and renamed
+          <code>totals</code>).</li>
+          <li><strong>New focused suite <code>test-sources.mjs</code></strong> (node test module mocks, no real
+          Supabase): 3 tests — curated-first merge + feed_url dedup + gap-fill order; registry-error fallback;
+          empty-registry fallback. All 3 pass.</li>
+          <li><strong>Live read-only observation</strong> (<code>npm run observe:registry</code>) — first tracked run
+          wrote history line 1 and computed the drift vs baseline:</li>
+        </ul>
+        <pre><code>TOTAL: 2250 items | 112 fresh | 2138 stale | 0 dateless | 55 new candidates | 19 seen by production
+HEALTH: STALE=5 · FEEDLESS=4 · QUIET=2 · HEALTHY=8 · DEFERRED=2
+STORIES: 49 clusters | 1 blend-eligible | 0 blend-uncertain | 35 single-source | 0 discovery-only | 13 first-party anchored
+Estimated LLM calls avoided by funnel pre-filtering: 63
+
+── STAGE 2 TRACKING ──
+  Previous run: (none — first tracked run)
+  Baseline:     registry-observe-report-baseline-before-stage1a.json (2026-08-09T21:03:07.420Z)
+  vs baseline — items +6 · fresh +74 · candidates +41 · calls avoided +38
+  History: registry-observe-history.jsonl (1 run, append-only)</code></pre>
+
+        <h4>Docs mirroring</h4>
+        <p>This entry is the SESSION_LOG half of the Session #45 record. TRAINING_MANUAL Chapter 55 (Stage 2) and the
+        CLAUDE.md updates (header bump, S45 session-history row, Stage 2 note in the Curated Source Registry section,
+        <code>sources.js</code>/<code>test-sources.mjs</code> in the file structure) are the other halves. Git plan
+        per the split rule: CLAUDE.md + scout-agent code pushed to GitHub; SESSION_LOG + TRAINING_MANUAL committed
+        locally only — awaiting Felix's explicit go-ahead before the commit.</p>
+      </div>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
