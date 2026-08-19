@@ -13937,6 +13937,242 @@ Estimated LLM calls avoided by funnel pre-filtering: 63
     </div>
   </div>
 
+  <div class="session" id="session-46">
+    <h2>Session #46 — 18 Aug 2026 — Groq provider restoration + Tavily-off experiment preservation</h2>
+
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>URGENT: RESTORE TAVILY-OFF EXPERIMENT — DO NOT REVERT THE EXPERIMENT</p>
+        <p>We are stopping the seven-day waiting period because the experiment has been invalidated by an external
+        provider event.</p>
+        <p>Your forensic report says Scout is failing because llama-3.3-70b-versatile returns HTTP 404.</p>
+        <p>I independently confirm from Groq's current official deprecation documentation that llama-3.3-70b-versatile
+        was officially shut down on 2026-08-16, with Groq recommending openai/gpt-oss-120b or qwen/qwen3.6-27b as
+        replacements.</p>
+        <p>Therefore:</p>
+        <ol>
+          <li>Diagnose the provider configuration first — inspect every production code location using
+          llama-3.3-70b-versatile, whether different functions use different models, whether Gemini fallback is
+          expected, whether the current fallback logic recognizes HTTP 404 as recoverable. Do not modify anything
+          yet.</li>
+          <li>Recommend the safest replacement — compare openai/gpt-oss-120b vs qwen/qwen3.6-27b for our workload
+          (source digestion, article generation, structured output, current prompts, token limits, free-tier TPD).
+          Do not choose based merely on benchmark reputation.</li>
+          <li>Preserve the Tavily experiment — DO NOT change TAVILY_SEARCH_ENABLED=false, search.js,
+          searchSameStory(), SWS, quality gate, registry, feeds, blend, editorial prompts, scheduling, YouTube
+          pipeline, Slack/editorial pipeline.</li>
+          <li>Fix only the provider failure — minimum possible provider/model change. Run syntax checks, existing
+          tests, controlled generation test, verify replacement is reachable, verify Gemini fallback intact.</li>
+          <li>Establish a new experimental baseline — mark Aug 16–18 as EXPERIMENT INVALID — PROVIDER FAILURE. After
+          restore, record new immutable TAVILY SEARCH-OFF VALID EXPERIMENT START timestamp and commit SHA.</li>
+          <li>Do not fix the 400-word problem yet — record the finding, do not modify prompt or quality gate.</li>
+          <li>Return a report before making any non-provider change.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="turn assistant">
+      <div class="label">AITrends Assistant</div>
+      <div class="bubble">
+        <p><strong>Diagnostic report delivered, then execution after Felix enabled the replacement model in Groq org
+        settings.</strong> This session restores Scout's Groq provider after the Aug 16 deprecation of
+        <code>llama-3.3-70b-versatile</code>, while preserving the Tavily-off experiment as the active experimental
+        condition.</p>
+
+        <h4>Step 1 — forensic search: dead model locations</h4>
+        <p>Grep for <code>llama-3.3-70b-versatile</code> across all <code>*.js</code> files in scout-agent found
+        exactly <strong>10 occurrences in 2 files</strong>:</p>
+        <ul>
+          <li><code>gemini.js</code> — 9 occurrences (8 code + 1 comment):
+            <ul>
+              <li>Line 64: <code>validateApiKeys()</code> — startup ping validation (the FIRST call that fails,
+              killing the pipeline before any work)</li>
+              <li>Line 110: <code>callGroq()</code> — <strong>THE single model selection point</strong> (all Groq
+              calls go through this one function)</li>
+              <li>Line 179: comment — documentation reference</li>
+              <li>Lines 242, 248, 252, 257, 262, 271: LLM Request Ledger record strings (observability)</li>
+            </ul>
+          </li>
+          <li><code>slack.js</code> — 1 occurrence:
+            <ul>
+              <li>Line 195: Human-readable Slack notification text ("Groq Llama 3.3 70B handled the request as
+              fallback")</li>
+            </ul>
+          </li>
+        </ul>
+        <p><strong>Impact on all pipelines:</strong> Scout Phase 1 (generateDigest, digestBlendSources,
+        synthesizeBlendDigest, generateEditorialDigest), Podcast (gemini-podcast.js), and the Gemini fallback path
+        all flow through <code>callGeminiWithFallback()</code> → <code>callGroq()</code>. Image generation (Cloudflare),
+        SWS, quality gate, Tavily, registry, feeds, scheduling — unaffected.</p>
+
+        <h4>Step 2 — live verification (before any code change)</h4>
+        <p>Three tests against the Groq API with the production <code>GROQ_API_KEY</code>:</p>
+        <pre><code>TEST: OLD MODEL (expect 404)
+Model: llama-3.3-70b-versatile
+HTTP Status: 404
+ERROR: "The model `llama-3.3-70b-versatile` does not exist or you do not have access to it."
+code: model_not_found
+
+TEST: NEW MODEL (expect 200)
+Model: openai/gpt-oss-120b
+HTTP Status: 403
+ERROR: "The model `openai/gpt-oss-120b` is blocked at the organization level."
+code: model_permission_blocked_org
+
+TEST: ALL AVAILABLE MODELS (9 tested)
+openai/gpt-oss-120b — 403 model_permission_blocked_org
+openai/gpt-oss-20b — 403 model_permission_blocked_org
+qwen/qwen3.6-27b — 403 model_permission_blocked_org
+allam-2-7b — 403 model_permission_blocked_org
+groq/compound — 403 model_permission_blocked_org
+groq/compound-mini — 403 model_permission_blocked_org
+meta-llama/llama-prompt-guard-2-22m — 403 model_permission_blocked_org
+meta-llama/llama-prompt-guard-2-86m — 403 model_permission_blocked_org
+openai/gpt-oss-safeguard-20b — 403 model_permission_blocked_org</code></pre>
+        <p><strong>Finding:</strong> Old model confirmed dead (404 — removed from Groq infrastructure Aug 16). All new
+        models exist in Groq's catalog (confirmed via <code>/v1/models</code> returning 13 models including
+        <code>openai/gpt-oss-120b</code>) but are blocked at the organization level (403). Same pattern as Session
+        #35 when <code>llama-3.3-70b-versatile</code> was initially org-blocked and Felix had to enable it in Groq
+        console settings.</p>
+        <p><strong>Blocked:</strong> Felix must enable <code>openai/gpt-oss-120b</code> at
+        <code>https://console.groq.com/settings/limits</code>.</p>
+
+        <h4>Step 3 — model enabled, re-verification</h4>
+        <p>Felix enabled <code>openai/gpt-oss-120b</code>. Re-ran all three tests:</p>
+        <pre><code>TEST: NEW MODEL (expect 200)
+Model: openai/gpt-oss-120b
+HTTP Status: 200
+Elapsed: 945ms
+Model returned: openai/gpt-oss-120b
+choices[0].message.content: "4"
+Finish reason: length
+Usage: {"prompt_tokens":84,"completion_tokens":20,"total_tokens":104,
+        "completion_tokens_details":{"reasoning_tokens":18}}
+Tool calls present: false
+
+TEST: EXACT PRODUCTION VALIDATION PING (max_tokens: 5)
+HTTP Status: 200
+Model returned: openai/gpt-oss-120b
+Content: "4"
+PASS — validation ping shape compatible
+
+TEST: PRODUCTION-STYLE EDITORIAL PROMPT (structured 5-field output)
+HTTP Status: 200 (3351ms)
+Model returned: openai/gpt-oss-120b
+Response length: 1874 chars
+Contains TITLE: true
+Contains CONTENT: true
+Contains EXCERPT: true
+Contains IMAGE_PROMPT: true
+Contains TRENDING_TERMS: true
+Usage: {"prompt_tokens":143,"completion_tokens":1422,"total_tokens":1565,
+        "completion_tokens_details":{"reasoning_tokens":1044}}</code></pre>
+        <p><strong>Key observations:</strong></p>
+        <ul>
+          <li>HTTP 200 — model callable ✅</li>
+          <li><code>choices[0].message.content</code> populated — standard OpenAI response shape ✅</li>
+          <li>No tool calls — <code>tool_calls</code> not present ✅</li>
+          <li>All 5 structured fields (TITLE, CONTENT, EXCERPT, IMAGE_PROMPT, TRENDING_TERMS) present ✅</li>
+          <li>Reasoning tokens used internally (1044/1422 on editorial prompt) but final answer is in
+          <code>choices[0].message.content</code> — <code>normaliseGroqResponse()</code> reads
+          <code>choices[0].message.content</code> and will work correctly</li>
+          <li>3.3s for 1422 output tokens — fast enough for the pipeline</li>
+        </ul>
+
+        <h4>Step 4 — minimal model change applied</h4>
+        <p>Two files edited, using <code>replaceAll</code> for the model string:</p>
+        <ul>
+          <li><code>gemini.js</code> — 9 replacements:
+            <ul>
+              <li>Line 64: <code>'llama-3.3-70b-versatile'</code> → <code>'openai/gpt-oss-120b'</code>
+              (validation ping)</li>
+              <li>Line 110: <code>'llama-3.3-70b-versatile'</code> → <code>'openai/gpt-oss-120b'</code>
+              (callGroq — THE model selection point)</li>
+              <li>Line 179: Comment updated — "Groq GPT-OSS 120B (free tier: 1K RPD / 8K TPM)"</li>
+              <li>Lines 242, 248, 252, 257, 262, 271: Ledger model strings updated</li>
+            </ul>
+          </li>
+          <li><code>slack.js</code> — 1 replacement:
+            <ul>
+              <li>Line 195: "Groq Llama 3.3 70B" → "Groq GPT-OSS 120B" in Slack notification text</li>
+            </ul>
+          </li>
+        </ul>
+        <p><strong>Deliberately NOT changed:</strong> provider architecture, retry logic, fallback logic, prompts,
+        token limits, TPD logic, request construction, <code>normaliseGroqResponse()</code>,
+        <code>extractGeminiText()</code>, Gemini model (<code>gemini-3.5-flash</code>), quota cooldown, SWS, quality
+        gate, search.js, TAVILY_SEARCH_ENABLED, registry, feeds, blend, scheduling, YouTube pipeline,
+        Slack/editorial pipeline.</p>
+
+        <h4>Step 5 — verification (all passed)</h4>
+        <ul>
+          <li><code>node --check gemini.js</code> — ✅ syntax OK</li>
+          <li><code>node --check slack.js</code> — ✅ syntax OK</li>
+          <li><code>node --check scout.js</code> — ✅ syntax OK</li>
+          <li><code>node --check gemini-podcast.js</code> — ✅ syntax OK</li>
+          <li><strong>Zero remaining references</strong> to <code>llama-3.3-70b-versatile</code> in any <code>*.js</code>
+          file (grep returned 0 matches)</li>
+          <li><strong><code>test-gemini-parts.mjs</code></strong> — 10/10 tests pass (extractGeminiText single-part,
+          empty candidates, later-part answer, reasoning-part skip, generateDigest parse, digestBlendSources parse,
+          generateEditorialDigest parse, empty 200 failure, single-part 200 resolve, Groq TPD→Gemini fallback)</li>
+          <li><strong>Live E2E test</strong> — <code>callGeminiWithFallback()</code> called through the production code
+          path with <code>openai/gpt-oss-120b</code>: HTTP 200, 4361ms, 281 chars, TITLE+CONTENT present,
+          <code>getLastServedProvider()</code> returns <code>'groq'</code> ✅</li>
+        </ul>
+
+        <h4>Step 6 — Tavily-off experiment integrity</h4>
+        <pre><code>TAVILY_SEARCH_ENABLED=false          ← UNCHANGED
+TAVILY_API_KEY=***REDACTED***        ← present (for felix.js + transcript.js)
+search.js                            ← UNCHANGED (0 model-string references)
+scout.js TAVILY_SEARCH_ENABLED check ← UNCHANGED
+Files modified: gemini.js + slack.js ONLY</code></pre>
+        <p>The Tavily-off experiment remains the active experimental condition. Scout Tavily story-search calls = 0.
+        No Tavily search reactivation. No change to source registry, SWS, quality gate, editorial prompts.</p>
+
+        <h4>Step 7 — Gemini fallback preserved</h4>
+        <p>The Gemini fallback path (lines 278-339 of <code>callGeminiWithFallback()</code>) is completely independent
+        of the Groq model string. <code>callGemini()</code> hits <code>generativelanguage.googleapis.com</code>
+        directly. The model name <code>gemini-3.5-flash</code> is untouched. Quota cooldown, empty response guard,
+        and GEMINI_QUOTA_EXHAUSTED sentinel — all untouched.</p>
+
+        <h4>Why the old model failed</h4>
+        <p>Groq deprecated <code>llama-3.3-70b-versatile</code> on August 16, 2026 as part of their scheduled model
+        retirement. The model was completely removed from Groq's infrastructure (HTTP 404: "does not exist"). This is
+        not an access/permissions issue — the model no longer exists on Groq's servers. Our production code received
+        HTTP 404 on every Groq call since Aug 16, causing <code>callGeminiWithFallback()</code> to exhaust its 3
+        retries then fall through to Gemini (which was also hitting its 20 req/day free-tier cap), resulting in
+        "Both providers failed" for every category on every run.</p>
+
+        <h4>Replacement rationale: openai/gpt-oss-120b</h4>
+        <ul>
+          <li><strong>120B parameters</strong> — closest to the 70B quality tier we had; <code>qwen/qwen3.6-27b</code>
+          (27B) is 4.4× smaller</li>
+          <li><strong>65K max output</strong> — our prompts request up to 3000 tokens; <code>qwen3.6-27b</code> caps
+          at 16K (adequate but less margin)</li>
+          <li><strong>Groq's own recommended replacement</strong> for <code>llama-3.3-70b-versatile</code> per their
+          deprecation documentation</li>
+          <li><strong>Same OpenAI-compatible API format</strong> — <code>callGroq()</code> and
+          <code>normaliseGroqResponse()</code> work without modification</li>
+          <li><strong>No tool invocation</strong> — confirmed: <code>tool_calls</code> absent from responses even
+          though the model has built-in browser search/code execution</li>
+          <li><strong>Free tier:</strong> 30 RPM, 1K RPD, 8K TPM (tighter than old model's 14.4K RPD but adequate
+          for ~60-70 calls/day with existing 65s pacing)</li>
+        </ul>
+
+        <h4>Git plan (per split rule)</h4>
+        <p>CLAUDE.md + scout-agent code (<code>gemini.js</code>, <code>slack.js</code>) pushed to GitHub. SESSION_LOG
+        + TRAINING_MANUAL committed locally only.</p>
+
+        <div class="tip">
+          <strong>Mirror-rule compliance note:</strong> This Session #46 entry is the SESSION_LOG half of the record.
+          TRAINING_MANUAL Chapter 56 (Groq provider restoration) and the CLAUDE.md updates (S46 session-history row,
+          model name updates in pipeline description) are the other halves.
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
