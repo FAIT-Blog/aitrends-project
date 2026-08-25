@@ -14171,6 +14171,145 @@ Files modified: gemini.js + slack.js ONLY</code></pre>
         </div>
       </div>
     </div>
+
+    <!-- TURN 1 -->
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>What did we do so far?</p>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- TURN 2 -->
+    <div class="turn assistant">
+      <div class="label">Claude</div>
+      <div class="bubble">
+        <p>Provided a full summary of P1A (curated source coverage expansion) and P1B (multimedia extraction) work,
+        plus the next step: updating all three documents (CLAUDE.md, SESSION_LOG.html, TRAINING_MANUAL.html) per the
+        mirror rule.</p>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- TURN 3 -->
+    <div class="turn user">
+      <div class="label">Felix</div>
+      <div class="bubble">
+        <p>Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</p>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- TURN 4 -->
+    <div class="turn assistant">
+      <div class="label">Claude</div>
+      <div class="bubble">
+        <h2>Session #47 — 25 Aug 2026 — P1A Curated Source Coverage + P1B Multimedia Extraction + Doc Updates</h2>
+        <p class="meta">Scout-agent + docs. Commits: <code>f6a1523</code> (P1A sources), <code>77e9c94</code> (P1B fetcher).
+        CLAUDE.md pushed; SESSION_LOG + TRAINING_MANUAL local-only (split rule).</p>
+
+        <h4>Read: CLAUDE.md (end sections)</h4>
+        <pre><code>Read lines 1030-1074 to find session history table end (S46 is last row at line 1074).
+Read lines 830-839 to find completed items section end (Session #39 follow-up is last).
+Read lines 1-10 to find header (Last Updated: 2026-08-18, Session #46).
+Found registry version references at lines 417, 476 (both say v3: 21 sources).</code></pre>
+
+        <h4>Read: SESSION_LOG.html (end)</h4>
+        <pre><code>Read lines 14130-14178. Last entry is Session #46 (Groq provider restored).
+File ends with:
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+&lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+Total: 14,178 lines.</code></pre>
+
+        <h4>Read: TRAINING_MANUAL.html (end)</h4>
+        <pre><code>Read lines 8500-8547. Last chapter is 56 (Groq provider restoration).
+File ends with identical closing structure. Total: 8,547 lines.</code></pre>
+
+        <h3>CLAUDE.md edits (5 changes)</h3>
+
+        <h4>Edit 1 — Last Updated header (line 2)</h4>
+        <pre><code>BEFORE:
+**Last Updated:** 2026-08-18 (Session #46 — Groq provider restored: dead `llama-3.3-70b-versatile` ...)
+
+AFTER:
+**Last Updated:** 2026-08-25 (Session #47 — P1A curated source coverage expanded: Tools +2 (Simon Willison, Latent Space), Anthropic +1 (Anthropic Engineering RSS mirror); P1B multimedia extraction: additive-only YouTube extraction in fetcher.js, 15/15 tests pass, zero caller breaks, registry v4 (24 sources))</code></pre>
+
+        <h4>Edit 2 — Registry version in file tree (line 417)</h4>
+        <pre><code>BEFORE:
+  registry.seed.json ← The curated source universe (v3: 21 sources) — canonical seed data, supersedes feeds.js as source of truth
+
+AFTER:
+  registry.seed.json ← The curated source universe (v4: 24 sources) — canonical seed data, supersedes feeds.js as source of truth</code></pre>
+
+        <h4>Edit 3 — Registry seed description (line 476)</h4>
+        <pre><code>BEFORE:
+- **Seed:** `registry.seed.json` v3 = 21 sources. `seed-registry.js` is explicit — read-only diff without
+
+AFTER:
+- **Seed:** `registry.seed.json` v4 = 24 sources. `seed-registry.js` is explicit — read-only diff without</code></pre>
+
+        <h4>Edit 4 — Session #45尾部 + P1A/P1B completed items (after line 839)</h4>
+        <pre><code>Added two new ✅ completed items after the Session #39 follow-up entry:
+
+- ✅ **P1A — Curated source coverage expanded (Session #47, 25 Aug 2026).**
+  Forensic investigation of ~15+ feed candidates across Tools (from 0 curated) and
+  Anthropic (from 1 curated) categories, evaluated on: Anthropic-primary content ratio,
+  production feasibility (GHA fetchable, no 403), update frequency, and feed health.
+  Final selection: Tools +2 sources (from 0→2), Anthropic +1 source (from 1→2),
+  registry v3→v4 (21→24 sources).
+  Tools sources added: Simon Willison's Weblog + Latent Space.
+  Anthropic source added: Anthropic Engineering (GitHub mirror).
+  Key discovery: Anthropic.com has NO RSS feed (all paths 404).
+  Rejected: O'Reilly Radar (403), BAIR Berkeley (too academic), DeepLearning.AI The Batch (dead feed),
+  TechCrunch/Ars Technica as Anthropic sources (only 9-14% Anthropic-primary).
+  Commit `f6a1523` pushed. 3/3 source-loading tests pass.
+
+- ✅ **P1B — Multimedia extraction added to fetcher (Session #47, 25 Aug 2026).**
+  Additive-only change to `fetcher.js` (+73 lines): two new exports
+  `extractMediaFromHtml(html)` and `getMediaForUrl(url)`.
+  YouTube-only extraction by design (no SSRF/noise from non-YouTube iframes).
+  Normalizes all YouTube URL variants to `https://www.youtube.com/watch?v={id}` format,
+  deduplicates by video ID, handles iframe src, watch URLs, shorts, youtu.be short URLs.
+  `fetchContent()` return type unchanged (string or null) — zero caller breaks confirmed.
+  Future use: Gemini prompts can enrich posts with embedded video references.
+  Commit `77e9c94` pushed. 15/15 unit tests pass.</code></pre>
+
+        <h4>Edit 5 — Session #47 row in history table (after S46)</h4>
+        <pre><code>| S47 | 25 Aug 2026 | scout-agent + docs | **P1A curated source coverage + P1B multimedia extraction.**
+  P1A: forensic investigation of ~15+ feed candidates across Tools (from 0 curated) and
+  Anthropic (from 1 curated) categories. Evaluated on Anthropic-primary content ratio,
+  GHA fetchability, update frequency, and feed health. Tools +2: Simon Willison's Weblog
+  (simonwillison.net/atom/everything/, specialist, 30 entries, 1-3/day) + Latent Space
+  (latent.space/feed, specialist, 13 items, 2-3/week). Anthropic +1: Anthropic Engineering
+  (taobojlen/anthropic-rss-feed GitHub mirror, core, 25 entries, ~2/month accelerating).
+  Key discovery: Anthropic.com has NO RSS feed (all paths 404); the third-party mirror is
+  the only viable infrastructure. Rejected: O'Reilly Radar (403), BAIR Berkeley (too academic),
+  DeepLearning.AI The Batch (dead feed), TechCrunch/Ars Technica as Anthropic sources
+  (only 9-14% Anthropic-primary). Existing Anthropic News mirror KEPT — Engineering
+  supplements it. Registry v3→v4 (21→24 sources). Commit `f6a1523` pushed.
+  3/3 source-loading tests pass. P1B: additive-only YouTube multimedia extraction in
+  `fetcher.js` (+73 lines). Two new exports: `extractMediaFromHtml(html)` +
+  `getMediaForUrl(url)`. YouTube-only (no SSRF/noise), normalizes all URL variants to
+  `watch?v={id}`, deduplicates by video ID, handles iframe/watch/shorts/youtu.be.
+  `fetchContent()` return type unchanged (string or null) — zero caller breaks.
+  Commit `77e9c94` pushed. 15/15 unit tests pass. |</code></pre>
+
+        <div class="tip">
+          <strong>Mirror-rule compliance note:</strong> This Session #47 entry is the SESSION_LOG half of the record.
+          TRAINING_MANUAL Chapter 57 (P1A + P1B) and the CLAUDE.md updates (S47 session-history row, P1A/P1B completed
+          items, registry v3→v4 bump, Last Updated header) are the other halves.
+        </div>
+      </div>
+    </div>
   </div>
 
 </div>

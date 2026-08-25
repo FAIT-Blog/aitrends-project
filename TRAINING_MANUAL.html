@@ -8542,6 +8542,159 @@ scout-agent/.validate-registry.mjs                     <span class="cmt"># pre-w
     </div>
   </div>
 
+  <div class="chapter" id="chapter-57">
+    <div class="chapter-num">Chapter 57</div>
+    <h2>Curated Source Coverage Expansion + Multimedia Extraction</h2>
+
+    <p>Session #47 (25 August 2026) delivers two additive-only improvements to the Scout pipeline: P1A expands the
+    curated source registry from 21 to 24 sources (filling the Tools and Anthropic category gaps that were the
+    structural root cause of category imbalance), and P1B adds YouTube multimedia extraction capability to the
+    fetcher without breaking any existing caller. Both changes are governed by the permanent single-source
+    architecture — Tavily search remains off, gates remain enforced, and no prompt or scheduling changes were made.</p>
+
+    <h3>57.1 P1A — Curated Source Coverage Expansion</h3>
+
+    <p>The forensic report (<code>SINGLE_SOURCE_NEXT_PHASE_FORENSIC.md</code>, 335+250 lines) identified the
+    structural root cause of Tools and Anthropic categories rarely publishing: feed-count imbalance. Industry had
+    10+ curated feeds while Tools had 0 and Anthropic had 1. The single-source architecture (Tavily off, MIN_BUCKET
+    = 1) means each category depends entirely on its own RSS feeds for source material — no cross-category search
+    to compensate.</p>
+
+    <h4>57.1.1 Investigation Method</h4>
+
+    <p>~15+ feed candidates were evaluated across both categories using four criteria:</p>
+
+    <ol>
+      <li><strong>Anthropic-primary content ratio</strong> — what percentage of the feed's items are directly about
+      Anthropic (vs. general AI news that mentions Anthropic in passing)?</li>
+      <li><strong>Production feasibility</strong> — can the feed be fetched from GHA without 403 errors? No
+      authentication required?</li>
+      <li><strong>Update frequency</strong> — how often does the feed publish new items? Too infrequent means the
+      category will still be starved.</li>
+      <li><strong>Feed health</strong> — is the feed actually alive and returning valid RSS/Atom XML?</li>
+    </ol>
+
+    <h4>57.1.2 Final Selection</h4>
+
+    <p><strong>Tools category (0 → 2 sources):</strong></p>
+
+    <ul>
+      <li><strong>Simon Willison's Weblog</strong> — <code>https://simonwillison.net/atom/everything/</code>
+      (specialist, tools, RSS/Atom, 30 entries, 1-3 posts/day). Simon Willison is a prominent UK developer who
+      writes extensively about AI tools, LLMs, and developer workflows. His blog is the single highest-signal
+      independent source for AI developer tools coverage.</li>
+      <li><strong>Latent Space</strong> — <code>https://www.latent.space/feed</code> (specialist, tools, RSS,
+      13 items, 2-3 posts/week). An AI engineering podcast/blog focused on AI developer tools, infrastructure,
+      and the AI engineering ecosystem.</li>
+    </ul>
+
+    <p><strong>Anthropic category (1 → 2 sources):</strong></p>
+
+    <ul>
+      <li><strong>Anthropic Engineering</strong> —
+      <code>https://raw.githubusercontent.com/taobojlen/anthropic-rss-feed/main/anthropic_engineering_rss.xml</code>
+      (core, anthropic, RSS, 25 entries, ~2/month accelerating). A third-party GitHub-mirrored RSS feed of
+      Anthropic's engineering blog posts. Supplements the existing Anthropic News mirror
+      (<code>anthropic_news_rss.xml</code>, 14 articles, 100% Anthropic-primary, ~3-4/week) — the two feeds
+      together cover both news announcements and deep engineering content.</li>
+    </ul>
+
+    <h4>57.1.3 Key Discovery</h4>
+
+    <p>Anthropic.com has <strong>no RSS feed</strong>. Every tested path (<code>/feed</code>, <code>/rss</code>,
+    <code>/blog/feed</code>, <code>/blog/rss</code>, etc.) returns HTTP 404. The only viable Anthropic RSS
+    infrastructure is the third-party <code>taobojlen/anthropic-rss-feed</code> GitHub mirror, which scrapes the
+    Anthropic blog and engineering pages and publishes them as RSS. This is an important governance note: if the
+    mirror goes down or stops updating, the Anthropic category reverts to its pre-P1A starvation state.</p>
+
+    <h4>57.1.4 Rejected Candidates</h4>
+
+    <ul>
+      <li><strong>O'Reilly Radar</strong> — returns HTTP 403 from GHA runners. Production-infeasible.</li>
+      <li><strong>BAIR Berkeley</strong> — too academic and infrequent (2-4 posts/month). Would not materially
+      improve category coverage.</li>
+      <li><strong>DeepLearning.AI The Batch</strong> — the feed is dead (no new items in months). Was the original
+      Session #45 Tools +1 plan; dropped after live feed health check.</li>
+      <li><strong>TechCrunch AI as Anthropic source</strong> — only 9% of TechCrunch AI articles are
+      Anthropic-primary. Not enough signal.</li>
+      <li><strong>Ars Technica AI as Anthropic source</strong> — only 14% Anthropic-primary. Same problem.</li>
+    </ul>
+
+    <h4>57.1.5 Registry Update</h4>
+
+    <p>The seed was applied via <code>npm run seed:registry -- --apply</code> (idempotent upsert by
+    <code>source_name</code>). Registry bumped from v3 (21 sources) to v4 (24 sources). Existing sources unchanged.
+    Commit: <code>f6a1523</code>. All 3 source-loading tests pass.</p>
+
+    <h3>57.2 P1B — Multimedia Extraction in fetcher.js</h3>
+
+    <p>Additive-only change to <code>scout-agent/fetcher.js</code> (+73 lines, zero existing behaviour altered).
+    Two new exports: <code>extractMediaFromHtml(html)</code> and <code>getMediaForUrl(url)</code>.</p>
+
+    <h4>57.2.1 Design Constraints</h4>
+
+    <ul>
+      <li><strong>YouTube-only extraction by design</strong> — non-YouTube iframes are ignored. This prevents SSRF
+      noise from random embed sources and keeps the signal clean.</li>
+      <li><strong><code>fetchContent()</code> return type unchanged</strong> — still returns <code>string | null</code>.
+      Zero caller breaks confirmed across the entire pipeline (scout.js, felix.js, gemini.js, gemini-podcast.js).</li>
+      <li><strong>URL normalization</strong> — all YouTube URL variants (<code>iframe src</code>, <code>watch</code>
+      URLs, <code>shorts</code>, <code>youtu.be</code> short URLs) are normalized to
+      <code>https://www.youtube.com/watch?v={id}</code> format.</li>
+      <li><strong>Deduplication</strong> — multiple references to the same video ID produce only one entry.</li>
+    </ul>
+
+    <h4>57.2.2 Future Use</h4>
+
+    <p>The extraction is currently a building block — the output is available but not yet consumed by any Gemini
+    prompt. The intended future use is enriching posts with embedded YouTube video references (matching the existing
+    <code>&lt;div data-youtube=""&gt;</code> pattern used in podcast posts). The additive-only design means this
+    capability can be wired into prompts in a future session without touching the fetcher again.</p>
+
+    <h4>57.2.3 Verification</h4>
+
+    <p>15/15 unit tests pass covering: iframe extraction, watch URL parsing, shorts normalization, youtu.be short
+    URL handling, deduplication by video ID, and the zero-caller-break invariant (<code>fetchContent()</code>
+    return type unchanged). Commit: <code>77e9c94</code>.</p>
+
+    <h3>57.3 What Was NOT Changed</h3>
+
+    <p>Both P1A and P1B were explicitly scoped to avoid touching the permanent single-source architecture:</p>
+
+    <ul>
+      <li><code>TAVILY_SEARCH_ENABLED=false</code> — unchanged</li>
+      <li><code>searchSameStory()</code> — untouched</li>
+      <li>SWS threshold (55) and weights — untouched</li>
+      <li>Quality gate rules (400-word, h3, WTM) — untouched</li>
+      <li>Groq/Gemini configuration — untouched</li>
+      <li>Scheduling (Phase 1 every 6h, Phase 2 hourly) — untouched</li>
+      <li>Category processing order — untouched</li>
+      <li>YouTube/publishing pipeline — untouched</li>
+      <li>Editorial voice and prompt rules — untouched</li>
+      <li>Existing registry entries — untouched (only 3 new entries added)</li>
+    </ul>
+
+    <h3>57.4 Verification Chain</h3>
+
+    <ol>
+      <li><code>node --check fetcher.js</code> — syntax OK</li>
+      <li><code>node --check sources.js</code> — syntax OK</li>
+      <li><code>node --check scout.js</code> — syntax OK</li>
+      <li><code>node --check gemini.js</code> — syntax OK</li>
+      <li><code>test-sources.mjs</code> — 3/3 tests pass (curated-first merge, error fallback, empty fallback)</li>
+      <li>P1B unit tests — 15/15 pass (extractMediaFromHtml, getMediaForUrl, fetchContent unchanged)</li>
+      <li><code>registry.seed.json</code> — 24 sources, 3 new (Simon Willison, Latent Space, Anthropic Engineering)</li>
+      <li>Commit <code>f6a1523</code> (P1A) + <code>77e9c94</code> (P1B) pushed to <code>origin/main</code></li>
+    </ol>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 57 is the TRAINING_MANUAL half of the Session #47
+      record. CLAUDE.md (S47 session-history row, P1A/P1B completed items, registry v3→v4 bump, Last Updated header)
+      and SESSION_LOG.html (Session #47 entry) are the other halves. Commits follow the split rule: CLAUDE.md +
+      scout-agent code pushed to GitHub, SESSION_LOG + TRAINING_MANUAL committed locally.
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
