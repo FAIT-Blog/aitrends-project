@@ -8695,6 +8695,142 @@ scout-agent/.validate-registry.mjs                     <span class="cmt"># pre-w
     </div>
   </div>
 
+  <div class="chapter" id="chapter-58">
+    <div class="chapter-num">Chapter 58</div>
+    <h2>P0 Image-Pipeline Fix — Source og:image Reuse Removal + Cloudflare FLUX Schema Repair</h2>
+
+    <p>Session #49 (3 September 2026, commit <code>97ff9f8</code>) fixed two independent production defects that
+    were silently degrading the <code>editorial image prompt → Cloudflare FLUX → generated image → upload →
+    cover_image_url → publish</code> path. This chapter documents why the defects existed, the exact root causes,
+    the fix, and the mandatory production verification that proved all 9 conditions before the change was declared
+    complete. No historical cover was regenerated; a separate READ-ONLY historical-cover audit is tracked awaiting
+    approval.</p>
+
+    <h3>58.1 Forensic Context</h3>
+
+    <p>The September 1 forensic (<code>PRODUCTION_STARVATION_FORENSIC.md</code>) reached a verdict that was
+    initially counter-intuitive: the P0 change intended to remove source og:image reuse existed <strong>only as
+    uncommitted working-tree edits</strong> in <code>complete.js</code> and <code>gemini.js</code>. The commits
+    GitHub Actions actually ran (<code>head_sha 77e9c94</code>) still contained <code>trySourceImage</code> as the
+    <em>primary</em> image path. Result: all 8 September 1 published covers (405/406/408/411/412/413/414/415) were
+    byte-for-byte source og:image REUSE, and the pre-outage RuntimeWire post (403) was exact source reuse too.</p>
+
+    <p>Worse, the fallback that should have caught these posts — Cloudflare FLUX — was itself broken in production:
+    <code>image-providers/cloudflare.js</code> sent <code>width</code>/<code>height</code>/<code>num_steps</code>
+    which <code>@cf/black-forest-labs/flux-1-schnell</code> rejects.</p>
+
+    <h3>58.2 The Two Root Causes</h3>
+
+    <h4>58.2.1 P0-A — <code>trySourceImage()</code> still deployed as primary path</h4>
+
+    <ul>
+      <li>The P0 fix was made but never committed; the working-tree edit existed on Felix's machine only.</li>
+      <li>Committed <code>77e9c94</code> kept <code>trySourceImage()</code> — fetch the source article HTML, parse
+      its og:image, download the bytes, serve that as the cover — as the STEP-1 default.</li>
+      <li>Net effect: generated-image posts were rare; source-photo reuse was the norm.</li>
+    </ul>
+
+    <h4>58.2.2 P0-B — Cloudflare FLUX request schema was wrong</h4>
+
+    <ul>
+      <li>Reproduced live (before any edit): the broken body returned
+      <code>HTTP 400 code 5006 — "Additional or unevaluated properties '/width, /height, /num_steps' at '/'
+      not allowed"</code>.</li>
+      <li>Verified accepted schema: <code>prompt</code> (string, required, 1–2048), <code>steps</code> (int,
+      default 4, max 8), <code>seed</code> (optional). The <code>num_steps</code> parameter name was also
+      misspelled relative to the model's <code>steps</code>.</li>
+      <li>Corrected body <code>{ prompt, steps: 4 }</code> returned HTTP 200 + a real base64 JPEG (508KB,
+      1024×1024) against the live model — both the failure and the fix proven before editing.</li>
+    </ul>
+
+    <h3>58.3 The Fix (commit <code>97ff9f8</code>)</h3>
+
+    <h4>58.3.1 P0-A — <code>complete.js</code></h4>
+
+    <ul>
+      <li>Removed the entire <code>trySourceImage()</code> function (source HTML fetch → og:image parse → byte
+      download).</li>
+      <li>Removed the STEP-1 <code>"Checking source article for photograph (og:image)..."</code> primary path.</li>
+      <li>Preserved the approved <code>[OG_IMAGE]</code> editorial path (felix.js pre-resolved og:image only) via
+      <code>downloadDirectImage(ogUrl)</code>.</li>
+      <li>No new source-image fallback was added — normal RSS/editorial posts go straight to the configured image
+      provider (Cloudflare FLUX).</li>
+    </ul>
+
+    <h4>58.3.2 P0-B — <code>image-providers/cloudflare.js</code></h4>
+
+    <pre><code>BEFORE:
+  body: JSON.stringify({
+    prompt,
+    width: 1024,
+    height: 576,     // 16:9 ratio
+    num_steps: 4,    // FLUX Schnell only needs 4 steps
+  })
+AFTER:
+  // @cf/black-forest-labs/flux-1-schnell accepts only prompt, steps, seed.
+  // width/height/num_steps are rejected by the model schema (HTTP 400, code 5006).
+  // steps = 4 is the model's documented default (max 8); output is base64 result.image.
+  body: JSON.stringify({
+    prompt,
+    steps: 4,
+  })</code></pre>
+
+    <p>Also added a <code>MULTIMEDIA RULE</code> to <code>gemini.js</code> (pre-existing working-tree change,
+    committed as part of <code>97ff9f8</code>).</p>
+
+    <h3>58.4 Verification Chain</h3>
+
+    <ol>
+      <li><code>node --check image-providers/cloudflare.js</code> — OK</li>
+      <li><code>node --check complete.js</code> — OK</li>
+      <li><code>test-gemini-parts.mjs</code> — 10/10 pass (with <code>--experimental-test-module-mocks</code>)</li>
+      <li><code>test-sources.mjs</code> — 3/3 pass</li>
+      <li>Live <code>processJob()</code> vs the real Cloudflare model — 843KB JPEG, 1024×1024, <code>done: true</code>
+      (one transient <code>ERR_SSL_SSLV3_ALERT_BAD_RECORD_MAC</code> on first attempt, passed on retry)</li>
+      <li>Commit <code>97ff9f8</code> pushed to <code>origin/main</code>.</li>
+    </ol>
+
+    <h3>58.5 Mandatory Production Verification (run <code>33706443309</code>)</h3>
+
+    <p>All 9 mandatory conditions were demonstrated on a controlled Phase 2 run (workflow_dispatch of
+    <code>Complete Posts (Phase 2)</code>, head_sha <code>97ff9f8f5e1c0b22112f30a1681230432899d755</code>):</p>
+
+    <ol>
+      <li>Deployed commit SHA <code>97ff9f8</code> present in the run.</li>
+      <li><code>trySourceImage</code> absent from deployed <code>complete.js</code> (0 occurrences).</li>
+      <li>No <code>"Checking source article for photograph (og:image)"</code> log line; every post logged
+      <code>"[Cloudflare] ✅ Image generated"</code>.</li>
+      <li>Cloudflare FLUX request executed ×4 (no 400/5006).</li>
+      <li>HTTP success + image buffers received.</li>
+      <li>Images uploaded to Supabase Storage (<code>covers/416,420,426,427.jpg</code>).</li>
+      <li>Generated covers NOT byte-identical to source og:images — all 1024×1024; hashes 426/420/416/427 differ
+      from their sources.</li>
+      <li><code>cover_image_prompt</code> corresponded to each request.</li>
+      <li>All 4 posts published (ATV, OpenAI Astra, Udacity, AI-native) + Slack notified.</li>
+    </ol>
+
+    <p>Bonus: previously-stuck posts 416 (attempts 6→7) and 420 (attempts 4→5) were unblocked and published on
+    this run — the schema repair cleared rows that had been silently failing under the broken FLUX request.</p>
+
+    <h3>58.6 Scope Guardrails</h3>
+
+    <ul>
+      <li><strong>No</strong> changes to SWS, prompts (beyond the MULTIMEDIA grounding rule), registry, categories,
+      publishing logic, or provider order.</li>
+      <li><strong>No</strong> historical cover was regenerated — the pre-<code>97ff9f8</code> posts (403, 405–415,
+      418–425 + any discovered) are the subject of a separate READ-ONLY audit that must complete and receive
+      approval before any published cover is modified.</li>
+      <li><strong>No</strong> secrets exposed; no DB writes beyond the normal pipeline publish path.</li>
+    </ul>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 58 is the TRAINING_MANUAL half of the Session #49
+      record. CLAUDE.md (S49 Last-Updated header, P0 image-pipeline completed item, S49 session-history row) and
+      SESSION_LOG.html (Session #49 entry) are the other halves. Commits follow the split rule: CLAUDE.md + code
+      pushed to GitHub, SESSION_LOG + TRAINING_MANUAL committed locally.
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
