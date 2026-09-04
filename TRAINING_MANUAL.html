@@ -8831,6 +8831,122 @@ AFTER:
     </div>
   </div>
 
+  <div class="chapter" id="chapter-59">
+    <div class="chapter-num">Chapter 59</div>
+    <h2>Image-Prompt Refinement — The Visual Editorial Brief (supersedes the "No text, no logos" blanket rule)</h2>
+
+    <p>Session #50 (4 September 2026) made the first <strong>controlled prompt-engineering change</strong> since
+    Session #49's P0 image-pipeline fix. The goal was to make cover images represent the <em>actual story</em>
+    rather than generic AI metaphors. Felix approved the full Section A–G implementation-safety proposal and two
+    decisions: (1) supersede the CLAUDE.md rule <code>"Every prompt ends with: 'No text, no logos'."</code> with a
+    new Visual Editorial Brief policy (mirrored across all three documents), and (2) confirm the scope as the three
+    digest paths only — <code>gemini-podcast.js</code> is explicitly out of scope. Provider, API params, pipeline,
+    and source-image protection are all unchanged; no historical cover was regenerated.</p>
+
+    <h3>59.1 Why This Change Was Needed</h3>
+
+    <p>The pre-Session-#50 image-prompt instructions were narrow and force-fitting. Each <code>IMAGE PROMPT RULES</code>
+    block in <code>scout-agent/gemini.js</code> told the model to pick between <em>two</em> default art styles
+    (watercolour/oil paint or pencil sketch), banned a few specific compositions, and ended with a blanket
+    <code>"No text, no logos."</code>. The fallback strings, used when the model returned no prompt, injected
+    <code>neural network</code> and <code>electric blue and gold accents</code> regardless of the story. The result
+    was a recurring family of failures:</p>
+
+    <ul>
+      <li><strong>Generic abstraction</strong> — neural networks, orbs, circuitry that says nothing about the actual story.</li>
+      <li><strong>Noun-pile prompts</strong> — listing many entities without a central narrative, so the model picked the loudest symbol over the real subject.</li>
+      <li><strong>Blanket no-logo reflex</strong> — preventing a genuinely warranted brand (OpenAI, Anthropic, a product) from being recognizable.</li>
+      <li><strong>Thumbnail-driven mismatch</strong> — for podcast-related and multimodal content the prompt and bytes could diverge from the headline story.</li>
+    </ul>
+
+    <div class="callout info">
+      <strong>Scope control — the lesson:</strong> this was deliberately a <em>prompt-engineering-only</em> refinement.
+      It touched one file (<code>gemini.js</code>), three digest paths, and three fallback strings. It did <em>not</em>
+      alter the provider (Cloudflare FLUX), image dimensions, API parameters, the pipeline, or the source-image
+      protection added in Session #49.       First controlled prompt change — keep the blast radius tiny.
+    </div>
+
+    <h3>59.2 The Visual Editorial Brief</h3>
+
+    <p>Each <code>IMAGE PROMPT RULES</code> block was rewritten as a <strong>Visual Editorial Brief</strong>. Before
+    writing the final prompt, the model must build an internal brief from the story:</p>
+
+    <ul>
+      <li><code>PRIMARY_SUBJECT</code> — who/what is the protagonist (person, company, product, event, discovery).</li>
+      <li><code>CENTRAL_EVENT</code> — what actually happened.</li>
+      <li><code>CENTRAL_NARRATIVE</code> — one sentence: why this story matters.</li>
+      <li><code>PRIMARY_ACTION</code> — what changed / launched / was disputed / was reduced / was demonstrated.</li>
+      <li><code>KEY_ENTITIES</code> — important secondary people/companies/products/places/technologies.</li>
+      <li><code>VISUAL_CONTEXT</code> — the setting that naturally belongs to the story.</li>
+      <li><code>BRAND_IDENTITY</code> — is a company/product genuinely the subject and does identifying it help the reader?</li>
+      <li><code>PEOPLE</code> — are people central (founders, executives, students, developers, researchers, workers, customers)?</li>
+      <li><code>VISUAL_METAPHOR</code> — only a metaphor that genuinely improves communication, never abstraction just because the subject is AI.</li>
+      <li><code>AVOID</code> — specific visual elements that could make the model misinterpret the story.</li>
+    </ul>
+
+    <p>Then the model writes <strong>one</strong> final editorial-illustration prompt in a fixed 10-part structure:</p>
+
+    <ol>
+      <li><strong>IMAGE TYPE</strong> — begin "Create an original premium technology-news editorial illustration..."</li>
+      <li><strong>PRIMARY SUBJECT</strong> — the protagonist, made visually dominant.</li>
+      <li><strong>CENTRAL EVENT</strong> — exactly what happened.</li>
+      <li><strong>VISUAL NARRATIVE</strong> — the concrete scene/action representing the event.</li>
+      <li><strong>SUPPORTING CONTEXT</strong> — only the most important supporting facts.</li>
+      <li><strong>BRAND / PRODUCT IDENTITY</strong> — which identity should be recognizable and why, only when editorially warranted.</li>
+      <li><strong>VISUAL STYLE</strong> — a credible technology-publication editorial aesthetic.</li>
+      <li><strong>COMPOSITION / HIERARCHY</strong> — what dominates and what stays secondary.</li>
+      <li><strong>TEXT POLICY</strong> — allow a restrained product label/signage where it aids recognition, but don't depend on generated text.</li>
+      <li><strong>AVOID</strong> — article-specific failure prevention.</li>
+    </ol>
+
+    <h3>59.3 The Rules</h3>
+
+    <ul>
+      <li>The image must communicate the <strong>central narrative</strong>, not the largest pile of nouns.</li>
+      <li>Prefer <strong>concrete scenes</strong> over generic AI symbolism; use an abstract metaphor only when nothing concrete communicates better.</li>
+      <li><strong>People appear when central</strong> to the story, in their true context.</li>
+      <li><strong>Brand/logo only when it is the actual subject</strong> or materially aids recognition. The source publisher is <em>not</em> automatically the visual subject.</li>
+      <li>If a <strong>defining number</strong> shapes the story (3 days → 3 hours, &gt;90% cheaper), show what it means visually — not big graphic text.</li>
+      <li>For <strong>competitive stories</strong>, make the reported product dominant and competitors clearly secondary.</li>
+      <li><strong>Originality is mandatory</strong> — never imitate/copy a source image, never recreate a source cover, no source-photo fallback.</li>
+      <li><strong>Do not overcorrect</strong> — not every image needs a logo, person, product name, UI screenshot, or numerical label.</li>
+      <li><strong>No blanket "no text, no logos"</strong> — manage text and branding with the restrained policy; every prompt ends with <code>"cinematic composition."</code></li>
+    </ul>
+
+    <h3>59.4 Fallback Strings Updated</h3>
+
+    <p>The three fallback strings (used when the model returns no prompt) dropped the hardcoded
+    <code>neural network</code> / <code>electric blue and gold accents</code> defaults:</p>
+
+    <pre><code>generateDigest fallback:
+  BEFORE: `${entityHint} logo, dark background, electric blue and gold accents, clean tech illustration, neural network, no text in image`
+  AFTER:  `Original premium technology-news editorial illustration of the ${entityHint} story — central subject dominant, concrete editorial scene, no source-article image reuse, cinematic composition`
+
+synthesizeBlendDigest fallback:
+  BEFORE: `${category} AI story, dark background, electric blue and gold accents, clean editorial illustration, no text in image`
+  AFTER:  `Original premium technology-news editorial illustration of the ${category} story — central subject dominant, concrete editorial scene, cinematic composition`
+
+generateEditorialDigest fallback:
+  BEFORE: 'Editorial AI news illustration, dark background, electric blue and gold accents, clean lines, no text in image'
+  AFTER:  'Original premium technology-news editorial illustration — central subject dominant, concrete editorial scene, cinematic composition'</code></pre>
+
+    <h3>59.5 Verification</h3>
+
+    <ul>
+      <li><code>node --check gemini.js</code> — clean.</li>
+      <li><code>node --check scout.js</code> + <code>node --check complete.js</code> — clean (scope-adjacent files, unchanged).</li>
+      <li><code>node --experimental-test-module-mocks --test test-gemini-parts.mjs</code> — 10/10 pass.</li>
+      <li>Grep-verified: 3 new Visual Editorial Brief blocks (one per digest path), 3 new <code>IMAGE_PROMPT:</code> response lines (<code>restrained branding only where warranted</code>), 3 new fallback strings, 0 legacy fallback defaults, and the only surviving <code>no text, no logos</code> strings are the three intentional <code>"Do not use a blanket..."</code> instruction lines.</li>
+    </ul>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 59 is the TRAINING_MANUAL half of the Session #50
+      record. CLAUDE.md (S50 Last-Updated header, Section 3 image-prompt policy, S50 session-history row) and
+      SESSION_LOG.html (Session #50 entry) are the other halves. Commits follow the split rule: CLAUDE.md + code
+      pushed to GitHub, SESSION_LOG + TRAINING_MANUAL committed locally.
+    </div>
+  </div>
+
 </div>
 </body>
 </html>

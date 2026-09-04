@@ -14518,6 +14518,120 @@ Both commits created after the below READ-ONLY audit is complete (per the sessio
     </div>
   </div>
 
+  <div class="session">
+    <div class="turn assistant">
+      <div class="bubble">
+        <h2>Session #50 — 4 Sep 2026 — Image-prompt refinement (Visual Editorial Brief replaces "no text, no logos" blanket rule)</h2>
+        <p class="meta">Scout-agent + docs. Prompt-engineering-only change to <code>scout-agent/gemini.js</code> — first controlled prompt change since Session #49. Scope: the three digest paths (<code>generateDigest</code> / <code>synthesizeBlendDigest</code> / <code>generateEditorialDigest</code>) + three fallback strings. <code>gemini-podcast.js</code> out of scope. Provider, API params, pipeline, source-image protection all unchanged. No covers regenerated.</p>
+
+        <hr>
+        <!-- TURN 1 -->
+        <h3>User (Turn 1)</h3>
+        <p>Resumed the Session #49 context (docs-commit, clean-history push, security remediation, PAT revocation) and moved to the next objective: reproduce the Section A–G implementation-safety proposal for a <strong>README-ONLY historical-cover audit</strong> (already complete — covers left as-is per Felix's decision) and the <strong>image-prompt refinement</strong> — the first controlled prompt-engineering change since Session #49, so covers represent the actual story rather than generic AI metaphors.</p>
+        <p>Felix approved the full Section A–G proposal and made two decisions:</p>
+        <pre><code>1. CLAUDE.md rule change APPROVED — supersede "Every prompt ends with: 'No text, no logos.'" with the
+   new Visual Editorial Brief policy, mirrored in SESSION_LOG/TRAINING_MANUAL per the atomic-docs rule.
+2. Scope CONFIRMED — the three digest paths in scout-agent/gemini.js only; gemini-podcast.js is out of scope.</code></pre>
+
+        <h3>Bash: run the Section G pre-implementation tests (before any edit, to establish the baseline)</h3>
+        <pre><code>node --check gemini.js                          → PASS
+node --check scout.js                          → PASS (scope-adjacent, unchanged)
+node --check complete.js                       → PASS (scope-adjacent, unchanged)
+node --experimental-test-module-mocks --test test-gemini-parts.mjs
+  # tests 10  # pass 10  # fail 0   → all 10 extraction/ledger tests pass</code></pre>
+
+        <hr>
+        <!-- TURN 2 -->
+        <h3>Assistant (Turn 2) — Implement the Visual Editorial Brief in all three digest paths + fallbacks</h3>
+        <p>Rewrote the three <code>IMAGE PROMPT RULES</code> blocks and three <code>IMAGE_PROMPT:</code> response lines in <code>scout-agent/gemini.js</code>, and updated the three fallback strings.</p>
+
+        <h4>Edit 1 — generateDigest() IMAGE PROMPT RULES block</h4>
+        <pre><code>BEFORE (forced two-default-style + blanket ban):
+  IMAGE PROMPT RULES:
+  Describe a specific editorial illustration for this story.
+  - Choose: watercolour/oil paint (hopeful stories) OR pencil sketch (serious/analytical)
+  - Show the specific event, object, or place in the story — not a generic tech scene
+  - No person at a laptop. No Lagos skyline. No co-working space.
+  - End with: "No text, no logos."
+
+AFTER (Visual Editorial Brief — build an internal brief, then write the final prompt):
+  IMAGE PROMPT RULES — VISUAL EDITORIAL BRIEF (CRITICAL):
+  Before writing the prompt, build an internal VISUAL EDITORIAL BRIEF from the story:
+    PRIMARY_SUBJECT / CENTRAL_EVENT / CENTRAL_NARRATIVE / PRIMARY_ACTION / KEY_ENTITIES /
+    VISUAL_CONTEXT / BRAND_IDENTITY / PEOPLE / VISUAL_METAPHOR / AVOID
+  Then write ONE final editorial-illustration prompt in this 10-part structure:
+    1. IMAGE TYPE  2. PRIMARY SUBJECT  3. CENTRAL EVENT  4. VISUAL NARRATIVE
+    5. SUPPORTING CONTEXT  6. BRAND/PRODUCT IDENTITY  7. VISUAL STYLE
+    8. COMPOSITION/HIERARCHY  9. TEXT POLICY  10. AVOID
+  RULES: central-narrative-not-noun-pile; concrete scenes over generic AI symbolism; people when central;
+  brand only when editorially warranted (source publisher NOT automatically the subject); show what a defining
+  number means visually, not big graphic text; reported product dominant in competitive stories; originality
+  mandatory (never imitate/copy a source image); do NOT overcorrect; do not use a blanket "no text, no logos" —
+  end with "cinematic composition."</code></pre>
+
+        <h4>Edit 2 — generateDigest() IMAGE_PROMPT response line</h4>
+        <pre><code>BEFORE:  IMAGE_PROMPT: [specific editorial illustration for this story — watercolour or pencil sketch, no people at laptops, ends with: no text, no logos]
+AFTER:   IMAGE_PROMPT: [original premium editorial illustration — central subject dominant, concrete scene, restrained branding only where warranted, article-specific AVOID, ends with "cinematic composition"]</code></pre>
+
+        <h4>Edit 3 &amp; 4 — synthesizeBlendDigest() IMAGE PROMPT RULES + response line (same replacement as Edit 1/2, old block was the shorter watercolour/pencil variant)</h4>
+        <h4>Edit 5 &amp; 6 — generateEditorialDigest() IMAGE PROMPT RULES + response line (same replacement, old block had its own "Choose: watercolour/oil paint OR pencil sketch" variant)</h4>
+
+        <h4>Edit 7–9 — the three fallback strings (remove neural-network / electric-blue defaults)</h4>
+        <pre><code>generateDigest fallback:
+  BEFORE: `${entityHint} logo, dark background, electric blue and gold accents, clean tech illustration, neural network, no text in image`
+  AFTER:  `Original premium technology-news editorial illustration of the ${entityHint} story — central subject dominant, concrete editorial scene, no source-article image reuse, cinematic composition`
+
+synthesizeBlendDigest fallback:
+  BEFORE: `${category} AI story, dark background, electric blue and gold accents, clean editorial illustration, no text in image`
+  AFTER:  `Original premium technology-news editorial illustration of the ${category} story — central subject dominant, concrete editorial scene, cinematic composition`
+
+generateEditorialDigest fallback:
+  BEFORE: 'Editorial AI news illustration, dark background, electric blue and gold accents, clean lines, no text in image'
+  AFTER:  'Original premium technology-news editorial illustration — central subject dominant, concrete editorial scene, cinematic composition'</code></pre>
+
+        <h4>Bash: Section G verification (after the edits)</h4>
+        <pre><code>node --check gemini.js                          → PASS
+node --check scout.js / complete.js             → PASS (unchanged)
+node --experimental-test-module-mocks --test test-gemini-parts.mjs   → 10/10 pass
+grep -c "VISUAL EDITORIAL BRIEF (CRITICAL)" gemini.js   → 3   (one per digest path)
+grep -c "restrained branding only where warranted"      → 3   (new IMAGE_PROMPT response lines)
+grep -c "electric blue and gold accents"                → 0   (legacy fallback defaults removed)
+grep -c "Original premium technology-news editorial illustration" → 3  (new fallbacks)
+grep -n "no text, no logos" gemini.js → 3 occurrences, all the intended "Do not use a blanket \"no text, no logos\"" instruction lines</code></pre>
+
+        <p class="meta">All three digest prompt blocks now carry the Visual Editorial Brief; the only surviving "no text, no logos" strings are the three intentional "Do not use a blanket 'no text, no logos'" lines. Provider, API params, pipeline, and source-image protection untouched.</p>
+
+        <hr>
+        <!-- TURN 3 -->
+        <h3>User (Turn 3)</h3>
+        <p>"Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."</p>
+
+        <h3>Assistant (Turn 3) — Docs mirror + commit</h3>
+        <p>Completed the mandatory three-document atomic mirror and the split-rule commit:</p>
+        <pre><code>CLAUDE.md changes (push to GitHub):
+  - Last Updated header → Session #50 (Visual Editorial Brief summary, gemini-podcast.js out of scope)
+  - Section 3 Cover Image Style: replaced the "Every prompt ends with: 'No text, no logos, cinematic composition.'"
+    line with the new Image-prompt policy note (Session #50 — Visual Editorial Brief, restrained branding/text
+    policy, NO blanket "no text, no logos", source publisher NOT automatically the subject, prompts end with
+    "cinematic composition.")
+  - Session history table: added the S50 row after S49
+
+SESSION_LOG.html (local only): this Session #50 verbatim block. TRAINING_MANUAL.html (local only): Chapter 59
+(append-only) capturing the Visual Editorial Brief change in full.
+
+Commit per split rule:
+  git add CLAUDE.md scout-agent/gemini.js  → commit → PUSH to GitHub
+  git add SESSION_LOG.html TRAINING_MANUAL.html → commit → LOCAL ONLY (do not push)</code></pre>
+
+        <div class="tip">
+          <strong>Mirror-rule compliance note:</strong> This Session #50 SESSION_LOG block is the verbatim record.
+          CLAUDE.md (S50 header + Section 3 policy + S50 history row) and TRAINING_MANUAL Chapter 59 are the other
+          halves. All three updated in lockstep per the project's mandatory three-document atomic rule.
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
