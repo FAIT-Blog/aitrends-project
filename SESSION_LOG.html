@@ -14632,6 +14632,77 @@ Commit per split rule:
     </div>
   </div>
 
+  <div class="session">
+    <div class="turn assistant">
+      <div class="bubble">
+        <h2>Session #51 — 5 Sep 2026 — Post-deployment production observation of the Session #50 Visual Editorial Brief (docs only, no code change)</h2>
+        <p class="meta">Docs-only session. Felix reviewed multiple live covers produced under the Session #50 Visual Editorial Brief and reported a clear production improvement, plus three observation notes for the NEXT refinement cycle. Explicit instruction: NO code change at this stage, preserve the current Session #50 behavior exactly, do not implement the recorded future direction yet — still observing production output.</p>
+
+        <hr>
+        <!-- TURN 1 -->
+        <h3>User (Turn 1)</h3>
+        <p>Felix's verbatim message:</p>
+        <pre><code>Session #50 image-prompt refinement is showing a noticeable improvement in production.
+
+After reviewing multiple live posts, the new Visual Editorial Brief is successfully producing covers that are substantially more relevant, concrete, and story-specific than the previous generic AI-visual pattern.
+
+Particularly strong examples include the ChatGPT/Grok/Claude outage story and the Claude malware/account-security story, where the primary entities and central events are immediately recognizable.
+
+However, observation across the Legora, Google AI Mode, EAC AI implementation, and Pentagon/Anthropic stories reveals a secondary weakness:
+
+The system sometimes understands too many aspects of the article and attempts to visualize too many of them simultaneously.
+
+This produces crowded editorial illustrations where the central relationship/event becomes less dominant.
+
+A second observation is that when the story depends on a comparison, transformation, causal relationship, or defining quantitative result, the generated image may contain the relevant objects without making the relationship itself sufficiently explicit.
+
+A third minor issue is excessive/inaccurate generated text on documents, institutional material, or signage.
+
+No code change is requested at this stage.
+
+Please treat these as observation notes for the next refinement cycle only. Preserve the current Session #50 behavior because it is clearly an improvement.
+
+Potential direction for a future refinement:
+
+ONE CENTRAL VISUAL IDEA → ONE PRIMARY ACTION/RELATIONSHIP → 1–3 supporting elements → omit the rest.
+
+When the story's central claim depends on a comparison, transformation, quantity, or relationship, make that relationship visually demonstrable rather than merely placing the participating objects in the same scene.
+
+Also prefer restrained, purposeful text/branding rather than invented institutional documents, labels or logos.
+
+Do not implement this yet. We are still observing production output.</code></pre>
+
+        <hr>
+        <!-- TURN 2 -->
+        <h3>Assistant (Turn 2) — Capture the observation notes in all three documents (no code change)</h3>
+        <p>Per Felix's explicit instruction — no code change, Session #50 behavior preserved, keep observing — the observation notes were captured as documentation only, through the mandatory three-document atomic mirror:</p>
+        <pre><code>CLAUDE.md changes:
+  - Last Updated header → Session #51 (docs-only follow-up: S50 confirmed a clear production improvement; three
+    observation notes captured for the NEXT refinement cycle; NO code change; future direction recorded in
+    Section 3; still observing production output)
+  - Section 3 Cover Image Style: added an "S50 production observation — NOTES ONLY" bullet directly after the
+    Session #50 image-prompt-policy line, capturing: (1) over-ambitious scenes → crowded illustrations where the
+    central relationship/event loses dominance (Legora, Google AI Mode, EAC AI implementation, Pentagon/Anthropic);
+    (2) relationships not made explicit for comparison/transformation/causal/quantitative stories; (3) generated
+    text drift on documents/institutional material/signage; plus the recorded future direction (ONE CENTRAL VISUAL
+    IDEA → ONE PRIMARY ACTION/RELATIONSHIP → 1–3 supporting elements → omit the rest; relationships visually
+    demonstrable; restrained purposeful text/branding) — explicitly marked NOT implemented yet
+  - Session history table: added the S51 row after S50
+
+SESSION_LOG.html (local only): this Session #51 verbatim block. TRAINING_MANUAL.html (local only): Chapter 60
+(append-only) recording the production observations as input to the next refinement cycle.
+
+No production code touched: scout-agent/gemini.js unchanged, Session #50 behavior fully preserved.</code></pre>
+
+        <div class="tip">
+          <strong>Mirror-rule compliance note:</strong> This Session #51 SESSION_LOG block is the verbatim record.
+          CLAUDE.md (S51 header + Section 3 observation bullet + S51 history row) and TRAINING_MANUAL Chapter 60
+          are the other halves. All three updated in lockstep per the mandatory three-document atomic rule.
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>

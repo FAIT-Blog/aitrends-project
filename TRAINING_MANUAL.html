@@ -8947,6 +8947,86 @@ generateEditorialDigest fallback:
     </div>
   </div>
 
+  <div class="chapter" id="chapter-60">
+    <div class="chapter-num">Chapter 60</div>
+    <h2>Production Observation of the Visual Editorial Brief — Notes for the Next Image-Prompt Refinement</h2>
+
+    <p>Session #51 (5 September 2026) was a <strong>docs-only</strong> follow-up to Session #50. After the Visual
+    Editorial Brief shipped, Felix reviewed multiple live covers in production and confirmed the refinement is a
+    clear improvement over the previous generic AI-visual pattern — then recorded three observation notes to guide
+    the <em>next</em> refinement cycle. Critically, he instructed that <strong>no code change be made at this
+    stage</strong>: Session #50 behavior is preserved exactly as-is while production output continues to be
+    observed.</p>
+
+    <div class="callout info">
+      <strong>The discipline — a controlled experiment, not a fire-and-forget change:</strong> Session #50 was the
+      first controlled prompt-engineering change since Session #49. Session #51 continues that discipline: before
+      the next prompt change is made, production evidence is gathered and stored. Changing prompts without observing
+      the outcome is how earlier failures entered the system (the "<code>No minimum. No inflation.</code>"
+      contradiction of Session #34, and the forced-phrase family of failures documented in Sessions #7/#8/#14/#23/#25).
+    </div>
+
+    <h3>60.1 What Production Confirms — the Improvement Is Real</h3>
+
+    <p>The new Visual Editorial Brief is consistently producing covers that are <strong>substantially more relevant,
+    concrete, and story-specific</strong> than the previous generic-AI-visual pattern. Particularly strong examples:</p>
+
+    <ul>
+      <li><strong>ChatGPT / Grok / Claude outage story</strong> — the primary entities and central event are immediately recognizable.</li>
+      <li><strong>Claude malware / account-security story</strong> — entity and event legible at a glance.</li>
+    </ul>
+
+    <h3>60.2 Observation 1 — Over-ambitious scenes (the main weakness)</h3>
+
+    <p>Across the <strong>Legora</strong>, <strong>Google AI Mode</strong>, <strong>EAC AI implementation</strong>,
+    and <strong>Pentagon/Anthropic</strong> stories, the system sometimes understands <em>too many</em> aspects of an
+    article and attempts to visualize too many of them simultaneously. The result is a <strong>crowded editorial
+    illustration</strong> where the central relationship/event becomes less dominant.</p>
+
+    <h3>60.3 Observation 2 — Relationships Not Made Explicit</h3>
+
+    <p>When a story depends on a <strong>comparison, transformation, causal relationship, or defining quantitative
+    result</strong>, the generated image may contain the relevant objects without making the relationship itself
+    sufficiently explicit. The participating elements are present; what the story <em>says about</em> them is not
+    visually demonstrated.</p>
+
+    <h3>60.4 Observation 3 — Generated Text Drift (minor)</h3>
+
+    <p>Excessive/inaccurate generated text appears on <strong>documents, institutional material, or signage</strong>.
+    Where the restrained text/branding policy calls for a product label or signage aid, the model sometimes
+    over-produces invented text.</p>
+
+    <h3>60.5 Recorded Future Direction (explicitly NOT implemented)</h3>
+
+    <p>Felix recorded a potential direction for the next refinement cycle. It is captured in CLAUDE.md Section 3 as
+    the forward reference, but is <strong>not yet implemented</strong> — production output is still being observed:</p>
+
+    <ul>
+      <li><strong>ONE CENTRAL VISUAL IDEA</strong> → <strong>ONE PRIMARY ACTION/RELATIONSHIP</strong> → <strong>1–3 supporting
+      elements</strong> → omit the rest.</li>
+      <li>When the story's central claim depends on a <strong>comparison, transformation, quantity, or relationship</strong>,
+      make that relationship <strong>visually demonstrable</strong> rather than merely placing the participating objects in the
+      same scene.</li>
+      <li>Prefer <strong>restrained, purposeful text/branding</strong> rather than invented institutional documents, labels, or logos.</li>
+    </ul>
+
+    <h3>60.6 Scope Control</h3>
+
+    <ul>
+      <li><strong>No code change.</strong> <code>scout-agent/gemini.js</code> untouched — Session #50 behavior preserved exactly.</li>
+      <li>No providers, API params, pipeline, or source-image protection changed.</li>
+      <li>No covers regenerated.</li>
+      <li>This chapter is input for the <em>next</em> refinement cycle only.</li>
+    </ul>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 60 is the TRAINING_MANUAL half of the Session #51
+      record. CLAUDE.md (S51 Last-Updated header, Section 3 S50-production-observation bullet, S51 session-history
+      row) and SESSION_LOG.html (Session #51 entry) are the other halves. Commits follow the split rule: CLAUDE.md
+      pushed to GitHub, SESSION_LOG + TRAINING_MANUAL committed locally.
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
