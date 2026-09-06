@@ -14703,6 +14703,193 @@ No production code touched: scout-agent/gemini.js unchanged, Session #50 behavio
     </div>
   </div>
 
+  <div class="session">
+    <div class="turn assistant">
+      <div class="bubble">
+        <h2>Session #52 — 6 Sep 2026 — Editorial Feedback Loop: observation + training examples for the scout/editorial pipeline (docs only, no implementation)</h2>
+        <p class="meta">Docs-only session. We are changing how feedback is given to the scout/editorial pipeline — applying the same evidence-based method that improved the Session #50 image prompts (actual result → diagnosis → preferred treatment → reusable lesson) to editorial output. Felix supplied the framing, the per-example feedback-set structure, and 10 initial generalizable editorial lessons from production review. Explicit instruction: NO production code change at this stage; the objective is to build a small, high-quality supervised feedback set from real AITrends.ng output before changing the scout/editorial generation logic. More reviewed examples will be supplied before implementation.</p>
+
+        <hr>
+        <!-- TURN 1 -->
+        <h3>User (Turn 1)</h3>
+        <p>Felix's verbatim message (full text):</p>
+        <pre><code>Editorial Feedback Loop — Observation + Training Examples — NO IMPLEMENTATION YET
+
+We are changing how we provide feedback to the scout/editorial pipeline.
+
+The recent image-prompt improvement produced noticeably better results because feedback was not given only as abstract rules. We placed the actual previous prompt/result beside a recommended interpretation and explicitly explained:
+
+what was produced → why it was inadequate → what should have been represented instead.
+
+We now want to apply the same evidence-based feedback method to the editorial pipeline.
+
+Do not modify production code yet.
+
+For the next phase, treat reviewed production posts as a small supervised feedback set. For each selected example, preserve:
+
+Post/topic
+What the scout/editor produced
+Specific defect
+Evidence/source finding
+Preferred treatment
+Generalizable editorial lesson
+
+The goal is not to hard-code the exact rewritten sentence. The goal is for the scout/editorial generation process to learn the reasoning pattern behind the correction.
+
+Initial lessons emerging from production review
+
+1. WHY THIS MATTERS
+
+Weak pattern: generic statement that the development is "important" or merely restates the event.
+
+Preferred pattern: identify the concrete consequence, decision, opportunity, risk, affected group, or industry change created by the specific story.
+
+Example: Mount Shasta should not simply say AI planning is "important." The stronger implication is the reliability boundary of AI-generated navigation advice when combined with incomplete preparation and human decisions.
+
+2. CAUSALITY
+
+Do not convert "AI was one contributing factor" into "AI caused the outcome."
+
+Mount Shasta is the reference example. Gemini was one of several tools/influences; the reporting also identifies route misunderstanding, slow progress, inadequate supplies and failure to turn around.
+
+3. SOURCE PERSPECTIVE
+
+Do not convert an author's personal opinion into a general market fact.
+
+Anthropic IPO is the reference example. The source was a Motley Fool value investor expressing personal interest in potentially buying after an IPO pullback. The headline should not imply that the broader value-investor community was "sparked" by the valuation.
+
+4. OPINION VS NEWS
+
+Clearly distinguish company claims, analyst/investor opinions, first-hand experiments, reported facts and independently corroborated findings.
+
+5. NUMERICAL PRECISION
+
+When a source contains a table, chart or underlying comparison, verify important numerical claims against that underlying evidence rather than relying only on a prose summary.
+
+GPT-6 Astra pelican is the reference example.
+
+6. SPECULATION
+
+Preserve speculation as speculation. Do not upgrade an author's hypothesis into an explanation.
+
+The pelican article's tokenizer/prompt-engineering explanation is an example: the experiment does not establish which mechanism explains the token difference.
+
+7. SOURCE RICHNESS ≠ WORD COUNT
+
+Do not treat a short source automatically as a poor source.
+
+Simon Willison is the reference example. His posts can be brief but highly valuable because they contain first-hand experiments, technical details, prompts, files and observed results.
+
+A short high-information source should not be padded with generic AI commentary merely to reach a word target.
+
+8. SOURCE BUCKET STATUS
+
+Always verify whether the source belongs to the curated bucket.
+
+Simon Willison is a curated Tools source.
+
+RuntimeWire is currently not a curated bucket source and should therefore receive the appropriate additional source scrutiny rather than being treated as equivalent to an established curated source.
+
+9. ARTICLE STRUCTURE
+
+A short article can still fail structurally if a required section such as Why This Matters is empty. Conversely, forcing extra prose into a short first-hand source can create low-value padding. Evaluate structure and information density separately.
+
+10. EDITORIAL CENTRAL NARRATIVE
+
+Do not build the article by mechanically describing every source detail. Identify the single most important idea connecting the evidence and build around it.
+
+Image feedback principle
+
+Continue the Session #50 image system unchanged for now.
+
+The image examples demonstrate a useful feedback pattern:
+
+actual poor result → diagnosis → preferred visual interpretation.
+
+Apply the same principle to editorial output:
+
+actual article/result → diagnosis → evidence → preferred treatment → reusable lesson.
+
+We will continue supplying additional reviewed examples before requesting implementation.
+
+No production code changes requested at this stage.
+
+The objective is to build a small, high-quality feedback set from real AITrends output before changing the scout/editorial logic.</code></pre>
+
+        <hr>
+        <!-- TURN 2 -->
+        <h3>Assistant (Turn 2) — Capture the Editorial Feedback Loop framework in all three documents (no production code change)</h3>
+        <p>Per Felix's explicit instruction — no production code change, objective is to build a supervised feedback set before changing the scout/editorial generation logic — the framework was captured as documentation only, through the mandatory three-document atomic mirror:</p>
+        <pre><code>CLAUDE.md changes:
+  - Last Updated header → Session #52 (docs-only: new Editorial Feedback Loop framework — applying the Session #50
+    image-feedback method to editorial output; treated reviewed production posts as a small supervised feedback set;
+    10 generalizable editorial lessons captured with reference examples (Mount Shasta, Anthropic IPO, GPT-6 Astra
+    pelican, Simon Willison, RuntimeWire); NO code change; more reviewed examples will be supplied before implementation)
+  - Section 6 (Scout Agent): added the "Editorial Feedback Loop (Session #52 — observation + training examples, NO
+    IMPLEMENTATION YET)" subsection directly after the "Gemini Prompt — Editorial Mandate" subsection. Contains the
+    status (docs-only), the per-example feedback-set structure (Post/topic → What the scout/editor produced →
+    Specific defect → Evidence/source finding → Preferred treatment → Generalizable editorial lesson), the explicit
+    goal (learn the reasoning pattern, NOT hard-code a rewritten sentence), the full 10-part "Initial lessons
+    emerging from production review", and the unchanged "Image feedback principle" note (Session #50 system continues).
+  - Session history table: added the S52 row after S51
+
+SESSION_LOG.html (local only): this Session #52 verbatim block. TRAINING_MANUAL.html (local only): Chapter 61
+(append-only) recording the Editorial Feedback Loop framework as input to the next refinement cycle.
+
+No production code touched: scout-agent/gemini.js and all other pipeline files unchanged.</code></pre>
+
+        <div class="tip">
+          <strong>Mirror-rule compliance note:</strong> This Session #52 SESSION_LOG block is the verbatim record.
+          CLAUDE.md (S52 header + Section 6 Editorial Feedback Loop subsection + S52 history row) and TRAINING_MANUAL
+          Chapter 61 are the other halves. All three updated in lockstep per the mandatory three-document atomic rule.
+        </div>
+
+        <hr>
+        <!-- TURN 3 -->
+        <h3>Assistant (Turn 3) — 10 initial editorial lessons (structured summary)</h3>
+        <p>The 10 generalizable editorial lessons emerging from production review, as the seed of the supervised feedback set (each is a reusable reasoning pattern, not a hard-coded sentence):</p>
+        <pre><code>1. WHY THIS MATTERS — prefer the concrete consequence / decision / opportunity / risk / affected group / industry
+   change the specific story creates, over a generic statement that the development is "important" or a restatement
+   of the event. (Mount Shasta: the stronger implication is the reliability boundary of AI-generated navigation
+   advice combined with incomplete preparation and human decisions.)
+
+2. CAUSALITY — do not convert "AI was one contributing factor" into "AI caused the outcome." (Mount Shasta: Gemini
+   was one of several tools/influences; reporting also cites route misunderstanding, slow progress, inadequate
+   supplies, and failure to turn around.)
+
+3. SOURCE PERSPECTIVE — do not convert an author's personal opinion into a general market fact. (Anthropic IPO: a
+   Motley Fool value investor's personal interest in buying after an IPO pullback should not imply the broader
+   value-investor community was "sparked" by the valuation.)
+
+4. OPINION VS NEWS — clearly distinguish company claims, analyst/investor opinions, first-hand experiments, reported
+   facts, and independently corroborated findings.
+
+5. NUMERICAL PRECISION — when a source contains a table, chart, or underlying comparison, verify important numerical
+   claims against that underlying evidence rather than relying only on a prose summary. (GPT-6 Astra pelican.)
+
+6. SPECULATION — preserve speculation as speculation; do not upgrade an author's hypothesis into an explanation.
+   (Pelican tokenizer/prompt-engineering explanation: the experiment does not establish which mechanism explains the
+   token difference.)
+
+7. SOURCE RICHNESS ≠ WORD COUNT — a short source is not automatically a poor source. (Simon Willison: brief but
+   highly valuable posts with first-hand experiments, technical details, prompts, files, observed results.) A short
+   high-information source should not be padded with generic AI commentary merely to reach a word target.
+
+8. SOURCE BUCKET STATUS — verify whether a source belongs to the curated bucket; non-curated sources get additional
+   scrutiny rather than being treated as equivalent to an established curated source. (Simon Willison = curated Tools
+   source; RuntimeWire = currently not a curated bucket source → additional scrutiny.)
+
+9. ARTICLE STRUCTURE — evaluate structure and information density separately. A short article can still fail
+   structurally if a required section (e.g. Why This Matters) is empty; forcing extra prose into a short first-hand
+   source can create low-value padding.
+
+10. EDITORIAL CENTRAL NARRATIVE — do not build the article by mechanically describing every source detail. Identify
+   the single most important idea connecting the evidence and build around it.</code></pre>
+        <p>These will be expanded into full per-example feedback-set entries (post/topic → produced → defect → evidence → preferred treatment → lesson) as Felix continues supplying reviewed production examples. Implementation of any prompt changes is deferred until the feedback set is sufficiently populated.</p>
+      </div>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>

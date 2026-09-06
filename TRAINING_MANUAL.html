@@ -9027,6 +9027,141 @@ generateEditorialDigest fallback:
     </div>
   </div>
 
+  <div class="chapter" id="chapter-61">
+    <div class="chapter-num">Chapter 61</div>
+    <h2>Editorial Feedback Loop — Observation + Training Examples for the Scout/Editorial Pipeline</h2>
+
+    <p>Session #52 (6 September 2026) was a <strong>docs-only</strong> session. Felix introduced a new feedback
+    framework for the scout/editorial pipeline: apply the same <strong>evidence-based</strong> method that improved
+    the Session #50 image prompts to <strong>editorial output</strong>. The explicit instruction is
+    <strong>NO implementation yet</strong> — the objective is to build a small, high-quality supervised feedback set
+    from real AITrends.ng output before changing the scout/editorial generation logic.</p>
+
+    <div class="callout info">
+      <strong>Why this method works (the Session #50 lesson carried over):</strong> the Session #50 image-prompt
+      improvement produced noticeably better results because the feedback was <strong>not</strong> given only as
+      abstract rules. We placed the actual previous prompt/result beside a recommended interpretation and explicitly
+      explained: <em>what was produced → why it was inadequate → what should have been represented instead.</em> The
+      editorial feedback loop applies the identical reasoning: <em>actual article/result → diagnosis → evidence →
+      preferred treatment → reusable lesson.</em>
+    </div>
+
+    <h3>61.1 The Per-Example Feedback-Set Structure</h3>
+
+    <p>Reviewed production posts are treated as a small supervised feedback set. For each selected example, preserve
+    six fields:</p>
+
+    <ol>
+      <li><strong>Post/topic</strong> — which production post.</li>
+      <li><strong>What the scout/editor produced</strong> — the actual output.</li>
+      <li><strong>Specific defect</strong> — what was wrong.</li>
+      <li><strong>Evidence/source finding</strong> — what the source actually supported.</li>
+      <li><strong>Preferred treatment</strong> — how it should have been handled.</li>
+      <li><strong>Generalizable editorial lesson</strong> — the reusable reasoning pattern.</li>
+    </ol>
+
+    <div class="callout warn">
+      <strong>The goal is <em>not</em> to hard-code the exact rewritten sentence.</strong> The goal is for the
+      scout/editorial generation process to <strong>learn the reasoning pattern</strong> behind the correction. A
+      hard-coded sentence fixes one post; a learned pattern fixes the whole class of posts.
+    </div>
+
+    <h3>61.2 Initial Lessons Emerging from Production Review — the Seed Set</h3>
+
+    <p>Ten generalizable editorial lessons were captured as the starting feedback set. Each is written as a reusable
+    reasoning pattern, with reference examples from real reviewed posts:</p>
+
+    <ol>
+      <li>
+        <strong>WHY THIS MATTERS</strong> — The weak pattern is a generic statement that a development is
+        "important" or a mere restatement of the event. The preferred pattern identifies the concrete
+        <strong>consequence, decision, opportunity, risk, affected group, or industry change</strong> created by the
+        specific story. <em>Reference example (Mount Shasta):</em> the stronger implication is not that AI planning
+        is "important," but the <strong>reliability boundary of AI-generated navigation advice</strong> when combined
+        with incomplete preparation and human decisions.
+      </li>
+      <li>
+        <strong>CAUSALITY</strong> — Do not convert "AI was one contributing factor" into "AI caused the outcome."
+        <em>Reference example (Mount Shasta):</em> Gemini was one of several tools/influences; the reporting also
+        identifies route misunderstanding, slow progress, inadequate supplies, and failure to turn around.
+      </li>
+      <li>
+        <strong>SOURCE PERSPECTIVE</strong> — Do not convert an author's personal opinion into a general market
+        fact. <em>Reference example (Anthropic IPO):</em> the source was a Motley Fool value investor expressing
+        personal interest in potentially buying after an IPO pullback. The headline should not imply the broader
+        value-investor community was "sparked" by the valuation.
+      </li>
+      <li>
+        <strong>OPINION VS NEWS</strong> — Clearly distinguish company claims, analyst/investor opinions, first-hand
+        experiments, reported facts, and independently corroborated findings.
+      </li>
+      <li>
+        <strong>NUMERICAL PRECISION</strong> — When a source contains a table, chart, or underlying comparison,
+        verify important numerical claims against that underlying evidence rather than relying only on a prose
+        summary. <em>Reference example:</em> the GPT-6 Astra pelican evaluation.
+      </li>
+      <li>
+        <strong>SPECULATION</strong> — Preserve speculation as speculation. Do not upgrade an author's hypothesis
+        into an explanation. <em>Reference example:</em> the pelican article's tokenizer/prompt-engineering
+        explanation — the experiment does not establish which mechanism explains the token difference.
+      </li>
+      <li>
+        <strong>SOURCE RICHNESS ≠ WORD COUNT</strong> — Do not treat a short source automatically as a poor source.
+        <em>Reference example (Simon Willison):</em> his posts can be brief but highly valuable because they contain
+        first-hand experiments, technical details, prompts, files, and observed results. A short high-information
+        source should <strong>not</strong> be padded with generic AI commentary merely to reach a word target.
+      </li>
+      <li>
+        <strong>SOURCE BUCKET STATUS</strong> — Always verify whether the source belongs to the curated bucket;
+        non-curated sources get additional scrutiny rather than being treated as equivalent to an established curated
+        source. <em>Reference example:</em> Simon Willison is a curated Tools source; RuntimeWire is currently
+        <strong>not</strong> a curated bucket source.
+      </li>
+      <li>
+        <strong>ARTICLE STRUCTURE</strong> — A short article can still fail structurally if a required section such
+        as Why This Matters is empty. Conversely, forcing extra prose into a short first-hand source can create
+        low-value padding. <strong>Evaluate structure and information density separately.</strong>
+      </li>
+      <li>
+        <strong>EDITORIAL CENTRAL NARRATIVE</strong> — Do not build the article by mechanically describing every
+        source detail. Identify the <strong>single most important idea</strong> connecting the evidence and build
+        around it.
+      </li>
+    </ol>
+
+    <h3>61.3 Image Feedback Principle (unchanged — Session #50 system continues)</h3>
+
+    <p>For now the Session #50 image system is unchanged. The image examples demonstrate a useful feedback pattern:
+    <em>actual poor result → diagnosis → preferred visual interpretation.</em> The editorial loop applies the same
+    principle to editorial output: <em>actual article/result → diagnosis → evidence → preferred treatment → reusable
+    lesson.</em></p>
+
+    <h3>61.4 What Happens Next</h3>
+
+    <p>This framework is the <strong>structure and seed content</strong> of the feedback set. The next step is to
+    continue supplying additional reviewed production examples (each in the six-field structure) before any
+    implementation of prompt/logic changes is requested. The discipline mirrors Chapters 59 &amp; 60 (the image-prompt
+    controlled-experiment pattern): gather evidence first, change the generation logic second.</p>
+
+    <h3>61.5 Scope Control</h3>
+
+    <ul>
+      <li><strong>No production code change</strong> — <code>scout-agent/gemini.js</code> and all other pipeline files
+      untouched. Session #50 behavior preserved.</li>
+      <li>No providers, API params, pipeline, or source-image protection changed.</li>
+      <li>No posts regenerated, no covers regenerated.</li>
+      <li>This chapter records the feedback-set structure and the reasoning-pattern lessons for the <em>next</em>
+      refinement cycle.</li>
+    </ul>
+
+    <div class="tip">
+      <strong>Mirror-rule compliance note:</strong> This Chapter 61 is the TRAINING_MANUAL half of the Session #52
+      record. CLAUDE.md (S52 Last-Updated header, Section 6 Editorial Feedback Loop subsection, S52 session-history
+      row) and SESSION_LOG.html (Session #52 entry) are the other halves. Commits follow the split rule: CLAUDE.md
+      pushed to GitHub, SESSION_LOG + TRAINING_MANUAL committed locally.
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
