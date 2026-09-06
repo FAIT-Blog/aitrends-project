@@ -9160,6 +9160,15 @@ generateEditorialDigest fallback:
       row) and SESSION_LOG.html (Session #52 entry) are the other halves. Commits follow the split rule: CLAUDE.md
       pushed to GitHub, SESSION_LOG + TRAINING_MANUAL committed locally.
     </div>
+
+    <div class="callout info">
+      <strong>⚠️ Push-strategy amendment — Session #52 (6 Sep 2026):</strong> Per Felix's decision, the split rule's
+      practical status changed. The S52 reconciliation push carried this chapter + the matching SESSION_LOG entry to
+      GitHub (origin already held the docs in S46-era form; now S52-era). Felix elected "leave as-is, document it" —
+      no force-push/history rewrite. The two-commit split still applies for hygiene, but future <code>git push origin
+      main</code> will necessarily carry the docs along, so they are no longer guaranteed local-only and nothing
+      should be placed in them that Felix does not want on GitHub. Full text in CLAUDE.md §9.
+    </div>
   </div>
 
 </div>
