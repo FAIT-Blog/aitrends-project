@@ -10303,3 +10303,130 @@ Appendix A rows: 65      A–K subsections: A B C D E F G H I J K</code></pre>
   no longer right on 2026-11-05 — and only a fresh read-only pass could tell which respect that was.</p>
 </div>
 
+<div class="chapter" id="chapter-70">
+  <div class="chapter-num">Chapter 70</div>
+  <h2>The Latent ReferenceError: Exported Is Not Imported</h2>
+
+  <p>This chapter records the smallest possible production fix — one line — and the disproportionately large
+  lesson behind it: <strong>a function being exported from a module does not make it available in the module
+  that uses it.</strong> You must import it.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>The bug:</strong> <code>scout.js</code> called <code>passesQualityGate()</code> at two places
+      on the editorial lane, but its import line only pulled in <code>contentWordCount</code>,
+      <code>MIN_DIGEST_WORDS</code>, and <code>qualityGateFailures</code>. The call sites resolved to an
+      undefined identifier — a <code>ReferenceError</code> waiting for the first editorial submission to
+      fire.
+    </div>
+  </div>
+
+  <h3>Why the existing safety nets did not catch it</h3>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong><code>node --check</code> is a syntax check, not a scope check.</strong> The file parses
+        cleanly. A missing import is a runtime error, so the syntax checker has nothing to report.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>The test suites do not execute the editorial lane.</strong>
+        <code>test-sources</code>, <code>test-gemini-parts</code>, and
+        <code>test-editorial-eligibility</code> exercise their own modules. None of them runs
+        <code>scout.js</code>'s editorial branch, so none of them can trip the undefined identifier.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>The lane was dormant.</strong> The editorial lane only runs when Felix submits something to
+        <code>#scout-editor</code>. With no pending editorial rows, the line never executed — so the bug was
+        latent, not firing.
+      </div>
+    </div>
+  </div>
+
+  <p>This is the classic shape of a latent bug: it is invisible to every cheap check, and it activates only
+  on the code path that is least frequently exercised.</p>
+
+  <h3>Why the impact was worse than a crash</h3>
+
+  <p>A plain crash at the top of a function is easy to spot. This one sits <em>after</em> an expensive step.
+  The sequence on the editorial lane is:</p>
+
+  <ol>
+    <li>Fetch the submitted source.</li>
+    <li>Call the LLM to generate a digest — a paid call.</li>
+    <li>Evaluate the quality gate — <em>here the undefined identifier throws</em>.</li>
+    <li>The queue row stays <code>pending</code>.</li>
+    <li>The next Phase 1 run picks the same row up and repeats from step 1.</li>
+  </ol>
+
+  <p>So the failure mode is not "nothing happens" — it is <strong>an unbounded repeat-spend loop</strong>:
+  the same submission is re-generated on every run, burning LLM quota, until someone notices. That is why a
+  one-line missing import was tracked as a Critical item rather than a cosmetic one.</p>
+
+  <h3>The fix</h3>
+
+  <pre><code>-import { contentWordCount, MIN_DIGEST_WORDS, qualityGateFailures } from './quality-gate.js'
++import { contentWordCount, MIN_DIGEST_WORDS, qualityGateFailures, passesQualityGate } from './quality-gate.js'</code></pre>
+
+  <p>The function was already exported correctly by <code>quality-gate.js</code>:</p>
+
+  <pre><code>export function passesQualityGate(content, title) { ... }</code></pre>
+
+  <p>The bug was never in the gate. It was in the consumer's import list.</p>
+
+  <h3>Verification</h3>
+
+  <pre><code>node --check scout.js
+# syntax OK
+
+node --experimental-test-module-mocks --test test-sources.mjs
+# pass 3 / fail 0
+
+node --experimental-test-module-mocks --test test-gemini-parts.mjs
+# pass 10 / fail 0
+
+node --experimental-test-module-mocks --test test-editorial-eligibility.mjs
+# pass 8 / fail 0</code></pre>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      The first two suites need <code>--experimental-test-module-mocks</code>. Run without the flag they
+      report a single <code>ERR_TEST_FAILURE</code> — that is the missing flag, not a broken test. Always
+      check the invocation before concluding a change broke something.
+    </div>
+  </div>
+
+  <h3>The reusable lesson</h3>
+
+  <p>When a module calls a helper, verify three things separately:</p>
+
+  <ul>
+    <li>The helper is <strong>defined</strong> (the module exports it).</li>
+    <li>The helper is <strong>imported</strong> (the consumer lists it).</li>
+    <li>The helper is <strong>reachable on the code path being changed</strong> (the branch actually runs in
+    a test, or in production).</li>
+  </ul>
+
+  <p>All three were false in different ways here, and only reading the import line next to the call sites
+  exposed it. The cheapest habit that prevents a repeat: when adding a call to an existing helper, scan the
+  import block in the same edit. If the identifier is not there, add it before writing the call.</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Shipped:</strong> commit <code>04e5462</code>, pushed to <code>origin/main</code>. One file,
+      one insertion, one deletion. The editorial lane's latent <code>ReferenceError</code> and its
+      repeat-spend risk are closed.
+    </div>
+  </div>
+</div>
+

@@ -16747,4 +16747,108 @@ c1a2b67 chore: make add-llm-request-ledger.sql idempotent (S41)
   </div>
 </div>
 
+<hr>
+<!-- SESSION 58 -->
+<h2>Session #58 — 5 November 2026 — scout.js:28 Import Fix</h2>
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</p>
+    <p>So what are you saying, have you succeeded? If yes, let's move then</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Scope</h3>
+    <p>Fix the Critical item selected by Felix: the missing <code>passesQualityGate</code> import at
+    <code>scout.js:28</code>. This is a one-line production change in <code>scout-agent</code>. Nothing else
+    was touched.</p>
+
+    <h3>Investigation</h3>
+    <h4>Read: scout.js (imports, lines 1–40)</h4>
+    <pre><code>28: import { contentWordCount, MIN_DIGEST_WORDS, qualityGateFailures } from './quality-gate.js'</code></pre>
+
+    <h4>Read: scout.js (editorial lane, lines 245–314)</h4>
+    <pre><code>264:        let gatePass = digest?.content ? passesQualityGate(digest.content, digest.title) : false
+296:          gatePass = digest?.content ? passesQualityGate(digest.content, digest.title) : false</code></pre>
+
+    <h4>Bash: grep exports in quality-gate.js</h4>
+    <pre><code>15:export function contentWordCount(html) {
+25:export const MIN_DIGEST_WORDS = 400
+31:export function qualityGateFailures(content, title) {
+69:export function passesQualityGate(content, title) {</code></pre>
+
+    <p><strong>Diagnosis confirmed:</strong> <code>passesQualityGate</code> is exported by
+    <code>quality-gate.js</code> and called twice in <code>scout.js</code>, but was not imported. The RSS lane
+    uses <code>qualityGateFailures()</code> and was unaffected; the editorial (Slack submission) lane would
+    throw a <code>ReferenceError</code> after a paid LLM digest had already been generated, leaving the row
+    <code>pending</code> for the next run to re-spend on.</p>
+
+    <h3>Change applied</h3>
+    <pre><code>-import { contentWordCount, MIN_DIGEST_WORDS, qualityGateFailures } from './quality-gate.js'
++import { contentWordCount, MIN_DIGEST_WORDS, qualityGateFailures, passesQualityGate } from './quality-gate.js'</code></pre>
+
+    <h4>Bash: node --check scout.js</h4>
+    <pre><code>syntax OK</code></pre>
+
+    <h4>Bash: tests (first attempt, without the module-mocks flag)</h4>
+    <pre><code>node --test test-sources.mjs
+# fail 1   (ERR_TEST_FAILURE)
+
+node --test test-gemini-parts.mjs
+# fail 1   (ERR_TEST_FAILURE)</code></pre>
+    <p>The failures were the missing <code>--experimental-test-module-mocks</code> flag, not the change.</p>
+
+    <h4>Bash: tests (with --experimental-test-module-mocks)</h4>
+    <pre><code>node --experimental-test-module-mocks --test test-sources.mjs
+# tests 3
+# pass 3
+# fail 0
+
+node --experimental-test-module-mocks --test test-gemini-parts.mjs
+# tests 10
+# pass 10
+# fail 0
+
+node --experimental-test-module-mocks --test test-editorial-eligibility.mjs
+# tests 8
+# pass 8
+# fail 0</code></pre>
+
+    <h3>Commit and push</h3>
+    <h4>Bash: git status --short (scout-agent)</h4>
+    <pre><code> M SCOUT_AGENT_SPEC.md
+ M gemini.js
+ M scout.js
+?? FORENSIC_REPORT.md
+?? TAVILY_FORENSIC_REPORT.md</code></pre>
+    <p>Only <code>scout.js</code> was staged — the uncommitted S51 <code>gemini.js</code> rules and the
+    untracked forensic reports were deliberately left out of this commit.</p>
+
+    <h4>Bash: commit + push</h4>
+    <pre><code>[main 04e5462] fix: import passesQualityGate in scout.js editorial lane
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+To https://github.com/FAIT-Blog/scout-agent.git
+   7133ebc..04e5462  main -&gt; main</code></pre>
+    <p>The push required the <code>FAIT-Blog</code> account token: the active <code>felicota</code> account
+    has only <code>READ</code> on <code>FAIT-Blog/aitrends-project</code> and no access to
+    <code>FAIT-Blog/scout-agent</code>. The token was used for the single push via a temporary
+    credential-helper override, then unset; nothing was stored and the token was never printed.</p>
+
+    <h3>Documentation updates</h3>
+    <ul>
+      <li><code>CLAUDE.md</code> — header bumped to Session #58; §7A Critical item marked fixed; Session #58
+      row added to §10.</li>
+      <li><code>SESSION_LOG.html</code> — this entry.</li>
+      <li><code>TRAINING_MANUAL.html</code> — Chapter 70 (the latent-ReferenceError lesson).</li>
+    </ul>
+
+    <h3>Conclusion</h3>
+    <p>One-line fix, committed and pushed as <code>04e5462</code>. Syntax and all three offline test suites
+    pass. No other code, configuration, or data was changed.</p>
+  </div>
+</div>
+
 </html>
