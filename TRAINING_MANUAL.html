@@ -284,6 +284,24 @@ li { margin-bottom: 6px; }
   </div>
 </div>
 
+<!-- ════════════ PENDING COMMIT NOTICE (Session #55) ════════════ -->
+<div class="callout danger">
+  <div class="callout-body">
+    <strong>⚠️ PENDING COMMIT — uncommitted / unpushed state (Session #55, 23 Sep 2026)</strong>
+    <p>The Session #55 Editorial Eligibility Gate commit <code>ddb8231</code> exists in the local
+    <code>scout-agent</code> repo but has <strong>NOT been pushed</strong> to GitHub (explicit Felix instruction:
+    "DO NOT PUSH"). The S53/S54/S55 documentation work in this manual and its mirrors (CLAUDE.md +
+    SESSION_LOG.html) is likewise <strong>uncommitted</strong> in the root <code>aitrends-project</code> repo,
+    together with the untracked S54 read-only deliverables (<code>SELECTION_FUNNEL_FORENSIC.md</code>,
+    <code>STORY_SELECTION_QUALITY_AUDIT.md</code>, <code>CONTRASTIVE_SELECTION_ANALYSIS.md</code>,
+    <code>EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md</code>) and the S53 deliverable
+    <code>PRODUCTION_STARVATION_FORENSIC.md</code>. <code>scout-agent</code> also carries unrelated uncommitted
+    edits (<code>gemini.js</code> + untracked <code>FORENSIC_REPORT.md</code> / <code>TAVILY_FORENSIC_REPORT.md</code>)
+    deliberately excluded from <code>ddb8231</code>. Nothing should be pushed without an explicit instruction from
+    Felix.</p>
+  </div>
+</div>
+
 <!-- ═══════════════════ TOC ═══════════════════ -->
 <div class="toc">
   <h2>Table of Contents</h2>
@@ -409,6 +427,7 @@ li { margin-bottom: 6px; }
     <li><a href="#chapter-43">Session #34 — When the Gate and the Prompt Disagree</a></li>
     <li><a href="#chapter-44">Sizing Providers to Their True Quotas</a></li>
     <li><a href="#chapter-45">The Earliest Documentation Style Is the Standard</a></li>
+    <li><a href="#ch65">When the Spec Outlives the System — Reading a Document Against the Live Tree</a></li>
   </ol>
 </div>
 
@@ -9172,5 +9191,1115 @@ generateEditorialDigest fallback:
   </div>
 
 </div>
+
+<div class="chapter" id="chapter-62">
+  <div class="chapter-num">Chapter 62</div>
+  <h2>Session #53 — AITrends Backend Forensic Report (Read-Only Audit, 2026-08-25 → 2026-09-23)</h2>
+  <div class="callout info">
+    <strong>Type:</strong> Docs-only (forensic). <strong>Scope:</strong> Evidence-only, no modifications/triggers/DB writes/API calls. <strong>Date:</strong> 2026-09-23
+  </div>
+  <h3>Objective</h3>
+  <p>Produce 23-section "AITrends Backend Forensic Report" covering GHA health, LLM/image/resource consumption, quota pressure, failures/retries, bottlenecks, and executive verdict over 2026-08-25 → 2026-09-23.</p>
+  <h3>Key Findings</h3>
+  <ul>
+    <li>GHA: 455 unique runs (342/113), 0 cancelled/timed-out/reruns, 454 schedule + 1 workflow_dispatch</li>
+    <li>Starvation week: Aug 25–31 — all 23 Scout Agent failures <code>runner_id: 0</code>, <code>steps: 0</code>, ~3s (S48 minutes exhaustion). Cutover 2026-08-23 21:15:02 UTC, recovery Sep 1 (0 Scout failures)</li>
+    <li>Ledger 781: Groq 501 (<code>openai/gpt-oss-120b</code>), pipeline 280; 0 Gemini/Tavily. rewrite 490 (360/130 rate_limit), gate-check 132 (all rejected), publish-outcome 148, podcast 11</li>
+    <li>Yield: ~2.27 rewrite attempts/story, gen→publish ~68.5%, call→publish ~30.2%. Gate rejections 132 (missing "Why this matters" 70)</li>
+    <li>Rate limits 132 (1–10/day). Tokens 1,747,029 in / 339,270 out; avg 3,483/924, ~5.67s</li>
+    <li>148 published, 100% Supabase covers; scout_memory 1175 seen; pending 2 fresh + 4 terminal failed</li>
+  </ul>
+  <h3>Methodology</h3>
+  <p>Read-only Supabase REST (curl, sourcing .env in same shell), GHA history via <code>gh api</code> (manual pagination), local run JSON artifacts under <code>/tmp/</code>, verified column names (<code>timestamp</code> vs created_at), SSL workaround with curl. No DB writes/triggers.</p>
+  <h3>Outcome</h3>
+  <p>Evidence-only deliverable added to all three docs (CLAUDE.md header+history, SESSION_LOG #53, this chapter). Backend stable post-recovery with predictable daily Groq 429 pressure and gate enforcing editorial structure.</p>
+</div>
+
+<div class="chapter" id="chapter-63">
+  <div class="chapter-num">Chapter 63</div>
+  <h2>Session #54 — Editorial-Eligibility Gate Reconciliation Series (Read-Only, READY FOR IMPLEMENTATION)</h2>
+  <div class="callout info">
+    <strong>Type:</strong> Docs-only (read-only reconciliation). <strong>Scope:</strong> Four forensic deliverables,
+    zero code/config/prompt/SWS/pipeline changes. <strong>Date:</strong> 2026-09-23
+  </div>
+  <h3>Why This Exists</h3>
+  <p>Sessions #52–#53 established that the selection funnel's gate losses are mostly editorial, not technical. This
+  session asks the load-bearing question: <strong>can a pre-generation editorial-eligibility gate separate the
+  30 Strong from the 35 Weak published posts before any LLM call — and to what exact rule?</strong></p>
+  <h3>The Four Deliverables</h3>
+  <ol>
+    <li><code>SELECTION_FUNNEL_FORENSIC.md</code> — full-funnel audit (90 Scout runs × 4 category-slots = 360;
+      267 reached SWS → 228 passed → 150 published). Dominant defect is <strong>upstream feed quality</strong>: the
+      Bing-News-Anthropic feed yields ~19-char full-texts, driving 32% of scout_memory marks and 33 of 39 SWS
+      rejects. "Why this matters" is the #1 post-generation loss (70 of 132 gate-checks).</li>
+    <li><code>STORY_SELECTION_QUALITY_AUDIT.md</code> — 150-post classification: 30 Strong / 85 Reasonable / 35
+      Weak / 0 Poor. SWS floor held (0 RSS posts below 55). Concentration (simonwillison.net alone 34/150).
+      Re-coverage visible only via topic clusters, never title-keyed dedup.</li>
+    <li><code>CONTRASTIVE_SELECTION_ANALYSIS.md</code> — 65-story manual coding (20 binary dims). SWS does NOT
+      separate Strong (79.2) from Weak (76.7). Four decisive discriminators: concrete development (97% vs 20%),
+      source-established consequence (100% vs 3%), discrete dated event (97% vs 26%), freshness (100% vs 31%).</li>
+    <li><code>EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md</code> — the gate re-test on all 65 coded rows
+      → <strong>✅ READY FOR IMPLEMENTATION</strong>.</li>
+  </ol>
+  <h3>The Reconciliation Result</h3>
+  <p>Formulation A <code>(event OR action) AND consequence AND fresh</code> loses Strong #33 (Google AI Mode 21.6%
+  price study — a research finding, not an event under the narrow coding). Widening the anchor to
+  <code>(dev OR finding)</code> restores it. On all 65 rows:</p>
+  <table>
+    <tr><th>Formulation</th><th>Strong kept</th><th>Weak kept</th></tr>
+    <tr><td>A — event/action anchor</td><td>29/30</td><td>0/35</td></tr>
+    <tr><td>C-min — <code>(dev OR finding) AND consequence AND fresh</code></td><td><strong>30/30</strong></td><td>0/35</td></tr>
+    <tr><td>MIN — <code>consequence AND fresh</code> (smallest rule)</td><td><strong>30/30</strong></td><td>0/35</td></tr>
+    <tr><td>consequence alone (probe)</td><td>30/30</td><td>1/35 (Weak #60 leaks)</td></tr>
+  </table>
+  <h3>Two Implementation-Sensitive Lessons</h3>
+  <ol>
+    <li><strong>Freshness must be topic-signature dedup, not title match.</strong> Weak #60 (Anthropic class-action,
+      duplicate of Weak #59) leaks only under title-keyed dedup. The fix: Session #38 <code>storiesOverlap()</code>
+      on title + content.</li>
+    <li><strong>Podcast is a separate lane.</strong> Forcing the RSS consequence gate onto podcast rejects 100% of
+      it (7/7 sampled Weak + 1 Reasonable) — it would terminate that lane by policy, not selection. Podcast gets its
+      own lightweight eligibility check in <code>scout-podcast.js</code>, never the RSS consequence+event gate.</li>
+  </ol>
+  <h3>Decision</h3>
+  <p>ELIGIBLE ⟺ <code>(development OR finding) AND source-established consequence AND fresh</code>, with
+  <code>consequence AND fresh</code> as the smallest defended fallback. Category-independent, first-party- and
+  announcement-tolerant, no SWS raise, fully deterministic. Executed in Session #55 (Chapter 64).</p>
+</div>
+
+<div class="chapter" id="chapter-64">
+  <div class="chapter-num">Chapter 64</div>
+  <h2>Session #55 — The Editorial Eligibility Gate: Implementation + Clean Commit (STEP 7b)</h2>
+  <div class="callout success">
+    <strong>Type:</strong> Implementation. <strong>Scope:</strong> New zero-LLM pre-generation gate in the RSS lane;
+    committed as <code>ddb8231</code> (NOT pushed — explicit instruction). <strong>Date:</strong> 2026-09-23
+  </div>
+  <h3>Objective</h3>
+  <p>Execute the Session #54 <code>READY FOR IMPLEMENTATION</code> decision: a deterministic, ZERO-LLM gate in
+  <code>scout.js</code> STEP 7b — installed AFTER the SWS gate and BEFORE any Groq/Gemini digest call — that
+  flags ineligible stories <code>SKIPPED_BEFORE_GENERATION</code> and marks the capped articles seen.</p>
+  <h3>The Rule</h3>
+  <div class="callout info">
+    <div class="callout-body"><strong>ELIGIBLE ⟺ (development OR finding) AND source-established consequence AND fresh</strong></div>
+  </div>
+  <h3>What Was Built</h3>
+  <ol>
+    <li><code>editorial-eligibility.js</code> (new, 223 lines) — <code>consequence()</code> (sentence-anchored money
+      /capability/policy/legal/research/launch/health channels + protocol/hire/passing exclusions; regexes ported
+      VERBATIM from the <code>/tmp/funnel/calibrate4.mjs</code> gold harness; U+2011 non-breaking hyphens
+      normalised to ASCII <code>-</code>), <code>hasDf()</code> (dev/finding anchor),
+      <code>sharedDistinctiveEntities()</code> (≥4 shared non-generic entities catches rewritten-title re-coverage),
+      <code>FRESHNESS_WINDOW_MS = 72h</code>, <code>evaluateEditorialEligibility()</code>.</li>
+    <li><code>memory.js</code> — <code>getRecentPublishedPosts(windowMs, limit=200, client=supabase)</code> returns
+      the latest 200 published posts' <code>title, content</code> within the window. Optional 3rd <code>client</code>
+      argument keeps the test suite offline (early drafts contacted real Supabase → <code>20 !== 2</code> failures).</li>
+    <li><code>scout.js</code> STEP 7b (after SWS enforce gate) — builds <code>{ title, text, recent }</code>, calls
+      the gate, and on ineligible marks the capped articles seen + <code>continue</code>. <strong>Fail-open:</strong>
+      a recent-posts query error returns <code>null</code> → treated as fresh (<code>freshness:unknown</code>), and a
+      gate crash logs + proceeds — a DB outage must never starve the pipeline.</li>
+    <li><code>test-editorial-eligibility.mjs</code> (new, 8 tests) — eligibility rule, consequence channels,
+      freshness/duplication, fail-open; passes <code>makeSupabase()</code> as the 3rd client arg.</li>
+  </ol>
+  <h3>The Failure Mode the Test Suite Caught</h3>
+  <p>An import bug in the test file (<code>FRESHNESS_WINDOW_MS</code> imported from <code>./memory.js</code>, which
+  doesn't export it) initially broke tests #7/#8, and after the import fix the early drafts bypassed the module
+  mock and contacted real Supabase — producing <code>20 !== 2</code> assertion failures. The optional
+  <code>client</code> seam on <code>getRecentPublishedPosts</code> is the durable fix: tests now pin the Supabase
+  fake, keeping the suite fully offline and deterministic.</p>
+  <h3>Verification Matrix</h3>
+  <div class="steps">
+    <div class="step"><span class="step-num">1</span>
+      <div class="step-content"><code>node --experimental-test-module-mocks --test test-editorial-eligibility.mjs</code>
+        → <strong>8/8 ✓</strong></div></div>
+    <div class="step"><span class="step-num">2</span>
+      <div class="step-content"><code>node --experimental-test-module-mocks --test test-sources.mjs</code> → <strong>3/3 ✓</strong></div></div>
+    <div class="step"><span class="step-num">3</span>
+      <div class="step-content"><code>node --experimental-test-module-mocks --test test-gemini-parts.mjs</code> → <strong>10/10 ✓</strong></div></div>
+    <div class="step"><span class="step-num">4</span>
+      <div class="step-content"><code>node /tmp/funnel/verify-module.mjs</code> → <strong>VERIFICATION PASS</strong>
+        (STRONG 30/30 kept · RSS-lane Weak 0/28 · Weak #60 rejected via freshness)</div></div>
+    <div class="step"><span class="step-num">5</span>
+      <div class="step-content"><code>node --check scout.js memory.js editorial-eligibility.js</code> → clean ✓</div></div>
+  </div>
+  <h3>The Commit</h3>
+  <p><code>ddb8231</code> — "feat: add pre-generation editorial eligibility gate" — 4 files, +441/−1. ONLY the Step
+  7b files staged (<code>editorial-eligibility.js</code>, <code>scout.js</code>, <code>memory.js</code>,
+  <code>test-editorial-eligibility.mjs</code>). <code>scout-agent/gemini.js</code> + untracked
+  <code>FORENSIC_REPORT.md</code> / <code>TAVILY_FORENSIC_REPORT.md</code> deliberately excluded. <strong>NOT pushed</strong>
+  — explicit Felix instruction; the pending-commit notice is at the top of this manual and at the top of CLAUDE.md
+  / SESSION_LOG.html.</p>
+  <h3>Outcome</h3>
+  <p>The pipeline now refuses generation budget to stories that are re-coverage (~72h), lack a source-established
+  consequence, or are not a concrete development/finding — the trio that Session #54 proved separates Strong from
+  Weak at zero LLM cost, with a fail-open contract that can never starve production. Docs updated atomically
+  (CLAUDE.md header+S54/S55 rows+pipeline, SESSION_LOG TURN 54/TURN 55, this chapter).</p>
+</div>
+
+<!-- ═══════════════════ CHAPTER 65 ═══════════════════ -->
+<div class="chapter" id="ch65">
+  <div class="chapter-num">Chapter 65</div>
+  <h2>When the Spec Outlives the System — Reading a Document Against the Live Tree</h2>
+</div>
+
+<div class="callout info">
+  <div class="callout-icon">🔍</div>
+  <div class="callout-body">
+    <strong>Session #56 — docs-only documentation audit</strong>
+    <p>Felix asked what had been done last, what was pending, and which statements in
+    <code>CLAUDE.md</code> now contradict the system's actual status. This chapter records the method and the
+    twelve findings. <strong>No code, configuration, prompt, SWS, pipeline, deployment, or database change was
+    made, and <code>CLAUDE.md</code> itself was deliberately not edited</strong> — Felix's instruction was to
+    document the enquiry and report "in full verbatim in the documentation except CLAUDE.md".</p>
+  </div>
+</div>
+
+<h3 id="ch65-premise">The Premise: A Spec Is a Snapshot, and Snapshots Rot</h3>
+<p>
+  <code>CLAUDE.md</code> is a living document that every session reads before touching anything. That makes it
+  load-bearing in a way ordinary notes are not — a future session obeys it literally. The same append-only
+  discipline that preserves history also means superseded statements are never removed, so over time the file
+  accumulates claims that were true once and are false now.
+</p>
+<p>
+  The failure mode is not cosmetic. A stale line in a <em>narrative</em> section costs a reader some confusion.
+  A stale line in a <strong>Critical Rules</strong> or <strong>Must Not Do</strong> list is an active
+  instruction to break working code. Sessions #43 to #55 did not contradict themselves — each was correct when
+  written. They simply outlived the facts they described.
+</p>
+
+<h3 id="ch65-method">The Method: Every Claim Against the Live Tree</h3>
+<p>
+  The audit deliberately did <strong>not</strong> trust the documents' own account of themselves. Every claim was
+  checked against the working tree, the git history, and the shipped code. The contrast between the two is the
+  whole point of the exercise.
+</p>
+
+<div class="steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-content"><strong>Establish repository state first.</strong>
+      <code>git log --oneline</code> and <code>git status --short</code> in both repos, plus
+      <code>git log --stat</code> on the last commit. This confirmed the pending-commit notice was accurate
+      (<code>ddb8231</code> local-only; S53/S54/S55 docs and six forensic deliverables uncommitted) and that
+      <code>gemini.js</code> plus two forensic reports were correctly excluded from that commit.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-content"><strong>Inventory reality, not documentation.</strong>
+      <code>find app/api -name route.ts</code>, <code>ls lib/</code>, <code>ls components/</code>,
+      <code>ls *.js</code>, <code>ls .github/workflows/</code>, <code>ls supabase/</code>. Anything present in
+      the tree but absent from the spec is a gap; anything in the spec but absent from the tree is a
+      contradiction.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-content"><strong>Read the actual constants.</strong>
+      <code>grep -n "maxOutputTokens" gemini.js gemini-podcast.js</code> settled the most serious finding in two
+      seconds. The spec said "never below 8192"; the code said 3000.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-content"><strong>Trace the wiring, not just the symbol.</strong>
+      Confirming <code>evaluateEditorialEligibility</code> appears in <code>scout.js</code> but has zero
+      occurrences in <code>scout-podcast.js</code> proved the Session #54 decision had been implemented exactly
+      as specified — and simultaneously revealed that the separate podcast path it mandated was never built.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-content"><strong>Extract whole blocks, not grep counts.</strong>
+      A raw <code>grep -c complete.js CLAUDE.md</code> returned 20 and looked reassuring. Extracting the actual
+      file-structure code block with <code>awk</code> showed <code>complete.js</code> — the entire Phase 2
+      worker — had no entry at all. Counts mislead; structure reveals.</div>
+  </div>
+</div>
+
+<div class="callout warn">
+  <div class="callout-icon">⚠️</div>
+  <div class="callout-body">
+    <strong>A tool assumption failed mid-audit</strong>
+    <p>Two <code>rg</code> (ripgrep) searches failed with <code>zsh:1: command not found: rg</code> — ripgrep is
+    not installed on this machine. The fix was to switch to the dedicated content-search tool for the rest of
+    the audit. Recorded because the session log standard requires every error verbatim with its root cause: the
+    root cause was assuming a CLI tool was present, and the fix was to use the tool that was.</p>
+  </div>
+</div>
+
+<h3 id="ch65-findings-a">Findings A — Hard Contradictions That Can Cause a Regression</h3>
+<p>
+  These are ranked by damage potential, not by line number. The first four can actively break production code if
+  a future session obeys the document.
+</p>
+
+<table>
+  <tr><th>#</th><th>Location</th><th>What the document says</th><th>What is actually true</th></tr>
+  <tr>
+    <td>1</td>
+    <td>L380 + L988</td>
+    <td>"<code>maxOutputTokens</code> must stay at 8192 or higher" (Critical Rules) and "Never lower
+      <code>maxOutputTokens</code> below 8192" (Must Not Do)</td>
+    <td>Session #41 P0-4 capped <code>generateDigest()</code> and <code>synthesizeBlendDigest()</code> at
+      <strong>3000</strong>. Verified: <code>gemini.js:468/730/917</code> = 3000, <code>:575</code> = 2000,
+      <code>:80</code> = 5. Only <code>gemini-podcast.js:182</code> is still 8192.</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>L676, L669, L672</td>
+    <td>"<code>isYouTubeSource</code> check skips <code>trySourceImage</code> for YouTube posts → HF FLUX path
+      used"; "HF FLUX generates unique editorial illustration"</td>
+    <td>Session #49 P0-A <strong>deleted <code>trySourceImage()</code> entirely</strong> from
+      <code>complete.js</code>. HF FLUX was deprecated in Session #30; Cloudflare is the default. The documented
+      behaviour describes code that no longer exists.</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>L653 vs L381</td>
+    <td>"Groq Llama 3.3 70B primary" (What Has Been Built) alongside "Groq GPT-OSS 120B" (Critical Rules) — two
+      different models in one section</td>
+    <td>Session #46 replaced the dead <code>llama-3.3-70b-versatile</code> with
+      <code>openai/gpt-oss-120b</code>. L381 is correct; L653 was never updated.</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>L359 vs L850, L931</td>
+    <td>Known Issues: "<code>www.aitrends.ng</code> — Whogohost CNAME for www points to <code>aitrends.ng</code>
+      root instead of <code>cname.vercel-dns.com</code>"</td>
+    <td>The same file records it live at L850 ("HTTP/2 200") and resolved-and-struck-through at L931. A pure
+      self-contradiction inside one document, never pruned from Known Issues.</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>L80</td>
+    <td>Section 2 pipeline diagram: "Africa RSS Feeds (TechCabal, Techpoint, Disrupt Africa, Ventureburn) ←──
+      PRIMARY"</td>
+    <td>Session #25 removed the Africa-first mandate entirely. Section 1 carries the reversal note; the diagram
+      still depicts the pre-S25 architecture.</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td>L384</td>
+    <td>"### Pipeline (13 Steps)"</td>
+    <td>The block enumerates 0 through 13 — fourteen steps — and STEP 7b (Session #55) makes fifteen logical
+      stages. Off by one, and the sub-step is uncounted.</td>
+  </tr>
+  <tr>
+    <td>7</td>
+    <td>L391, L631, feeds.js entry</td>
+    <td>"25 feeds" presented as current; <code>feeds.js</code> described as "17 feeds" that "remains the fallback
+      surface <em>until Stage 2 production wiring is complete</em>"</td>
+    <td>Since Session #45 the canonical list is <code>registry.seed.json</code> v4 (24 curated sources) resolved
+      via <code>sources.js</code>. The same document says "Stage 2 (complete)" in the registry subsection.
+      <code>feeds.js</code> has 25 feeds, not 17.</td>
+  </tr>
+  <tr>
+    <td>8</td>
+    <td>L678</td>
+    <td>"⚠️ Supabase Migration Required (blocks podcast publishing)"</td>
+    <td>That migration ran in Session #16. The warning reads as still-pending.</td>
+  </tr>
+  <tr>
+    <td>9</td>
+    <td>Section 6 file structure</td>
+    <td>Lists 20 files. <code>image.js</code> is described as "Builds Pollinations.ai URL with Flux model"</td>
+    <td><strong>No entry for <code>complete.js</code></strong> — the entire Phase 2 image→upload→publish→notify
+      path. Also missing: <code>scout-podcast.js</code>, <code>feeds-podcast.js</code>,
+      <code>transcript.js</code>, <code>gemini-podcast.js</code>, <code>homepage-monitor.js</code>,
+      <code>search.js</code>, <code>verify.js</code>, <code>test-gemini-parts.mjs</code>,
+      <code>image-providers/</code>, and three of four workflow files. Pollinations has been dead behind x402
+      since Session #2.</td>
+  </tr>
+</table>
+
+<h3 id="ch65-findings-b">Findings B — Structural Gaps</h3>
+<ol>
+  <li><strong>Section 4 documents 5 tables.</strong> Production depends on at least eight more that the schema
+    section never mentions: <code>pending_posts</code>, <code>llm_request_ledger</code>,
+    <code>curated_source_registry</code>, <code>editorial_queue</code>, <code>homepage_monitor</code>,
+    <code>gemini_quota_cooldown</code>, <code>source_reputation</code>, <code>story_memory</code>. Ten migration
+    files sit in <code>aitrends.ng/supabase/</code> with no reference from the spec. Most consequentially,
+    <code>pending_posts</code> — the table every Phase 1 write and Phase 2 read depends on — is undocumented.</li>
+  <li><strong>Section 5 omits five live API routes</strong>, all verified present in the working tree:
+    <code>/api/search</code>, <code>/api/subscribe</code>, <code>/api/feedback</code>,
+    <code>/api/slack/editorial</code>, <code>/api/posts/list</code>. The key-files list also omits
+    <code>SearchDropdown.tsx</code>, <code>NewsletterSignup.tsx</code>, <code>FeedbackForm.tsx</code>,
+    <code>ShareButtons.tsx</code>, and <code>adminData.ts</code>.</li>
+  <li><strong>Section 7's 🔴 Critical tier is an archive masquerading as a to-do list.</strong> Roughly twenty
+    completed ✅ entries bury the four genuinely open ones. Separately, the BusinessDay-sports-feed and
+    Nigerian-general-news monitoring items appear twice — at L904/L905 and again at L935/L936, in different
+    priority tiers, with near-identical wording, never reconciled.</li>
+</ol>
+
+<h3 id="ch65-additional">Two Further Findings, Recorded During the Audit</h3>
+<p>
+  Reading the documentation's own conventions to write this chapter surfaced defects in the documents
+  themselves. Both are recorded as findings rather than silently corrected, because fixing them is a change
+  Felix has not yet authorised.
+</p>
+
+<h4>The table of contents has a nineteen-chapter gap</h4>
+<p>
+  <code>TRAINING_MANUAL.html</code>'s table of contents ends at Chapter 45. Chapters 46 through 64 were never
+  added. A reader navigating by the TOC has had no link to nineteen chapters — including every session since
+  Session #33. A single entry for the new chapter was added regardless, because a table of contents that
+  silently omits the newest chapter is a defect in its own right, and the TOC is front matter rather than a
+  chapter, so the append-only rule is not engaged by editing it.
+</p>
+
+<h4>Sessions #48 and #53–#55 drifted from the mandated style</h4>
+<p>
+  The style standard in <code>CLAUDE.md</code> §9 names Sessions 1–14 as the reference model and specifically
+  forbids two later patterns. Both had already crept in: the most recent log turns use
+  <code>&lt;span class="label"&gt;</code> instead of <code>&lt;div class="label"&gt;</code> and
+  <code>&lt;h3&gt;</code> session headings instead of <code>&lt;h2&gt;</code>, with an <code>&lt;hr&gt;</code>
+  missing between two of them; and Chapters 63–64 wrap their entire body inside the
+  <code>.chapter</code> div, whereas Chapters 1–21 use a header-only wrapper that closes after the
+  <code>&lt;h2&gt;</code> with body content as siblings. The new Session #56 entry and Chapter 65 both follow
+  the Chapters 1–21 structure deliberately, and both divergences are noted here rather than back-corrected.
+</p>
+
+<div class="tip">
+  The self-referential irony is worth naming: this audit found documentation-style drift in the very
+  documents that define the documentation-style standard. The standard itself is sound and was followed here —
+  but a rule that is written down and then quietly violated in the next session is not yet an enforced
+  convention. Felix's existing remedy, a one-time restyle pass, remains the right one.
+</div>
+
+<h3 id="ch65-outcome">Outcome and the Deliberate Non-Fix</h3>
+<p>
+  Two files were written: Session #56 in <code>SESSION_LOG.html</code> (both turns, every tool call with its
+  real output, the <code>rg</code> failures included) and this chapter.
+</p>
+<p>
+  The verification of those two files is worth reading in the session log, because it did not go the way it was
+  first written. A placeholder verification block was drafted into the log — a tidy command with clean output for
+  both files — <strong>before any check had actually been run</strong>. Running the real check instead showed
+  three genuine defects, all introduced by the session's own appends, and disproved the placeholder's claim about
+  this file: <code>TRAINING_MANUAL.html</code> was already carrying fourteen tag-balance errors in older chapter
+  wrappers long before this session. The corrected position is narrow and worth stating exactly:
+  <code>SESSION_LOG.html</code> is balanced with zero errors, matching its clean baseline; this file has the
+  <em>same fourteen</em> pre-existing errors it had at <code>HEAD</code> and no new ones, with only their line
+  numbers shifted by the nineteen lines added above them. The fourteen were deliberately left alone — they sit in
+  old chapter wrappers, this file is append-only, and a restyle is Felix's call.
+</p>
+<p>
+  The instructive part is the worst of the three defects. A verbatim code quote had been terminated with
+  <code>&amp;lt;/code&amp;gt;</code> — an <em>escaped</em> closing tag — so the browser read it as the literal text
+  <code>&lt;/code&gt;</code> and the enclosing code element never closed. The escaped and unescaped forms are
+  almost identical on screen, and reading the markup did not catch it; parsing one line in isolation and dumping
+  every tag push and pop did. It is a small thing, and it is the whole argument for verifying a document by
+  parsing it rather than by looking at it.
+</p>
+<p>
+  <strong>All twelve findings remain live in <code>CLAUDE.md</code>.</strong> Finding 1 is the one to act on
+  first: a documented "never below 8192" rule sitting beside code capped at 3000 is a standing invitation for
+  the next session to revert Session #41 P0-4 and re-introduce the runaway synthesis the quality gate rejects.
+  Findings 2, 3, and 4 are documentation of deleted code, which wastes time but breaks nothing until acted on.
+</p>
+
+<div class="callout success">
+  <div class="callout-icon">✅</div>
+  <div class="callout-body">
+    <strong>The transferable lesson</strong>
+    <p>A specification that only ever grows will eventually lie. The append-only convention is right for
+    history — deleted context is how the same mistake gets re-learned — but the <em>current-state</em> sections
+    need their own periodic audit against the live tree, on a cadence, not only when someone happens to ask.
+    This session was that audit, and it found twelve discrepancies in a document that had been maintained
+    diligently for three months. Nobody had been careless; the document had simply been allowed to age.</p>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-66">
+  <div class="chapter-num">Chapter 66</div>
+  <h2>Session #56 Wrap-Up: Deploying the Eligibility Gate, Isolating the "Why This Matters" Commit, and Reconciling CLAUDE.md Against Live Production</h2>
+
+  <p>Chapter 65 recorded a read-only audit of the project documentation. This chapter records what
+  happened next: Felix authorised the four ordered steps, the code was deployed, two separate commits
+  were produced, and <code>CLAUDE.md</code> was reconciled against live production. Both assistant
+  reports from that session are reproduced below <strong>in full verbatim</strong>, as Felix required.</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Three commits, three separate concerns, no amend.</strong>
+      <ul>
+        <li><code>ddb8231</code> — Editorial Eligibility Gate (STEP 7b). <strong>Pushed and deployed.</strong> 4 files, +441/−1.</li>
+        <li><code>7133ebc</code> — "Why This Matters" prompt sharpening. 1 file, +17/−4. <strong>Pushed on explicit instruction.</strong></li>
+        <li><code>6039f74</code> — <code>CLAUDE.md</code> reconciliation, root repo. 1 file, +334/−153. <strong>Local only</strong> per the Section 9 split rule.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>The teaching point: the diff was not what it claimed to be</h3>
+
+  <p>Felix's instruction for step 3 was to commit the Why This Matters change, and the standing
+  project notes described the uncommitted <code>gemini.js</code> work as being exactly that. The
+  required full diff review found otherwise. The working-tree diff was <code>+32/−7</code> across
+  <strong>10 hunks</strong>, of which only <strong>4</strong> were Why This Matters edits. The other
+  <strong>6</strong> were the S51 image-prompt refinement — a different feature, in the same file,
+  from a different session.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Why this matters more than the two commits did.</strong> A single file, a single diff,
+      and a plausible-sounding description can hide two unrelated changes. Had the commit been made
+      on the description alone, an image-prompt feature would have shipped inside a commit labelled as
+      a copy-prompt fix — and the two changes would have been impossible to revert independently later.
+      The verification that actually proves the separation is mechanical, not a matter of judgement:
+    </div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">Back up the full mixed file to a temp location and hash it, so the
+      work is recoverable before anything is destroyed.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">Revert the file to <code>HEAD</code>, leaving a clean baseline.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">Extract only the wanted hunks into a patch, and <strong>grep the patch
+      for the unwanted feature's markers before applying it</strong> — this is the check that
+      guarantees a clean split.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">Apply, run the full test suite, then assert from both directions: the
+      commit must contain <strong>0</strong> image lines, and the remaining working-tree diff must
+      contain <strong>0</strong> Why This Matters lines.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">Commit only the wanted change, then restore the full backup so the
+      excluded work survives as uncommitted changes.</div>
+    </div>
+  </div>
+
+  <h3>The second teaching point: a documentation rule that was actively dangerous</h3>
+
+  <p>The reconciliation found that <code>CLAUDE.md</code> instructed future sessions to keep
+  <code>maxOutputTokens</code> at 8192 or higher, in two separate sections. The actual shipped code
+  had used 3000 for content generation since Session #41, deliberately, to stop a runaway synthesis
+  the quality gate then rejected.</p>
+
+  <p>That is not a harmless stale note. A future session obeying the documented rule would have
+  reverted a correct, deliberate fix — and would have done so while believing it was following
+  project instructions. Documentation drift is dangerous precisely when the stale statement still
+  sounds authoritative. The fix was to replace the blanket rule with the verified per-call-site values
+  and, in Section 8, to redirect the prohibition rather than contradict it.</p>
+
+  <div class="tip">
+    <strong>Generalisable lesson.</strong> When documentation and code disagree, find out <em>which
+    one is deliberate</em> before editing either. Session #41's cap was a decision with a recorded
+    rationale. The rule in <code>CLAUDE.md</code> was a leftover from before that decision and had
+    simply never been revisited. A reconciliation that "fixes" the code to match stale docs is worse
+    than one that does nothing.
+  </div>
+
+  <h3>Report 1 — four-step wrap-up (verbatim)</h3>
+  <p>Reproduced exactly as delivered.</p>
+  <pre><code>## 1. What was done
+
+Four steps, in your order, each verified before moving on:
+
+**Step 1 — Full diff review.** The working-tree `gemini.js` diff was **not** limited to Why This Matters. It was `+32/−7` across 10 hunks:
+- **4 WTM edits** (single-source, blend, and both editorial branches)
+- **6 unrelated S51 image-prompt hunks** (ONE CENTRAL VISUAL IDEA / RELATIONSHIPS MUST BE VISUALLY DEMONSTRABLE / TEXT MUST BE PURPOSEFUL)
+
+No selection, SWS, provider, or architecture changes. Nothing was committed before this was known.
+
+**Step 2 — Deployed `ddb8231`.** Confirmed it was the *only* commit ahead of `origin/main`, pushed it, no amend, no scope expansion.
+
+**Step 3 — Isolated the WTM commit.** Backed up the full mixed diff to a temp file, reverted `gemini.js` to HEAD, extracted the WTM half, committed it alone, then restored the full backup so the S51 image work stays uncommitted.
+
+**Step 4 — `CLAUDE.md` reconciliation.** All 10 Q10 areas applied.
+
+## 2. Deployed commit
+
+**`ddb8231020d0b9573bf6a7b604d1daac0c285b2e`** — pushed `6140f56..ddb8231 main -&gt; main`, 4 files, `+441/−1`.
+
+**Verification result — important caveat:** it is on `origin/main`, but **no production run has executed it yet.** Every GHA run still reports `head_sha 6140f56` (latest: Scout 02:32 UTC, Phase 2 03:04 UTC, monitor 05:33 UTC). The next scheduled Phase 1 run (`0 */6 * * *`) is the first that will include STEP 7b. Its only validation so far is the offline 65-story gold set.
+
+## 3. Why This Matters commit
+
+**`7133ebc`** — 1 file, `+17/−4`, **committed but NOT pushed.**
+
+Full diff review found it was mixed with the S51 image work, so I isolated it. The new instruction requires one central concrete significance, must add information rather than restate the headline, must preserve attribution/uncertainty, carries an explicit anti-overreach list, and forbids manufacturing significance — while keeping the literal phrase the publishing gate needs. Verified: 0 image-prompt lines in the commit, 0 WTM lines left in the working tree.
+
+## 4. CLAUDE.md documentation commit
+
+**`6039f74`** — 1 file, `+334/−153`, local only per Section 9.
+
+The most consequential change: **I withdrew the blanket "`maxOutputTokens` must stay at 8192" rule** from both §6 and §8. It contradicted Session #41 P0-4, which deliberately set 3000 for content generation and 2000 for PASS-1 source digests — anyone following the old rule would have reverted a correct prior fix. Documented the verified per-call-site values with line numbers.
+
+Also added the five undocumented tables (`pending_posts`, `curated_source_registry`, `editorial_queue`, `gemini_quota_cooldown`, `llm_request_ledger`), the missing modules (`complete.js`, `image-providers/`, podcast lane, 4 workflows), 5 missing API routes, and removed the nonexistent STEP 13. §7 split into 7A/7B with all 17 session blocks and every commit hash preserved.
+
+## 5. Tests
+
+| Suite | Result |
+|---|---|
+| `test-gemini-parts.mjs` | 10/10 |
+| `test-sources.mjs` | 3/3 |
+| `test-editorial-eligibility.mjs` | 8/8 |
+| **Total** | **21/21** |
+| `node --check` (8 files) | clean |
+| `git diff --check` | clean |
+
+Re-ran the full 21/21 against the WTM-only tree *before* committing, and again after the docs pass. Content-parity check on the §7 move: 17/17 session records preserved, 0 commit hashes lost.
+
+## 6. Open issues and blockers
+
+No blocker stopped this work. Two things need your decision:
+
+- **`7133ebc` is not pushed.** It's the fix for the #1 production loss (70 of 132 gate rejections were missing this closing; the last run failed the gate in all three categories). I did not push it — you authorized a push for `ddb8231` specifically.
+- **The S51 image-prompt work remains uncommitted**, exactly as you asked. It's preserved in the working tree and verified image-only.
+
+Top of §7A (full list in the file): Gemini key returns HTTP 503 so production is **Groq-only with no fallback**; the Bing-News-Anthropic feed yields ~19-char texts and drove 33 of 39 SWS rejects; the last run queued zero posts; `gemini-podcast.js:192` still reads `parts?.[0]?.text` (latent only while Gemini is down). `TAVILY_SEARCH_ENABLED=false` means blend mode is unreachable, which also lowers the priority of the adaptive-blend backlog item.
+
+Say the word and I'll push `7133ebc`.</code></pre>
+
+  <h3>Report 2 — push confirmation (verbatim)</h3>
+  <p>Reproduced exactly as delivered, after Felix authorised the push with the constraint
+  "push ONLY 7133ebc".</p>
+  <pre><code>Pushed.
+
+## Old SHA → New SHA
+
+```
+ddb8231020d0b9573bf6a7b604d1daac0c285b2e
+   ↓
+7133ebc4b379e54f29349baaa94d03346731b619
+```
+
+`git push origin main` → `ddb8231..7133ebc  main -&gt; main`
+
+## On origin/main
+
+- **`7133ebc` on `origin/main`: YES** — local `main` and `origin/main` both at `7133ebc`, in sync, 0 unpushed commits.
+- **`ddb8231` on `origin/main`: YES** — not amended, not rewritten.
+- Pushed commit touches **`gemini.js` only**, with **0 image-prompt lines** in it.
+
+## S51 image work remains uncommitted
+
+```
+ modified:   gemini.js
+ staged:     []  (empty — nothing staged)
+ 15 insertions, 3 deletions
+ WTM strings:  0  ✓
+ image strings: 9  ✓  (the 3 S51 rule blocks, still local only)
+```
+
+The push did not touch, stage, or consume the S51 work.
+
+## Final git status
+
+**scout-agent** — `main`, up to date with `origin/main`:
+- Modified, unstaged: `gemini.js` (S51 image work only)
+- Untracked: `FORENSIC_REPORT.md`, `TAVILY_FORENSIC_REPORT.md`
+
+**root aitrends-project** — unchanged by this push (pre-existing S53–S55 doc work and untracked reports remain as they were):
+- Modified: `SESSION_LOG.html`, `TRAINING_MANUAL.html`
+- Untracked: 7 reports/PDF
+
+`7133ebc` will take effect on the next scheduled Phase 1 run (`0 */6 * * *`), which will be the first run carrying both STEP 7b and the tightened "Why This Matters" prompt.
+
+Stopping here. No further changes.</code></pre>
+
+  <h3>Outcome</h3>
+
+  <p>Both commits are on <code>origin/main</code> as <code>7133ebc</code>. The S51 image-prompt work
+  remains uncommitted in the working tree and verified image-only. No production run had yet executed
+  either change at the time of writing — the next scheduled Phase 1 run
+  (<code>0 */6 * * *</code>) is the first to carry both STEP 7b and the tightened Why This Matters
+  prompt. The genuine open problems (Gemini key returning HTTP 503, the Bing-News-Anthropic feed
+  producing ~19-character full texts, the last run queueing zero posts) were deliberately
+  <strong>recorded and not fixed</strong>, per instruction, and now live in
+  <code>CLAUDE.md</code> §7A Current Open Issues.</p>
+</div>
+
+<div class="chapter" id="chapter-67">
+  <div class="chapter-num">Chapter 67</div>
+  <h2>Session #56 Close-Out: Recording the Final Production State After the Push</h2>
+
+  <p>Chapter 66 recorded the wrap-up itself. This chapter records the close-out: the moment the
+  work was declared finished, with a single append-only note pinned to the end of
+  <code>CLAUDE.md</code> stating what production now runs and what remains unresolved.</p>
+
+  <p>Felix's instruction carried an important constraint — <em>"do NOT duplicate the full reports
+  again — they are already present in those three documents. This addition should only record the
+  final state after the push."</em> So this chapter deliberately does <strong>not</strong> repeat the
+  wrap-up or push reports. It exists only to mirror the close-out note, as Section 9's atomic rule
+  requires of every <code>CLAUDE.md</code> change.</p>
+
+  <h3>What the close-out note asserts</h3>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Both commits are deployed.</strong> <code>ddb8231</code> (Step 7b) and
+      <code>7133ebc</code> (Why This Matters) are on <code>origin/main</code>, with local
+      <code>main</code> synchronized at <code>7133ebc</code>.
+    </div>
+  </div>
+
+  <p>The note carries one distinction that is easy to lose and expensive to get wrong in later
+  sessions, so it is worth restating here as a teaching point: the Editorial Eligibility Gate was
+  validated against an <strong>offline 65-story gold set</strong>, and that is <em>not</em> the same
+  thing as live production validation. The first scheduled Phase 1 run carrying
+  <code>7133ebc</code> is the first real evidence.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Do not read the gold set as production truth.</strong> A deterministic gate scoring
+      30/30 on a curated offline set tells you the rule behaves as designed. It says nothing about
+      whether real feeds supply material the rule can classify correctly. Treating the offline pass
+      as deployment validation is precisely the kind of premature closure that hides a
+      zero-publish day.
+    </div>
+  </div>
+
+  <p>The note equally insists on the other side of the ledger: the S51 image-prompt refinement
+  remains <strong>uncommitted and undeployed</strong>, and must not be treated as production
+  behaviour. Five open issues stay open and unresolved — Gemini returning HTTP 503 (leaving
+  production Groq-only), the Bing-News-Anthropic feed's ~19-character texts, the zero-post run,
+  <code>gemini-podcast.js</code>'s latent multipart parsing, and podcast eligibility as a separate
+  deferred path that must not be solved by reusing the RSS logic.</p>
+
+  <h3>A verification step that paid for itself</h3>
+
+  <p>The append itself was unremarkable: write the supplied text to the end of the file and check it
+  byte-for-byte. The check that earned its place was the one after — rendering validation.</p>
+
+  <p>Section 11 embeds both verbatim reports inside fenced code blocks. Report A has no inner fence,
+  so its 3-backtick container was correct. Report B contains two inner 3-backtick blocks, which
+  closed its 3-backtick container early and promoted four of its own
+  <code>##</code> lines into the real document outline — as though report B were the manual's own
+  structure. Upgrading the container to four backticks fixed it, and the report text itself was
+  never touched.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">Confirm the appended text is a byte-identical match — hash both sides
+      and compare, rather than eyeballing the tail.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">Confirm everything before the append is an exact prefix of the new
+      file, so the append provably altered nothing above it.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">Parse the file and assert fences balance — a fence check catches
+      structure damage that a text check cannot, because the text is still perfectly correct.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">Re-verify the preserved content still unescapes to the original text,
+      proving the container fix changed structure only, not content.</div>
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>Generalisable lesson.</strong> A verbatim-content check and a valid-structure check are
+    not substitutes. Here the content was correct and the rendering was broken at the same time —
+    and only one of the two checks would have caught it. When preserving exact text, verify both
+    that the bytes survived and that the bytes are still in a container that renders as intended.
+  </div>
+
+  <h3>The engineering rule recorded at close-out</h3>
+
+  <p>The session closes with an explicit instruction against the most tempting next move: begin
+  another architecture audit or a speculative optimisation cycle. The next engineering decision is to
+  rest on concrete production evidence from runs carrying <code>7133ebc</code>, and the gate or the
+  prompt is not to be changed on the strength of a single run unless a concrete defect is
+  demonstrated.</p>
+
+  <p>That is the correct posture for a pipeline whose next real input is a scheduled run nobody has
+  seen yet. Fixing the policy before observing the outcome would replace measurement with
+  guesswork.</p>
+</div>
+
 </body>
+
+<div class="chapter" id="ch63">
+  <div class="chapter-num">Chapter 63</div>
+  <h2>Documentation Refresh, Phase 1 Audit (Read-Only) — 2 October 2026</h2>
+
+  <div class="callout info">
+    <strong>Scope:</strong> Read-only truth restoration per Phase 1 instructions. No production code changed.
+  </div>
+
+  <h3>Objectives</h3>
+  <ul>
+    <li>Establish §0 Document Authority & Precedence (Foundational/ Governing/ Operational/ Historical)</li>
+    <li>Quarantine stale operational specs containing retired Africa-first policy</li>
+    <li>Reconcile §7A against live production (Gemini HTTP 200, STEP 7b live, 7133ebc WTM ineffective)</li>
+    <li>Correct <code>llm_request_ledger.timestamp</code> reference</li>
+    <li>Add historical/supersession banners to forensic documents</li>
+    <li>Verify CLAUDE.md integrity and update mandated mirrors</li>
+  </ul>
+
+  <h3>Actions Taken</h3>
+  <ul>
+    <li>Restored CLAUDE.md to coherent state (1572 lines); verified section order, 55 Completed entries, 60 session rows matching HEAD</li>
+    <li>Added §0 with four tiers and precedence rules; quarantined <code>SCOUT_AGENT_SPEC.md</code> and <code>AITRENDS_NG_SPEC.md</code></li>
+    <li>Rewrote/updated §7A with verified live facts; fixed timestamp wording</li>
+    <li>Removed transient reconstruction duplication (S40–S41); reverted condensed sections to HEAD then reapplied only legitimate corrections</li>
+    <li>Added supersession banners to root forensic files and <code>scout-agent/TAVILY_FORENSIC_REPORT.md</code></li>
+    <li>Appended audit to SESSION_LOG.html and this chapter to TRAINING_MANUAL.html</li>
+  </ul>
+
+  <h3>Results</h3>
+  <pre><code>3 files changed, 2360 insertions(+), 54 deletions(-)
+Documentation-only. No production files modified.
+</code></pre>
+
+  <h3>Key Findings (Recorded, Not Fixed)</h3>
+  <ul>
+    <li><code>scout.js:28</code> missing <code>passesQualityGate</code> import (latent on editorial lane)</li>
+    <li>Prompt↔gate WTM contradiction (literal substring requirement vs instruction not to force section)</li>
+    <li>Bing-News-Anthropic yields ~19-character full texts</li>
+    <li><code>gemini-podcast.js:192</code> reads <code>parts?.[0]?.text</code> (S42 fix not applied)</li>
+    <li>S51 image-prompt refinements remain uncommitted</li>
+  </ul>
+</div>
+
 </html>
+
+<div class="chapter" id="chapter-68">
+  <div class="chapter-num">Chapter 68</div>
+  <h2>Documentation Refresh, Phase 1b: Reconciling Historical Evidence Documents</h2>
+
+  <p>Chapter 63 established the authority structure: which documents govern, which are quarantined, and
+  which are merely evidence. It also placed a banner on the forensic documents. This chapter records what
+  happened when we came back and looked at those banners honestly — because several of them were
+  <em>technically</em> correct and still misleading.</p>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Scope:</strong> Documentation only. No production code, prompt, SWS weight, feed, database,
+      workflow, configuration, or deployment was changed. No commit, no push, no staging.
+    </div>
+  </div>
+
+  <h3>The problem with a banner alone</h3>
+
+  <p>A banner that says <em>"this is historical, see CLAUDE.md"</em> stops a reader from citing the document
+  as current. It does not stop a reader from <strong>mistaking a later implementation for original content</strong>.</p>
+
+  <p>Consider the trap. <code>EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md</code> carries a bold green
+  <code>✅ READY FOR IMPLEMENTATION</code> heading. The gate it recommends <em>is</em> now in production.
+  A reader skimming for context will naturally assume the document described a system that was already
+  running — that the author was documenting existing behaviour. The truth is the opposite: the document
+  recommended a gate, <code>READY FOR IMPLEMENTATION</code> meant <em>the evidence supported proceeding</em>,
+  and the code did not exist for another session. Nothing in the original file said so.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>The generalisable lesson.</strong> A supersession banner answers <em>"is this current?"</em>
+      but never <em>"when did this change, and who changed it?"</em>. When a document's recommendations
+      were later implemented or reversed, you need both — the banner <strong>and</strong> an explicit
+      chronology section.
+    </div>
+  </div>
+
+  <h3>The rule that came out of it</h3>
+
+  <p>Added to <code>CLAUDE.md</code> §0.4, which governs the documentation itself:</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      Every Historical-tier document must carry a historical marker, and any document whose analysis was
+      acted on later must <strong>also</strong> carry a chronology section — fixing the
+      <strong>evidence → reconciliation → implementation → verification</strong> order.
+    </div>
+  </div>
+
+  <p>The test for whether a document needs the second part is simple and worth reusing: <em>did a later
+  session implement, reverse, or supersede this analysis?</em> If yes, a reader who does not know that
+  history will draw wrong conclusions from the document, and no amount of banner text fixes it.</p>
+
+  <h3>Two working patterns the sweep produced</h3>
+
+  <p>The three chronology sections share a structure worth naming, because it is reusable and it is what
+  stopped the back-dating error:</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>State the original recommendation in its own words</strong>, including the formulations that
+        were measured and then <em>not</em> chosen. The reconciliation document kept C, C-min, and MIN
+        side by side rather than collapsing them, because the record of what was rejected is the reasoning.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>Name the specific exception that forced the change.</strong> Story #33 — the Google AI
+        Mode 21.6% price research finding — is why the anchor widened. "We later chose differently" is
+        useless; "#33 would have been rejected" is why a future reader can check the reasoning.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>Mark the gold-set result as a property of its sample, not a promise.</strong> The
+        <code>30/30 Strong, 35/35 Weak</code> figures describe a 65-story historical population. Quoting
+        them without that qualifier is how a single-session result quietly becomes a permanent accuracy claim.
+      </div>
+    </div>
+  </div>
+
+  <h3>The trap that had to be closed explicitly</h3>
+
+  <p>Point 3 deserves emphasis because it cuts against the instinct to make documentation sound conclusive.
+  The evidence really was strong. But the same companion analyses warned against mechanical rules that would
+  reject first-party sources, reject announcements, raise the SWS threshold, or reject analysis. Those were
+  <strong>warnings</strong>. Writing the gate's success without them would have quietly promoted a
+  historical caution into a governing rule nobody had adopted.</p>
+
+  <p>So each chronology section closes with an explicit note that those warnings remain warnings, and that
+  the implementation must not be described as having adopted them. Additive, dated, and falsifiable — a later
+  session can check it.</p>
+
+  <h3>Preservation as the real deliverable</h3>
+
+  <p>The hard part was not writing the new sections; it was <strong>not touching anything underneath
+  them</strong>. Because the target files are untracked, there is no committed baseline to diff against —
+  so <code>git diff</code> returned nothing at all, which is not evidence of correctness. Preservation had
+  to be proven by assertion instead:</p>
+
+  <pre><code>OK  A = 29/30          OK  #60 in table
+OK  B 30/30              OK  8 strong decision posts
+OK  C 30/30              OK  podcast do-not-reuse
+OK  C-min 30/30          OK  topic-signature req
+OK  MIN 30/30            OK  load-bearing component
+OK  60 leaks             OK  65 coded rows
+OK  30/30 + 35/35        OK  redundant action / decision
+Appendix A rows: 65      A–K subsections: A B C D E F G H I J K</code></pre>
+
+  <p>Two techniques earned their place:</p>
+
+  <ul>
+    <li><strong>Read into a variable, verify, then write.</strong> Never <code>open(path,'w')</code> in the
+    same expression that supplies the content — that is how <code>CLAUDE.md</code> was truncated to 0 bytes
+    during the earlier Phase 1 audit.</li>
+    <li><strong>Assert against the original content, not against your own output.</strong> Proving the 65
+    Appendix rows and 34 bracketed story references survived is worth more than re-reading the section you
+    just wrote.</li>
+  </ul>
+
+  <h3>What is still outstanding</h3>
+
+  <p>The sweep is deliberately incomplete, and <code>CLAUDE.md</code> §0.4 records that honestly rather
+  than leaving it to memory:</p>
+
+  <ul>
+    <li><code>scout-agent/FORENSIC_REPORT.md</code> (390 lines) — the <strong>only</strong> Historical-tier
+    document with no historical marker at all.</li>
+    <li><code>scout-agent/TAVILY_FORENSIC_REPORT.md</code> — generic §0.1 banner only; no chronology needed.</li>
+    <li><code>TRAINING_MANUAL.html</code> itself has a structural defect: <code>&lt;/body&gt;</code> precedes
+    Chapter 63, so appended chapters land outside the document body.</li>
+  </ul>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      Chapter 68 was appended at the end of the file to match how Chapter 63 was appended. Fixing the
+      <code>&lt;/body&gt;</code> placement would mean restructuring existing chapters, so it is recorded
+      as a finding instead of silently corrected.
+    </div>
+  </div>
+
+  <p>No new editorial rule, SWS threshold, consequence definition, source rule, image rule, or publishing
+  rule was introduced anywhere in this sweep. Where the historical documents describe behaviour that was
+  never implemented, or a recommendation that was later reversed, that is recorded as history — in those
+  documents and nowhere else.</p>
+</div>
+
+<div class="chapter" id="chapter-69">
+  <div class="chapter-num">Chapter 69</div>
+  <h2>Live Re-Verification: When the Documentation Is Right and Still a Month Old</h2>
+
+  <p>Chapter 68 closed the historical-evidence sweep. It made the forensic documents honest about what they
+  were — evidence, not current state. This chapter records the next step: a consolidated status check on
+  <strong>5 November 2026</strong>, one month after the 2026-10-02 reconciliation, and what that check
+  revealed about the difference between <em>documentation that was correct when written</em> and
+  <em>documentation that is correct now</em>.</p>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Scope:</strong> Read-only verification and documentation only. No production code, prompt,
+      SWS weight, feed, database, workflow, configuration, or deployment was changed. No commit, push, or
+      staging.
+    </div>
+  </div>
+
+  <h3>The principle: a dated number is a measurement, not a promise</h3>
+
+  <p>The 2026-10-02 reconciliation was accurate. It recorded 5 of 5 post-deployment gate rejections failing
+  on "Why this matters", a 2.2/day throughput window, and a Gemini key that answered HTTP 200 but served
+  zero calls. Every one of those statements was true <em>of its measurement window</em>.</p>
+
+  <p>A month later, some of them had changed and some had not. That is the normal condition of a live
+  system. The mistake is to treat the old snapshot as a standing guarantee in either direction — neither
+  "the dip is permanent" nor "the fix must have worked by now". The only way to know is to measure again.</p>
+
+  <h3>What the 2026-11-05 check found</h3>
+
+  <table>
+    <tr><th>Signal</th><th>Live value (2026-11-05)</th><th>Reading</th></tr>
+    <tr><td>Published posts</td><td>655</td><td>Publishing continuously</td></tr>
+    <tr><td>Posts/day, 2026-10-22 → 11-05</td><td>3.54/day (46 posts / 13 active days)</td><td>The 2.2/day dip recovered</td></tr>
+    <tr><td>GHA runs sampled</td><td>12/12 green, all <code>7133ebc</code></td><td>All four workflows healthy</td></tr>
+    <tr><td>LLM ledger, last 30d</td><td>Groq 178 success / 59 fail; 95 publish-outcome success / 53 gate-check fail; <strong>0 Gemini</strong></td><td>Groq remains the sole serving provider</td></tr>
+    <tr><td>Gemini key</td><td>HTTP 200 (models list, 50 models)</td><td>Reachable, still not invoked</td></tr>
+    <tr><td>Gate-check failures, last 30d</td><td>53</td><td>Loss concentrated in generation</td></tr>
+    <tr><td>Of those, "Why this matters"-related</td><td>40 / 53 (75%)</td><td>The <code>7133ebc</code> fix remains ineffective</td></tr>
+    <tr><td><code>pending_posts</code></td><td>0 pending_image · 0 generating · 11 failed · 656 published</td><td>No live queue blockage</td></tr>
+    <tr><td>Curated registry</td><td>22 enabled / 18 feed-bearing</td><td>Matches the Session #45 read</td></tr>
+  </table>
+
+  <h3>What changed, and what did not</h3>
+
+  <p>Two findings matter most, and they point in opposite directions.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>The throughput drop was not permanent.</strong> The 2.2/day figure covered only the six days
+        immediately after <code>7133ebc</code>. The later 13-day window averaged 3.54/day. A six-day window
+        is too short to establish a new steady state, and this is the concrete proof: the same system
+        recovered without the prompt being changed again.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>The WTM loss did not recover.</strong> Forty of fifty-three Phase 1 gate-check failures in
+        the last 30 days are "Why this matters"-related — twenty pure WTM failures plus twenty
+        WTM-plus-too-short failures. The prompt fix has now been measured ineffective over a full month,
+        not a five-run sample.
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Two facts can both be true.</strong> "Publishing at 3.54/day" and "failing 40 WTM gates in
+      30 days" describe the same system. A healthy top-line throughput number does not clear the generation
+      loss, and a persistent generation loss does not mean the pipeline is starving. Report both.
+    </div>
+  </div>
+
+  <h3>Availability is not invocation</h3>
+
+  <p>The ledger showed <strong>zero Gemini rows</strong> across 30 days. That sentence is easy to misread as
+  "Gemini is broken" — which is exactly the error the 2026-10-02 pass corrected. The key answered HTTP 200
+  and listed 50 models. Gemini is <em>available</em>. It is simply never <em>invoked</em>, because Groq
+  keeps succeeding and the fallback only fires on Groq failure or TPD exhaustion.</p>
+
+  <p>The precise statement is: <strong>the fallback is verified reachable and still untested by its trigger
+  condition in production.</strong> "Available", "working in production", and "broken" are three different
+  claims. Keep them separate.</p>
+
+  <h3>The reusable procedure for a read-only status check</h3>
+
+  <p>Nothing here writes state. The point is to measure the system as it is, not as the last document
+  described it.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>Run history.</strong> Query the workflows with the account that can see the private repo
+        (<code>gh run list --repo FAIT-Blog/scout-agent</code>), and record both the conclusion and the
+        <code>head_sha</code>. A green run on the wrong commit is not evidence about the current code.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>Production rows.</strong> Query <code>posts</code>, <code>pending_posts</code>, and the
+        curated registry through PostgREST. Compute posts/day over a stated window, not an impression.
+        Report queue status counts separately from published counts.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>The ledger.</strong> Group <code>llm_request_ledger</code> by provider, purpose, and
+        success for the stated window. Read the actual <code>error_type</code> values for gate-check rows
+        rather than inferring the reason. The distribution is the diagnosis.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <strong>Provider reachability, separately from usage.</strong> A models-list call verifies the key
+        without consuming generate quota. Then report invocation counts separately, so "reachable" and
+        "serving" cannot be conflated.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <strong>Working-tree state.</strong> Check all three repos. Documentation claims about what is
+        committed, pushed, or still uncommitted are only trustworthy if the working tree was inspected in
+        the same pass.
+      </div>
+    </div>
+  </div>
+
+  <h3>What is still outstanding</h3>
+
+  <p>The consolidated pending list is unchanged in substance by this check, and is now recorded in
+  <code>CLAUDE.md</code> §7A with the 2026-11-05 numbers attached:</p>
+
+  <ul>
+    <li><strong>Critical:</strong> the WTM prompt fix is ineffective; the prompt and gate contradict each
+    other; <code>scout.js:28</code> omits the <code>passesQualityGate</code> import; the Bing-News-Anthropic
+    feed yields near-empty full texts.</li>
+    <li><strong>High:</strong> the S51 image-prompt refinement is uncommitted; the untracked forensic
+    deliverables are uncommitted; the S53–S57 documentation work is uncommitted; the Gemini fallback is
+    reachable but never invoked.</li>
+    <li><strong>Medium:</strong> the podcast lane has no eligibility gate; four feed-drift monitoring items
+    remain open; <code>gemini-podcast.js:192</code> still reads <code>parts?.[0]?.text</code>; the manual's
+    table of contents has a gap.</li>
+    <li><strong>Deferred:</strong> newsletter sending, social auto-posting, Render deployment, the YouTube
+    transcript proxy, PDF ingestion, the adaptive blend digest count, and the deferred editorial/structural
+    checkpoints.</li>
+  </ul>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>No production change.</strong> This chapter records a measurement and a documentation update.
+      The pipeline was not touched, and the WTM issue was not fixed here.
+    </div>
+  </div>
+
+  <h3>A note on this manual's own structure</h3>
+
+  <p>The check also confirmed the structural defect recorded in Chapter 68 rather than silently fixing it:
+  <code>&lt;/body&gt;</code> appears at line 9926 and <code>&lt;/html&gt;</code> at line 9971, so Chapters
+  63 and 68 were appended outside the document body. Chapter 63 also appears twice (lines 9218 and 9928).
+  Chapter 69 is appended at the end to match the existing convention. Fixing the placement would mean
+  restructuring existing chapters, so it remains a recorded finding.</p>
+
+  <p>The generalisable lesson from the whole chapter is small but load-bearing: <strong>re-measure before
+  you conclude.</strong> The documentation was right on 2026-10-02. It was also, in one specific respect,
+  no longer right on 2026-11-05 — and only a fresh read-only pass could tell which respect that was.</p>
+</div>
+

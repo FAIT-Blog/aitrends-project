@@ -1,24 +1,33 @@
 # AITrends Project — Master Specification
-**Last Updated:** 2026-09-27 (Session #56 — documentation reconciliation against live production. Read-only pass plus 10 cleanup areas applied to this file. Live state established from GH Actions run logs, the current working tree, and the current source. Three code facts changed this file materially: (1) the Session #55 Editorial Eligibility Gate (`ddb8231`) is now **PUSHED and DEPLOYED** — `origin/main` = `ddb8231`; (2) a separate commit `7133ebc` tightens the "Why This Matters" prompt in all 3 digest paths (4 sites) to address the single largest production loss; (3) production currently runs **single-source mode with Groq only** — `TAVILY_SEARCH_ENABLED=false` and the `GEMINI_API_KEY` returns HTTP 503. The "Why This Matters" commit is **committed but NOT pushed**; the S51 image-prompt refinement remains uncommitted in the working tree by design. Section 7 is now split into §7A Current Open Issues and §7B Historical Session Records.)
+**Last Updated:** 2026-11-05 (**Session #57** — consolidated status update and live re-verification. Documentation-only; no production code changed. Live-verified: **655 published posts**, **3.54 posts/day** over 2026-10-22→11-05, **53 Phase 1 gate-check failures in the last 30 days of which 40 (75%) are still "Why this matters"-related**, **0 Gemini-served calls in 30 days** (key HTTP 200, 50 models), **22 enabled / 18 feed-bearing** curated sources, and **12/12 sampled GHA runs green on `7133ebc`**. Full snapshot in §7A.) **Prior state — 2026-10-02 (Documentation Refresh, **Phase 1** — truth restoration and authority structure only. No production code changed in this phase; explicitly NOT implemented: the WTM structural fix, the S51 image-prompt rules, and any new governing rules. Changes in this pass: (1) new **§0 Document Authority & Precedence** defining the four documentation tiers and quarantining the two stale operational specs; (2) §7A reconciled against live production — **Gemini is verified HTTP 200 and reachable** (the old "HTTP 503 / Groq-only" claim was wrong), **STEP 7b is deployed and demonstrably filtering** (first run 2026-09-27T11:01), and **`7133ebc` is measured INEFFECTIVE — 5/5 post-deployment Phase 1 gate rejections still fail "Why this matters"**; (3) `llm_request_ledger` time column corrected from `created_at` to the actual **`timestamp`** column; (4) supersession banners added to the forensic documents. Prior state: `7133ebc` is on `origin/main`; the S51 image-prompt refinement remains uncommitted in the working tree by design.) **Later the same day, Phase 1b continued the sweep:** all six root forensic/audit documents were given a detailed historical-status banner, three of them (`STORY_SELECTION_QUALITY_AUDIT.md`, `CONTRASTIVE_SELECTION_ANALYSIS.md`, `EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md`) additionally received a `## Post-Analysis Status — Subsequent Implementation` chronology section fixing the evidence → reconciliation → implementation (`ddb8231`) → later-verification order. **No original historical measurement, story number, table, or recommendation was rewritten.** Documentation-only; still no production code changed. **Outstanding:** `scout-agent/FORENSIC_REPORT.md` is the only §0.1 Historical-tier document with no historical marker at all — see §0.4.
 **Owner:** Felix Okon
 **Maintained by:** FAIT (Felicota Audio Infotech), Lagos
 
 > This is the single source of truth for the entire AITrends.ng project.
 > Both sub-projects (aitrends.ng and scout-agent) are governed by this file.
 > Read this at the start of EVERY Claude Code session on either sub-project.
+> **Read §0 first** — it defines which other documents you may trust, and which are historical.
 
-> ⚠️ **UNCOMMITTED / UNPUSHED STATE (Session #56, 27 Sep 2026).** The S53/S54/S55 documentation work
-> in this file and its mirrors (SESSION_LOG.html + TRAINING_MANUAL.html) is **uncommitted in the root
-> `aitrends-project` repo**, together with the untracked S54 read-only deliverables
+> ⚠️ **UNCOMMITTED / UNPUSHED STATE (Session #56, 27 Sep 2026; updated 2026-10-02).** The S53/S54/S55/S56
+> documentation work in this file and its mirrors (SESSION_LOG.html + TRAINING_MANUAL.html) is
+> **uncommitted in the root `aitrends-project` repo**, together with the untracked S54 read-only deliverables
 > (`SELECTION_FUNNEL_FORENSIC.md`, `STORY_SELECTION_QUALITY_AUDIT.md`, `CONTRASTIVE_SELECTION_ANALYSIS.md`,
 > `EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md`), the S53 deliverable `PRODUCTION_STARVATION_FORENSIC.md`, and
-> the older `SINGLE_SOURCE_NEXT_PHASE_FORENSIC.md`. **Session #56 resolved the `ddb8231` pending state:**
-> that commit is now **pushed and deployed** (`origin/main` = `ddb8231`). A new commit `7133ebc` ("Why This
-> Matters" prompt sharpening) is **committed locally but NOT pushed** — pushing it is a Felix decision.
+> the older `SINGLE_SOURCE_NEXT_PHASE_FORENSIC.md`. `ddb8231` (Session #55 Editorial Eligibility Gate) and
+> `7133ebc` (Why This Matters prompt sharpening) are **both pushed** — `origin/main` = `7133ebc`.
 > `scout-agent` additionally carries the **S51 image-prompt refinement uncommitted in `gemini.js`** by
 > design (6 hunks, 3 image-rule blocks: ONE CENTRAL VISUAL IDEA / RELATIONSHIPS MUST BE VISUALLY
 > DEMONSTRABLE / TEXT MUST BE PURPOSEFUL) plus untracked `FORENSIC_REPORT.md` / `TAVILY_FORENSIC_REPORT.md`.
 > Nothing should be pushed without an explicit instruction from Felix.
+
+> ⚠️ **INCIDENT LOG — 2026-10-02 (documentation integrity).** While performing the Phase 1 §7A rewrite, a
+> scripted edit truncated `CLAUDE.md` to 0 bytes (a Python `open(path,'w')` was evaluated before the read
+> that supplied its content). Recovery: restored to committed `HEAD` (`6039f74`) and reconstructed the
+> uncommitted working-tree delta from the full verbatim copy held in session context. **Verified after
+> reconstruction:** file integrity, section order, §7B entry count, and Section 10 row count all match the
+> pre-incident state. **No committed content was lost, and no uncommitted content was lost.** Lesson recorded
+> in the session log: never script a read-modify-write on a documentation file in a single Python expression —
+> read into a variable first, verify, then write.
 
 ---
 
@@ -27,15 +36,21 @@
 ```
 WEBSITE_AI_Generated_Xai/
   └── aitrends-project/
-        ├── CLAUDE.md                     ← THIS FILE — master spec for the whole project
+        ├── CLAUDE.md                     ← THIS FILE — master spec for the whole project (§0 defines precedence)
         ├── SESSION_LOG.html              ← Master session log (all sessions, both projects)
         ├── TRAINING_MANUAL.html          ← Vibe-Coding training manual (12 chapters, 1,867 lines)
-        ├── PRODUCTION_STARVATION_FORENSIC.md  ← Session #48 P0 forensic report (GHA minutes exhaustion)
+        ├── "AI Trends Editorial Constitution.pdf"  ← Foundational editorial source (Session #32)
+        ├── PRODUCTION_STARVATION_FORENSIC.md  ← Session #48 P0 forensic report (GHA minutes exhaustion) — HISTORICAL
+        ├── SELECTION_FUNNEL_FORENSIC.md  ← Session #54 full-funnel audit — HISTORICAL
+        ├── STORY_SELECTION_QUALITY_AUDIT.md  ← Session #54 150-post classification — HISTORICAL
+        ├── CONTRASTIVE_SELECTION_ANALYSIS.md ← Session #54 65-story coding — HISTORICAL
+        ├── EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md ← Session #54 gate design evidence — HISTORICAL
+        ├── SINGLE_SOURCE_NEXT_PHASE_FORENSIC.md ← Historical; its image-architecture recommendation was REVERSED by 97ff9f8
         ├── aitrends.ng/                  ← Blog frontend (Next.js · Vercel)
-        │     ├── AITRENDS_NG_SPEC.md    ← Detailed frontend spec (reference, not primary)
+        │     ├── AITRENDS_NG_SPEC.md    ← ⚠️ QUARANTINED 2026-10-02 — see §0.3. NOT current
         │     └── SESSION_LOG_AITRENDS.html ← Archived aitrends.ng-only sessions
         └── scout-agent/                  ← Automation pipeline (Node.js · GitHub Actions)
-              ├── SCOUT_AGENT_SPEC.md    ← Detailed scout spec (reference, not primary)
+              ├── SCOUT_AGENT_SPEC.md    ← ⚠️ QUARANTINED 2026-10-02 — see §0.3. NOT current
               └── SESSION_LOG_SCOUT.html ← Archived scout-agent-only sessions
 ```
 
@@ -44,6 +59,81 @@ WEBSITE_AI_Generated_Xai/
 - Scout pipeline: https://github.com/FAIT-Blog/scout-agent
 
 **Live site:** https://www.aitrends.ng (canonical; `aitrends.ng` 308-redirects here, `aitrends-ng.vercel.app` is the Vercel project domain)
+
+---
+
+## 0. DOCUMENT AUTHORITY & PRECEDENCE
+
+*Added 2026-10-02 (Documentation Refresh, Phase 1). This section governs how every other document in this
+repository must be read. It exists because a documentation audit on 2026-10-02 found that several files
+correctly declared CLAUDE.md as master and then contradicted it — most seriously by re-asserting the
+Africa-first mandate that Section 1 retired in Session #25.*
+
+### 0.1 The four tiers
+
+| Tier | Source | Standing | May it be cited as current fact? |
+|---|---|---|---|
+| **Foundational** | `AI Trends Editorial Constitution.pdf` | The origin of the editorial voice, structure rules, and the "Why it matters" closing discipline. Adopted Session #32. | **Yes, for editorial intent only.** It states *why* the rules exist. It is not a description of the implementation and must never be used to argue what the pipeline currently does. |
+| **Governing** | `CLAUDE.md` (this file) | **Master specification.** Current architecture, current provider state, governing rules, and open issues. | **Yes.** This is the only file that may be quoted as "what AITrends currently is". |
+| **Operational** | `scout-agent/SCOUT_AGENT_SPEC.md`, `aitrends.ng/AITRENDS_NG_SPEC.md` | Implementation-facing documentation. Intended to describe how each subsystem is built. | **Only after verification against live code.** ⚠️ **Both files are currently QUARANTINED — see §0.3.** |
+| **Historical** | `PRODUCTION_STARVATION_FORENSIC.md`, `SELECTION_FUNNEL_FORENSIC.md`, `STORY_SELECTION_QUALITY_AUDIT.md`, `CONTRASTIVE_SELECTION_ANALYSIS.md`, `EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md`, `SINGLE_SOURCE_NEXT_PHASE_FORENSIC.md`, `scout-agent/FORENSIC_REPORT.md`, `scout-agent/TAVILY_FORENSIC_REPORT.md`, `SESSION_LOG.html`, `TRAINING_MANUAL.html` | Evidence and provenance. Immutable record of what was found, when, and why a decision was made. | **No.** Never cite as current state. Their conclusions describe the moment of investigation and are frequently superseded by later sessions. |
+
+### 0.2 Precedence rules — these resolve every conflict
+
+1. **Live code beats every document.** If a document and the running pipeline disagree, the pipeline is
+   what is happening. Fix the document.
+2. **`CLAUDE.md` beats the operational specs**, which beat the forensic documents.
+3. **A forensic's conclusion never overrides deployed code.** Forensic files are point-in-time evidence.
+   Several now describe architecture that was deliberately reversed — most importantly
+   `SINGLE_SOURCE_NEXT_PHASE_FORENSIC.md`, whose "use source article images" recommendation was reversed by
+   commit `97ff9f8` (Session #49).
+4. **Do not treat a rule as active merely because it appears in an old session record or forensic.** A rule
+   is active only if it appears in CLAUDE.md as a governing rule AND is not contradicted by live code.
+5. **The Constitution outranks nothing operational, and is outranked by nothing.** It is the *why*. It
+   cannot make a pipeline behaviour current, and no later decision may be justified by ignoring it.
+6. **Every numeric claim (counts, thresholds, model names, quota figures) must carry a date.** An
+   undated number in any document is treated as unverified.
+7. **When two governing rules contradict each other, stop and report it.** Do not silently pick one. A
+   live example is recorded in §7A: the WTM prompt and the WTM gate currently disagree.
+
+### 0.3 ⚠️ QUARANTINE — the two operational specs (as of 2026-10-02)
+
+`SCOUT_AGENT_SPEC.md` and `AITRENDS_NG_SPEC.md` were last meaningfully updated 2026-06-03. A full audit
+found both describe a system that no longer exists. **They must not be used to answer any question about
+current AITrends behaviour until they are rewritten.** Specific known-wrong content:
+
+- **Both assert a retired Africa-first mandate.** Section 1 retired it in Session #25 *because it was the
+  root cause of a recurring fabrication problem* — the model manufactured Africa relevance to satisfy the
+  gate. The specs still instruct Africa-first generation. **This is the most dangerous content in the
+  repository.**
+- `SCOUT_AGENT_SPEC.md`: wrong provider order (Gemini primary; Groq is primary), wrong `MIN_ARTICLES`
+  (says 2; code is 1), `maxOutputTokens 8192` (withdrawn Session #56), Pollinations cover images (dead),
+  `image.js` described as live (it is dead code), Phase 1 publishing (Phase 2 only), a STEP 13 that does
+  not exist, and no mention of STEP 7b / SWS / `quality-gate.js` / `complete.js` / `sources.js` /
+  `image-providers/` / the podcast lane / the curated registry / the LLM ledger.
+- `AITRENDS_NG_SPEC.md`: Pollinations and Render in the stack, "Gemini 1.5 Flash", the retired tagline,
+  and `cover_image_url` described as a Pollinations URL.
+
+A full rewrite is scheduled as a later phase of the documentation refresh. Until then, **CLAUDE.md is the
+only place to get an answer.**
+
+### 0.4 Rules about the documentation itself
+
+- **Never silently delete historical evidence.** Superseded material gets a banner marking what superseded
+  it and when. The reasoning is the value; a future session may need to know why a rule existed.
+- **The two operational specs must cite `file:line`** when rewritten, so that they cannot silently drift
+  from the code they describe.
+- **Documentation changes follow the three-document atomic rule in Section 9.** Any CLAUDE.md change must
+  also be reflected in `SESSION_LOG.html` and `TRAINING_MANUAL.html`.
+- **Every Historical-tier document in §0.1 must carry a historical marker, and any document whose analysis was
+  acted on later must also carry a chronology section.** A banner stating "this is historical" is the minimum;
+  where a later session implemented, reversed, or superseded the analysis, the document must also record the
+  evidence → reconciliation → implementation → verification order so a future reader cannot mistake later
+  implementation for original content. **Sweep status as of 2026-10-02: DONE for all six root forensic/audit
+  documents (`PRODUCTION_STARVATION_FORENSIC.md`, `SELECTION_FUNNEL_FORENSIC.md`, `STORY_SELECTION_QUALITY_AUDIT.md`,
+  `CONTRASTIVE_SELECTION_ANALYSIS.md`, `EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md`, `SINGLE_SOURCE_NEXT_PHASE_FORENSIC.md`);
+  NOT DONE for `scout-agent/FORENSIC_REPORT.md`, which still has no historical marker, and
+  `scout-agent/TAVILY_FORENSIC_REPORT.md`, which carries only the generic §0.1 banner.**
 
 ---
 
@@ -130,9 +220,11 @@ Curated source registry (Supabase `curated_source_registry`, 22 enabled / 18 fee
 and Phase 2 publishes it through the same queue. The podcast lane runs **neither** the SWS gate nor
 STEP 7b — see §7A.
 
-**Current production provider state (verified 2026-09-27, run `36288813810`):** Groq `openai/gpt-oss-120b`
-is the only serving provider (`GEMINI_API_KEY` returns HTTP 503) and `TAVILY_SEARCH_ENABLED=false` means
-blend mode is unreachable — every production post is a single-source rewrite.
+**Current production provider state (updated 2026-10-02):** Groq `openai/gpt-oss-120b` is the serving
+provider. The configured `GEMINI_API_KEY` is **verified reachable (HTTP 200)**, but the ledger shows
+**zero Gemini-served calls in the last 14 days** — Gemini is only reached when Groq fails or TPD-exhausts,
+and Groq has been succeeding, so the fallback is available but not exercised. `TAVILY_SEARCH_ENABLED=false`
+means blend mode is unreachable — every post is a single-source rewrite. See §7A for the precise wording.
 
 **Critical link:** The `SCOUT_API_KEY` must match in three places simultaneously:
 1. `scout-agent/.env` (local) → `SCOUT_API_KEY`
@@ -300,7 +392,7 @@ fatal** — it is fail-silent by design so an insert failure can never block pub
 Columns: `id`, `provider`, `model`, `input_tokens_est`, `output_tokens_est` (~4 chars/token), `success`,
 `error_type`, `retry_attempt`, `duration_ms`, `purpose`, `category`, `story_title`, `run_id`,
 `pending_post_id` (FK, backfilled by `linkLedgerToPost()`), `blend_sources` (int, on the synthesis row),
-`created_at`.
+`timestamp` column is `timestamp`, not `created_at`.
 
 `purpose` values beyond real LLM calls: `gate-check` (a Phase 1 digest failed the quality gate;
 `provider: 'pipeline'`, `retry_attempt: -1` sentinel, reasons in `error_type`) and `publish-outcome`
@@ -737,6 +829,87 @@ The goal is **not** to hard-code the exact rewritten sentence. The goal is for t
 
 ### Image feedback principle (unchanged — Session #50 system continues)
 The image examples demonstrate a useful feedback pattern: actual poor result → diagnosis → preferred visual interpretation. Apply the same principle to editorial output: actual article/result → diagnosis → evidence → preferred treatment → reusable lesson. We will continue supplying additional reviewed examples before requesting implementation.
+### Editorial Review Procedure
+*Complementary to the ten lessons above; this describes how a reviewer inspects and evaluates published posts. It does not create new automated pipeline rules.*
+
+#### 1. Distinguish categories
+
+- **Editorial lessons** — the ten generalizable lessons above. They are teaching patterns, not rigid checklists.
+- **Review procedure** — the steps here for inspecting and evaluating a published post.
+- **Governing pipeline rules** — deterministic checks implemented in code (e.g., SWS gate `minScore 55`, STEP 7b Editorial Eligibility Gate, quality gates in `quality-gate.js`/`lib/qualityGate.ts`, and ledger/pipeline invariants). These describe what the pipeline currently enforces and must be verified against live code.
+- **Historical observations** — documented observations (e.g., S50/S51 image observations) that inform future direction but are **not** currently governing behavior.
+
+#### 2. Artifact-first review
+
+Review the **actual published AITrends output** (the published article/HTML and the actual generated image), not presumed pipeline intent. The published artifact is the authoritative object of output review. Do not diagnose based solely on prompt text or assumptions about what the pipeline “should have done.”
+
+#### 3. Source verification
+
+Extract the **actual source URL(s)** from the published article’s `source_urls` (or visible attribution) and inspect that source directly. Do not infer source content from the headline, search snippets, indirect references, or third-party summaries. Verify the cited source is what the article actually references.
+
+#### 4. Evidence chain
+
+Trace the full chain: **Source → story selection → framing → writing → closing → image**. Evaluate whether each transformation stayed grounded in the underlying evidence without inventing angles or manufactured relevance.
+
+#### 5. Story/coverage classification
+
+Classify the story as precisely as possible, distinguishing:
+- **New story** — previously unreported event/announcement with its own core development.
+- **Substantive follow-up** — builds on prior coverage with concrete new developments, decisions, data, or consequences.
+- **Additional detail/development** — expands with specific new evidence while remaining the same core story.
+- **Repackaging** — primarily restates existing coverage with minimal new evidence.
+- **Duplicate coverage** — substantially the same core story with no substantive development or consequence.
+
+Do not treat every previous mention as a duplicate if the new article contains a substantive development, decision, opportunity, risk, or consequence.
+
+#### 6. Claim verification
+
+Identify the important factual, numerical, causal, and speculative claims. Verify them against the underlying evidence. Preserve the source’s level of certainty and perspective. Do not upgrade “AI was one contributing factor” to “AI caused…” (Lesson 2). Preserve speculation as speculation (Lesson 6). Verify important numbers against underlying tables/charts when present (Lesson 5).
+
+#### 7. Source perspective and attribution
+
+Distinguish: company claims, analyst/investor opinions, first-hand experiments, reported facts, and independently corroborated findings. Ensure the article does not silently convert one category into another (Lesson 4). Verify the source’s perspective is not misrepresented (Lesson 3). Assess whether attribution is adequate for claims not directly stated in the source.
+
+#### 8. Headline and metadata
+
+Check the headline, description/excerpt, tags where relevant, and published metadata against the actual central claim of the source and article. Headlines must reflect the evidence, not overstate or generalize beyond what the source supports.
+
+#### 9. Article structure and information density
+
+Evaluate structure separately from length (Lesson 9). A short, information-dense article can be strong; a longer article can be weak if padded, structurally defective, or mechanically reproduces every detail. The empty **Why This Matters** section is an **output defect** when present but substantively empty.
+
+#### 10. Why This Matters
+
+Apply Lesson 1. The closing must identify a concrete consequence, decision, opportunity, risk, affected group, or industry change grounded in the source. A present-but-empty “Why This Matters” section is an **output defect**. The existence of a heading alone does not satisfy the requirement.
+
+#### 11. Central narrative
+
+Determine whether the article is organized around the **most important idea connecting the evidence** (Lesson 10), rather than mechanically reproducing every source detail.
+
+#### 12. Image review
+
+Inspect the **actual generated image** separately from the image prompt. Evaluate whether it illustrates the article’s central idea (not just its subject), and whether relationships are visually demonstrable (consistent with S50/S51 observations). Note any over-ambitious/over-packed composition, unclear relationships, generated text drift, or visual emphasis that contradicts the article’s central claim.
+
+#### 13. Article ↔ prompt ↔ image consistency
+
+Check that important article facts and semantics survive into the image prompt and then into the generated image. Pay particular attention to numbers, technical concepts, named entities, relationships, and claims that could be visually misrepresented. (The article→image factual-consistency checkpoint is documented as a future checkpoint in §7A; as a **review check**, reviewers should note inconsistencies even though it is not currently an enforced pipeline rule.)
+
+#### 14. Output defect vs pipeline defect
+
+Explicitly distinguish:
+- **Output defect** — an isolated issue in this specific generated/published output (one-off generation failure).
+- **Pipeline defect** — a recurring/systemic issue indicating a problem with prompts, gates, pipeline logic, or architecture.
+
+Do not recommend a pipeline change merely because a single article is defective.
+
+#### 15. Batch evidence
+
+When reviewing multiple posts, **accumulate evidence across the batch** before recommending changes to generation logic, prompts, gates, or architecture. Patterns matter more than single examples.
+
+#### 16. Smallest justified correction
+
+Prefer the **smallest justified correction** that addresses a demonstrated recurring problem. Do not redesign healthy infrastructure to solve an isolated output defect.
+
 
 ### How to Use #scout-editor
 Post messages to the `#scout-editor` Slack channel. Scout reads it at the start of every run (last 8h window).
@@ -828,54 +1001,121 @@ Original setup reference (for historical context):
 
 ## 7A. CURRENT OPEN ISSUES
 
-*Restructured in Session #56. This section lists only what is genuinely still open, verified against live
-production on 2026-09-27. Everything already finished moved to §7B Historical Session Records. No item
-here was acted on in Session #56 — it is a reconciled status list, not a work plan. Felix's instruction
-for this pass was explicitly "do not fix any of them".*
+*Reconciled 2026-10-02 (Documentation Refresh, Phase 1) against live production. Every claim below is
+dated and re-verified: GHA run history (`head_sha` + logs), `llm_request_ledger` via PostgREST, the `posts`
+table, and a live Gemini API call. Items the 2026-09-27 pass recorded as unverified are now closed; items
+proven wrong are corrected. This section remains a status list — **nothing here was fixed in Phase 1.**
+Per Felix's instruction, this phase makes the documentation truthful only.*
 
 *Status key: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Deferred / Later*
 
+### Live re-verification — 2026-11-05 (Session #57, read-only)
+
+*Re-checked one month after the 2026-10-02 reconciliation. Read-only: GHA run list via `gh`, `posts` /
+`pending_posts` / `llm_request_ledger` / `curated_source_registry` via PostgREST, and a Gemini models-list
+call. No production code, config, or data was changed.*
+
+| Signal | Live value (2026-11-05) | Reading |
+|---|---|---|
+| Published posts | **655** | Site is publishing continuously |
+| Posts/day, 2026-10-22→11-05 | **3.54/day** (46 posts / 13 active days) | Recovered from the 2.2/day post-`7133ebc` window — the dip was not permanent |
+| Latest published | 2026-11-05T18:27Z (`ai-models`) | Same day as this check |
+| GHA runs sampled | 12/12 green, all `head_sha 7133ebc` | Phase 1, Phase 2, podcast, homepage monitor all healthy |
+| LLM ledger, last 30d | 385 rows: Groq **178 success / 59 fail**; pipeline **95 publish-outcome success / 53 gate-check fail**; **0 Gemini** | Groq remains the sole serving provider |
+| Gemini key | **HTTP 200** (models list, 50 models) | Reachable, still not invoked |
+| Phase 1 gate-check failures, last 30d | **53** | Loss is still concentrated in generation |
+| Of those, "Why this matters"-related | **40 / 53 (75%)** (20 pure WTM + 20 WTM-plus-too-short) | `7133ebc` remains ineffective a month later |
+| `pending_posts` | `pending_image` 0 · `generating` 0 · `failed` 11 · `published` 656 | No live queue blockage; the 11 failures are historical |
+| Curated registry | **22 enabled / 18 feed-bearing** | Matches the Session #45 read; seed v4 is 24 sources |
+
+**What this changes:** nothing in the Critical list is closed. The WTM prompt/gate loss is now confirmed
+over a full month, not a five-run sample, and the throughput drop recorded on 2026-10-02 has since recovered
+to 3.54/day — so the drop should not be attributed to `7133ebc` alone. The uncommitted working-tree items
+(S51 image rules, forensic docs, root documentation) are unchanged.
+
 ### 🔴 Critical — active production problems
 
-- [ ] **Gemini fallback provider is dead (HTTP 503).** Verified 2026-09-27 on run `36288813810`: the
-  configured `GEMINI_API_KEY` returns HTTP 503 for every model, so the Groq TPD pre-check has nothing to
-  fall back to and **production runs Groq-only with no redundancy**. The Session #35 architecture assumes
-  Gemini is available as backup capacity; that assumption no longer holds. Fix path is the same as the
-  last key rotation — a new GCP project + key, because the previous one hit Tier-1 billing after ~28 days
-  on free tier. Alternative is an explicit decision to accept single-provider operation.
-- [ ] **The "Why this matters" gate is the single largest production loss, and the fix is not deployed.**
-  Session #53 measured it as the #1 post-generation defect: **70 of 132 quality-gate rejections** were
-  content missing the required closing. Live run `36288813810` failed the gate in all three categories.
-  The prompt-side fix is committed as `7133ebc` (tightens the instruction in all 3 digest paths, 4 sites:
-  `generateDigest()`, `synthesizeBlendDigest()`, and both branches of `generateEditorialDigest()`) but is
-  **committed locally and NOT pushed** — pushing it is a Felix decision. Until it is pushed *and* a
-  production run confirms the gate rejection rate falls, the dominant loss mechanism stays live.
-- [ ] **STEP 7b (Editorial Eligibility Gate) is pushed but has not yet run in production.** `ddb8231` is on
-  `origin/main`; as of 2026-09-27 every recorded GHA run still reports `head_sha 6140f56`, so no run has
-  exercised the gate. Its only validation is the offline 65-story gold set
-  (`test-editorial-eligibility.mjs` 8/8; `verify-module.mjs` = STRONG 30/30 kept, RSS-lane Weak 0/28).
-  **First verification point: the next scheduled Phase 1 run (`0 */6 * * *`) should report `head_sha`
-  `ddb8231`.** Watch for STEP 7b skips and for any fail-open log lines.
+- [ ] **The `7133ebc` "Why This Matters" prompt fix was INEFFECTIVE — the gate loss is unresolved.**
+  `7133ebc` (prompt tightened in all 3 digest paths, 4 sites) first executed in the Phase 1 run of
+  **2026-09-27T16:01**. Every Phase 1 quality-gate rejection after that deployment still failed on
+  `missing "Why this matters" closing`:
+
+  | Timestamp | Failure reason |
+  |---|---|
+  | 2026-09-27T16:04 | missing "Why this matters" closing |
+  | 2026-09-28T22:48 | too short (336 words) + missing WTM |
+  | 2026-09-29T11:50 | too short (377 words) + missing WTM |
+  | 2026-10-01T03:09 | too short (319 words) + missing WTM |
+  | 2026-10-01T03:11 | too short (187 words) + missing WTM |
+
+  **5 of 5 post-deployment Phase 1 gate rejections still failed WTM.** Scoping from `ddb8231`
+  (2026-09-27T11:01, the first run carrying any gate change) instead gives **7 of 7** — that is the origin
+  of the "7/7" figure. Both scopings are recorded so the number is reproducible; neither shows any
+  improvement from the prompt. Phase 2 is **not** the loss point: all 13 `publish-outcome` rows since
+  2026-09-27 are `success=true`, with zero Phase 2 gate rejections. The loss is entirely Phase 1
+  generation. **No fix implemented in Phase 1.**
+
+- [ ] **The prompt and the gate now actively contradict each other.** `gemini.js:374` instructs the model
+  **not** to force a separate "Why this matters" section, while the gate at `quality-gate.js:59` and
+  `aitrends.ng/lib/qualityGate.ts:44` requires the literal substring `/why this matters/i.test(content)`.
+  The gate therefore rewards a bare heading with no body — confirmed in production: the Gemini 4 Argon post
+  (`3291ed71-31ed-41c8-b754-c4ff41e4253f`, published 2026-10-01T00:59) ends with a literal
+  `<p>Why This Matters</p>` and **nothing after it**, and still passed. This structural conflict is a
+  plausible reason prompt tuning alone has not moved the metric. **Gate-contract change is explicitly
+  DEFERRED to a later phase — do not implement from this entry.**
+
+- [ ] **`scout.js:28` omits `passesQualityGate` from its `quality-gate.js` import, but calls it at
+  `scout.js:264` and `scout.js:296`.** Verified 2026-10-02 against the working tree. This is a live
+  `ReferenceError` waiting to fire on the **editorial (Slack submission) lane only** — the RSS lane uses
+  `qualityGateFailures()` (`scout.js:663`, `scout.js:692`) and is unaffected. Impact: a paid LLM digest is
+  generated, then the line throws, the row is left `pending`, and the next run re-spends on the same
+  submission — an unbounded repeat-spend loop. `editorial_queue` currently has **no pending rows**, so it is
+  latent, not firing. The one-line import fix is known and trivial but is **production code — NOT changed
+  in Phase 1**, per instruction.
+
 - [ ] **Bing-News-Anthropic feed produces ~19-character full texts — the largest upstream defect.**
   Session #54 funnel forensic: this single feed drove ~32% of all `scout_memory` marks and **33 of 39 SWS
   rejects**. It is a search-results feed, so `fetcher.js` extracts almost nothing, so the story can never
-  clear SWS or STEP 7b. It burns the funnel at the very first filter. Deliberately NOT fixed in this pass.
-- [ ] **Last audited run produced zero posts.** Run `36288813810` (2026-09-27) queued nothing despite a
-  healthy runner — the run completed successfully and simply published nothing. Root cause is upstream
-  (feed quality) plus the post-generation gate, not GHA capacity.
-- [ ] **`gemini-podcast.js:192` reads `parts?.[0]?.text` directly.** The Session #42 `extractGeminiText()`
-  fix was never applied to the podcast path. Currently latent *only* because Gemini returns 503; it
-  becomes a live silent-failure bug the moment a fallback provider is restored and the model returns
-  multi-part thinking output. `.validate-blend3.mjs:20` has the same read.
+  clear SWS or STEP 7b. It burns the funnel at the very first filter. **Still open — not fixed in Phase 1.**
 
-### 🟠 High — blocked on a Felix decision, or uncommitted state
+### 🟠 High — corrected status, deferred decisions, and uncommitted state
 
-- [ ] **Decide whether to push `7133ebc`.** It is the fix for the #1 production loss and it is sitting
-  local, ahead of `origin/main` by one commit. Blocked only on Felix's explicit go-ahead.
+- [x] **Gemini is NOT dead. CORRECTION — the 2026-09-27 "HTTP 503 / Groq-only / no fallback" claim was
+  wrong.** A live call on **2026-10-02** to the configured model (`gemini.js:8`, `gemini-3.5-flash`)
+  returned **HTTP 200**. Gemini is reachable and the fallback capacity assumed by the Session #35
+  architecture is present again. ⚠️ **Caveat, stated precisely:** the ledger shows **0 Gemini rows in the
+  last 14 days** (377 rows total; all real LLM calls are Groq — 174 success / 71 failure; the 132
+  `pipeline` rows are pseudo-events). So Gemini is *available but never invoked* — it is only reached when
+  Groq fails or TPD-exhausts, and Groq has been succeeding. **The fallback is therefore verified reachable
+  but still UNTESTED in production**, because its trigger condition has not fired. Do not re-describe this
+  as either "broken" or "proven working in production."
+- [x] **STEP 7b is DEPLOYED and demonstrably working in production.** CORRECTION — the 2026-09-27 claim that
+  "no run has exercised the gate" was true then and is now superseded. `ddb8231` first executed
+  **2026-09-27T11:01**, and every Phase 1 run since carries `7133ebc`. Live log evidence confirms both
+  outcomes and both rejection reasons are occurring:
+  - `✅ ELIGIBLE — signals: money:magnitude:$42 billion | cap:... | freshness:ok`
+  - `⏭️ INELIGIBLE — reasons: editorial_no_source_consequence` → `SKIPPED_BEFORE_GENERATION`
+  - `⏭️ INELIGIBLE — freshness:duplicate-of:... | reasons: editorial_not_fresh` → `SKIPPED_BEFORE_GENERATION`
+
+  The freshness channel is firing against real previously-published topics. Offline gold-set validation
+  (`test-editorial-eligibility.mjs` 8/8) is no longer the only evidence. **No fail-open lines were observed
+  in the sampled runs.**
+- [ ] **Throughput observation — recorded as an OPEN QUESTION, not an editorial verdict.** Measured from
+  the `posts` table: **5.9/day** over the 7 days before `7133ebc` (2026-09-20→26, 41 posts) versus
+  **2.2/day** over the 6 days after (2026-09-27→10-02, 13 posts). Earlier sessions quoted the pre-window
+  as "6.3/day"; the difference is window boundary, not a contradiction — a wider 33-day pre-window that
+  includes the August starvation stretch averages 1.4/day. **Do not treat the drop as proof that `7133ebc`
+  caused it, nor as proof that the gates are "too strict."** Three mechanisms are live simultaneously and
+  are not yet separated: (a) the `7133ebc` WTM prompt, (b) STEP 7b, (c) SWS. Separating them requires the
+  attribution work deferred to a later phase.
+  **2026-11-05 update:** the later window has recovered — **3.54/day** over 2026-10-22→11-05 (46 posts /
+  13 active days), with 5 posts published on 2026-11-05 itself. The 2.2/day figure was a short post-deploy
+  dip, not a new steady state. The WTM loss, however, persists (40 of 53 gate-check failures in the last
+  30 days are WTM-related). The attribution question is still open.
 - [ ] **S51 image-prompt refinement is uncommitted in the working tree** — 3 rule blocks
   (ONE CENTRAL VISUAL IDEA / RELATIONSHIPS MUST BE VISUALLY DEMONSTRABLE / TEXT MUST BE PURPOSEFUL) across
   all 3 `IMAGE_PROMPT RULES` sections of `gemini.js`. Deliberately excluded from `7133ebc` to keep that
-  commit WTM-only. Deploying it needs a separate decision.
+  commit WTM-only. **NOT implemented in Phase 1** — still awaiting a separate Felix decision.
 - [ ] **Untracked forensic deliverables are uncommitted** — `FORENSIC_REPORT.md`, `TAVILY_FORENSIC_REPORT.md`
   (scout-agent), plus the S53/S54 reports in the project root. Evidence, not infrastructure; commit or
   discard at Felix's discretion.
@@ -901,6 +1141,10 @@ for this pass was explicitly "do not fix any of them".*
   either number as current without a fresh read.
 - [ ] **`TRAINING_MANUAL.html` table of contents has a gap** — the later chapters are not linked from the
   contents block. Cosmetic, but it is the navigation surface for the training material.
+- [ ] **`gemini-podcast.js:192` reads `parts?.[0]?.text` directly.** The Session #42 `extractGeminiText()`
+  fix was never applied to the podcast path. ⚠️ **The old "latent only because Gemini returns 503" reasoning
+  is obsolete** — Gemini is reachable again (above), so this becomes live the moment the podcast lane serves
+  Gemini output on a thinking model. `.validate-blend3.mjs:20` has the same read. Not changed in Phase 1.
 
 ### 🔵 Deferred / Later — backlog, no current trigger
 
@@ -910,9 +1154,14 @@ for this pass was explicitly "do not fix any of them".*
 - [ ] YouTube transcript proxy for GHA IP ranges
 - [ ] PDF ingestion (manual paste is current fallback)
 - [ ] **Adaptive blend digest count (Session #40 — evaluate only, DO NOT implement yet)** — Felix's explicit request: investigate whether the blend should stop being fixed at a fixed source count and become adaptive. Evaluation dimensions: (a) minimum required sources before synthesis, (b) a target-confidence signal that enough evidence has been gathered, (c) a maximum cap to bound spend. Objective: stop digest generation once sufficient evidence is gathered rather than always consuming the max. **Session #41 progress:** the fixed max is now 5 (was 8) via `MAX_BLEND_SOURCES` (P0-3), and `blend_sources` on the ledger synthesis rows + the SWS confidence bands are the future evidence base for the adaptive rule. Placeholder in code: `gemini.js` `digestBlendSources` source loop.
+- [ ] **Deferred to a later phase by explicit instruction (2026-10-02), NOT to be implemented now:**
+  semantic-type preservation of technical/numerical claims; the re-coverage taxonomy
+  (duplicate vs repackaging vs follow-up vs substantive development); the article→image
+  factual-consistency checkpoint; expanding `STORY FIRST` beyond `generateDigest()` (it is currently absent
+  from the blend and editorial paths); and the WTM gate-contract change. These are recorded here so the
+  deferred scope stays visible, and were deliberately left out of Phase 1.
 
 ---
-
 ## 7B. HISTORICAL SESSION RECORDS
 
 *Session #56 moved every completed item here. This is the historical record of finished work — kept for
@@ -1127,6 +1376,146 @@ e
 - ✅ **Orphaned file removed** — `command (ypco5u)` (an unexecuted heredoc script accidentally saved as a literal file in the project root by a prior session) deleted after confirming the TRAINING_MANUAL.html edits it described were already applied.
 - ✅ **Docs updated chronologically per Felix's explicit instruction** — no past session entries rewritten; every correction added as a new dated note explaining what was found and why, rather than silently edited in place.
 
+### ✅ Completed — Session #20 (23 June 2026)
+Felix added 3 items to the to-do list, no code changes. (1) Google Alert for "AITrends.ng"/`site:aitrends.ng` — manual external setup, logged under Medium. (2) Homepage change-detection monitor (alert on title/description change, new nav/category links, non-AI keywords) — logged under Medium with two implementation options noted (third-party service vs. a custom scout-agent script following the project's existing build-it-yourself pattern), decision deferred to implementation time. (3) Tagline + footer rewording — exact old/new text specified by Felix; footer wording confirmed via clarifying question (footer mirrors the new tagline text, not separate wording). Logged under High, not yet executed — Felix said "add to to-do list," not "do it now."
+
+### ✅ Completed — Session #21 (23 June 2026)
+Executed the tagline/footer to-do from S20. New text "AITrends.ng — insights, and lessons for the future." applied to layout.tsx (description, og:description, twitter:description), about page subtitle, and Footer.tsx. Corrected Felix's "AItrends.ng" typo to the established brand spelling and normalized "--" to "—"; footer keeps its existing styled brand element and only swaps the trailing copy to avoid the brand name rendering twice in one line. Typecheck + production build clean; confirmed live via curl on the meta description. Commit `2c76eeb`.
+
+### ✅ Completed — Session #22 (23 June 2026)
+Built and shipped the homepage change-detection monitor from the S20 to-do. Felix chose the custom-built option over a third-party service (the off-topic-keyword check needed custom logic regardless). New `homepage-monitor.js` (independent of Phase 1/2, own GHA schedule every 6h), new `homepage_monitor` Supabase table (single-row snapshot, SQL written to `aitrends.ng/supabase/add-homepage-monitor.sql`), new `notifyMonitorAlert()` in slack.js reusing the existing webhook (sidesteps the chat:write scope gap from Session #19 entirely). Checks: title/description change, nav link add/remove (`nav.site-nav a`), and homepage post titles against an incident-driven off-topic keyword list (MTN, BNPL, football/FIFA — sourced from documented Session #8 incidents). Hit the same PostgREST schema-cache gotcha from Session #18 when creating the table — walked Felix through the SQL Editor location and the separate `NOTIFY pgrst, 'reload schema';` step explicitly, step by step, since the table wasn't visible via the API immediately after the first attempt. Verified live end-to-end: baseline saved on first run, second run correctly reported no changes, then a simulated change (patched directly in Supabase, not the live site) correctly triggered a Slack alert and the snapshot self-healed back to the real state on the next run. Commits: `e9fc094` (scout-agent), `65665a8` (aitrends.ng SQL reference).
+
+### ✅ Completed — Session #23 (23 June 2026)
+Worked the 🔴 Critical to-do list. (1) HN Anthropic feed: confirmed hnrss.org 502 live, swapped for Bing News RSS, added `resolveTrackingLink()` to scout.js so Bing's click-tracking redirect resolves to the real publisher URL before storage (not the tracking link) — verified end-to-end against MSN/Yahoo/TheStreet articles. (2) ai-models fabrication risk: added a category-scoped extra-strictness clause to both `generateDigest()` and `generateBlendedDigest()` in gemini.js — model/product announcements from OpenAI/Google/HuggingFace/DeepMind no longer pass the Africa GATE on a bare "supports African languages" capability claim; requires an explicit named African deployment/partnership/initiative. Targets the documented Sierra Leone/DeepMind Gemma fabrication exactly; that existing live post itself was deliberately left untouched (flagged for a separate unpublish-or-rewrite decision, not a cleanup-script fix). (3) Old-post retroactive cleanup, scoped via three rounds of Felix's explicit sign-off before any write: stripped markdown asterisks from all 54 affected posts (same regex `publisher.js` already uses; verified 0/67 remain). Audited all 287 source_urls by fetching page titles and checking AI-signal keywords rather than comparing to the post's own metaphorical title; manually cross-checked for false negatives (URLs that were actually the correct primary source) before removing 68 confirmed-irrelevant URLs across 35 posts — sports/crime/politics/job-listings/directory-pages/unrelated-business-news (e.g. "Panic as Eriksen collapses", a movie review, Binance trading-competition pages); kept 19 genuine sources a naive keyword check would have wrongly flagged; left 32 unverifiable URLs untouched. Detected exact-phrase keyword stuffing (4–7 word phrases repeated 3+ times verbatim — the underlying pattern behind the old "×7" bold-stuffing issue, now visible in plain text) in 36 of 67 posts; sent the 25 with a non-generic phrase repeated 5+ times to Gemini for a fact-preserving rewrite capping repetition at ≤2 mentions. 15 of 25 completed, spot-checked for fidelity, and written; the remaining 10 are still outstanding — mid-session the work hit Google's Gemini free-tier hard daily cap (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, 20 requests/day for gemini-3.5-flash) from the combined volume of rewrite attempts. Nothing was written for those 10; the failures were silent 429s with no content risk. Flagged for Felix: if this `.env` key is the same one configured in GitHub Actions, today's remaining scheduled Phase 1/podcast runs may also 429 until the quota resets — open question whether production uses a separate key or needs a billing/quota upgrade given normal daily operation alone may already approach this cap.
+
+### ✅ Completed — Session #24 (24 June 2026)
+Two threads. (1) Slack `chat:write` fix verified end-to-end: after Felix added the scope and reinstalled the app, a live `auth.test` call confirmed `chat:write` now present in the granted scopes (bot user `scout_editor`); the GitHub Actions `SLACK_BOT_TOKEN` secret was then synced directly from the verified local `.env` value via `gh secret set` (not pasted separately) to guarantee the two are byte-identical. Closes the gap open since Session #9. (2) Felix's long-pending Google Doc corrections finally applied — the same doc Claude Code had wrongly auto-actioned back in Session #7 (the incident that established the "never act on a document without explicit instruction" rule). Read the doc on request first, reported its 3 items and what Session #23 had already incidentally fixed vs. missed, then got Felix's explicit go-ahead per item before writing anything. Found a real gap in Session #23's own cleanup: 2 businessday.ng source_urls on the Zimbabwe/SA post survived because both titles contained "data" — a word that was on the AI-signal allowlist used to judge relevance, even though neither article was about that post's actual topic. Removed both. Also found the banned "For developers in Lagos, Accra, and Nairobi" template phrase (banned going forward since Session #7) still live in 6 of 121 published posts, not just the one example post named in the doc — fixed 4 of 6 via Gemini rewrite (spot-checked, written); the other 2, including Felix's own linked example post, hit the same Session #23 Gemini quota wall and remain outstanding.
+
+### ✅ Completed — Session #25 (25 June 2026)
+Felix asked whether the remaining quota-blocked de-stuffing work could be scheduled, and whether checks existed to prevent needing this kind of cleanup again. Checking the second question surfaced a real, currently-live gap: grepped gemini.js for the Session #7 banned-phrase/anti-repetition guards and found zero matches — the Session #8 prompt simplification had silently dropped them, meaning new posts could still reproduce the exact problem just spent two sessions cleaning up. Felix's response reframed the whole problem: a narrow phrase-ban is whack-a-mole, because the forced phrases were never the root cause — the Africa-relevance mandate itself was, since Gemini would manufacture a connection by whatever means necessary whenever a genuinely non-Africa story still had to clear the gate. His decision: drop the Africa-first mandate entirely, make the site general-AI, leave all 121 existing published posts untouched regardless of relevance. Used EnterPlanMode given the scope (two repos, prompt logic, branding copy); two Explore agents mapped every Africa-dependency across scout-agent (gemini.js's gate blocks, scout.js's sentinel handling, feeds.js's 14 Africa + 12 global feed split, confirmed scout-podcast.js already fully general) and every Africa-branding location across aitrends.ng + CLAUDE.md (14+ locations across 9 files); a Plan agent validated the closing-sentence redesign against the existing Session #7 "TITLE VARIETY" precedent before any code was touched. Felix made three explicit scope calls before implementation: leave `EVERGREEN_ENTITIES`'s Africa scoring-boost terms alone (harmless tie-breaker), reject a fixed "Bottom line:" replacement label for the closing sentence ("too obvious, predictable... sometimes come out forced" — correctly identifying it as the same forcing problem in miniature), and keep `feeds.js` exactly as configured. Removed the full Africa GATE block (including the now-moot Session #23 ai-models strictness clause) from `generateDigest()`/`generateBlendedDigest()` in gemini.js; new closing-sentence instruction mandates varied construction (implication/forward-looking/skeptical/question) with fixed labels explicitly banned; removed the dead `SKIP_NO_AFRICA_RELEVANCE` sentinel check in scout.js. Verified with one real `runScout()` run rather than a batch (quota-conscious): 2 posts queued, one genuinely Africa-relevant on its own merits (Nigeria's NITDA digital sovereignty strategy) and one purely global with zero forced framing (Anthropic vs. Alibaba) — both closing sentences varied in construction, no sentinel leakage, no forced phrasing, confirming the gate removal works as intended rather than just assumed. Updated branding/copy across both repos (layout.tsx, about page, Sidebar, NewsletterSignup, feed.xml, CLAUDE.md Section 1 mission/tagline/voice/audience, the Gemini Prompt Mandate subsection) — `npm run build` clean. Marked the now-superseded Session #23 to-do item and a now-moot Medium to-do item with dated annotations rather than rewriting their original text, per this file's own append-only convention.
+
+### ✅ Completed — Session #26 (25 June 2026)
+Three threads. (1) Felix confirmed completing the Search Console sitemap submission and Google Alert setup himself — marked both done in the 🟠 High / 🟡 Medium to-do lists. (2) Scheduled the 12 remaining quota-blocked cleanup posts (10 de-stuffing + 2 forced-phrase, from Sessions #23–24) as a one-time cloud routine via the `/schedule` skill for 2026-06-27 08:00 UTC, since the cloud agent runs in an isolated environment with its own git checkout — wrote a self-contained prompt giving it the exact detection methodology (regex/phrase-repetition logic, not a fixed post list, since the live set could shift) rather than relying on it remembering specifics from this conversation; flagged that the cloud environment's Gemini/Supabase secrets weren't confirmed configured. (3) Built site search for aitrends.ng — live dropdown-as-you-type in the NavBar searching title+excerpt+tags, per Felix's explicit UX choices. New `app/api/search/route.ts` (GET, public Supabase client, `.or()` on ilike title/excerpt + `.cs.` exact-match on tags, comma/paren sanitization since those are PostgREST `.or()` syntax characters), new `components/SearchDropdown.tsx` (debounced fetch mirroring the existing `NewsletterSignup.tsx` pattern, click-outside + Escape close, mobile collapses to a tap-to-expand icon rather than hiding search entirely), `NavBar.tsx` + `globals.css` updated to match. Verified the backend live against real Supabase data (title match, tag match via a post whose tags — not title — contained the query, the 1-char guard, comma-injection sanitization, no-match case all correct) and confirmed the component renders server-side; no headless browser tool (chromium-cli/Playwright) was available locally and this is Felix's real Mac rather than a sandboxed container, so rather than silently downloading a fresh Chromium binary for a one-off check, asked Felix to do the interactive click-through himself — he confirmed it works. (4) Felix flagged two formatting issues on the YouTube podcast pipeline's posts: literal "Main Idea 1/2/3..." labels instead of real subheadings, and a separate "Notable Quotes" list instead of quotes woven into the prose naturally. Fixed both in `gemini-podcast.js`'s prompt (the label instruction now explicitly forbids "Main Idea N" prefixes; the quotes section instruction now tells Gemini to weave verbatim quotes into the relevant theme section's prose, reserving `<blockquote>` for the rare standout quote rather than the default). Demonstrated the fix on one real published post ("The AI-First Playbook: How Peter Yang Runs a 140K Newsletter Solo") by manually restructuring its existing content rather than spending a Gemini call — dropped the "Main Idea N:" prefixes from its four section headings and rewove all 5 previously-listed quotes into the body paragraphs they actually support (verified live: zero "Main Idea" or "Notable Quotes" text remains, all section headings now read as natural descriptive subheadings).
+
+### ✅ Completed — Session #27 (25 June 2026)
+Felix asked a detailed operational question: when Gemini's daily quota is exhausted, does the pipeline degrade gracefully, or do cron jobs keep retrying and accumulating failed attempts/error noise until the quota resets? Investigated rather than assumed: confirmed gemini.js's production retry logic doesn't actually retry-storm on 429 (only 503 triggers retry+fallback) — that risk was specific to ad-hoc cleanup scripts, not the live pipeline. But found three real problems: (1) scout.js's RSS fetch + Tavily search + fetchContent all run *before* the Gemini call per category, so the expensive upstream work is wasted every 6h while quota is dead; (2) each category's try/catch swallows the error and never re-throws, so `runScout()` exits 0 (success) even when every category failed — meaning the GHA "Notify Slack on failure" step (`if: failure()`) never fires, so the degradation is completely silent, not just noisy; (3) no quota-state tracking existed anywhere to let a future run skip early. Also discovered the model fallback only triggers on 503, never 429 — meaning `gemini-2.5-flash`'s entirely separate daily quota bucket had never been touched by any of Sessions #23–24's cleanup work despite repeatedly hitting 429 on `gemini-3.5-flash` — a near-free fix on its own. Discussed design before implementing (Felix: "Let's talk through first"): reactive detection chosen over proactive self-counting (a self-counter can't see manual one-off work hitting the same Google-side quota, so it would give false confidence); full-run skip chosen over partial skip (trades a rare missed short-lived RSS item for fully eliminating wasted Tavily/fetch calls); alert once per day, not per skipped run. Built: `gemini.js`'s three duplicated retry blocks (generateDigest, generateBlendedDigest, generateEditorialDigest) extracted into one shared `callGeminiWithFallback()`, now falling back to 2.5-flash on 429 too, only recording a cooldown when *both* models 429 in the same attempt; discovered `gemini-podcast.js` had its own independent copy of the identical retry logic (same shared quota) and refactored it to reuse the new shared helper instead of tripling the fix; `memory.js`/`slack.js` gained `isGeminiQuotaCooledDown()`/`setGeminiQuotaCooldown()` (single-row Supabase state, same pattern as `homepage_monitor`; a cooldown from a previous calendar day is treated as stale rather than computing Google's exact reset time) and a once-per-day Slack alert; `scout.js`/`scout-podcast.js` both check the cooldown before any work and skip the entire run if already exhausted today, and `break` out of remaining categories/channels immediately if exhaustion is hit mid-run rather than continuing to burn calls on items that will fail the same way. SQL migration written to `aitrends.ng/supabase/add-gemini-quota-cooldown.sql`, mirroring `homepage_monitor`'s exact single-row RLS pattern. Felix hit the same "clear the editor" confusion as Session #22 (thought it meant clearing the table, not the SQL Editor's text box) — clarified explicitly. Fully verified live against the real table before shipping: no-cooldown state, new-cooldown-sets-true, same-day-repeat-returns-false (dedup for the alert), and a cooldown timestamped to a previous day correctly treated as stale — test row deleted afterward so the real pipeline starts clean. Closed the loop with one real `runScout()` execution confirming the Session #25 Africa-gate removal and this session's quota protection work correctly together in production code: 2 posts queued (one genuinely Africa-relevant on its own merits, one purely global with zero forced framing), no sentinel leakage, no forced phrasing.
+
+### ✅ Completed — Session #28 (13 July 2026)
+Diagnosed why Scout published zero posts since July 7: `isGeminiQuotaCooledDown()` in memory.js compared UTC calendar dates (`hitDate === today`), but Gemini's quota resets at midnight Pacific, not midnight UTC. The `~01:47 UTC` GHA cron run (6:47 PM PT) always passed the cooldown check (new UTC day), tried Gemini (still exhausted — still previous PT day), hit429, and re-set the cooldown with the new UTC date. This blocked the `05:00 UTC` run (=midnight PT) when the quota actually reset, and every subsequent run that UTC day. The cooldown was self-perpetuating: each day's first run to pass the check would re-set it before midnight PT, blocking the fresh-quota window permanently. Fix: replaced UTC-date comparison with elapsed-time staleness check (`Date.now() - hit_at < 20 hours`). 20-hour threshold is timezone-agnostic, covers worst-case PT-to-reset gap. After fix is live: `DELETE FROM gemini_quota_cooldown WHERE id = 1;` to clear the stuck row. Zero posts published July 7–13; quota was genuinely exhausted but the self-resolve mechanism was broken.
+
+### ✅ Completed — Session #29 (15 July 2026)
+Root cause confirmed: billing, not timezone. Old Gemini key hit Tier 1 billing after ~28-day free trial — all429s were billing errors. Created new GCP project, new API key. Discovered `gemini-2.5-flash` deprecated for new keys (404). Used `gemini-3.5-flash` instead (200 confirmed). Added Groq Llama 3.3 70B as cross-provider fallback (14,400 req/day free). Rewrote `gemini.js`: `callGroq()` translates Gemini contents→OpenAI messages, `normaliseGroqResponse()` wraps Groq output in Gemini shape, no caller changes needed. Updated GH Actions secrets (GEMINI_API_KEY + GROQ_API_KEY). Cleared cooldown row, triggered manual run — 90 fresh articles, 2 posts queued, 1 published. Pipeline alive after 8 days of silence. Known: 3.5-flash will hit same 28-day billing cliff; fix is same (new project, new key).
+
+### ✅ Completed — Session #30 (18 July 2026)
+Diagnosed why 109 posts failed in Phase 2: HF Inference API deprecated FLUX.1-schnell (HTTP410 "The requested model is deprecated and no longer supported by provider hf-inference"). Tested every HF provider (nscale, together, fal-ai) — all return 400 "not supported by provider". HF Inference API has completely dropped text-to-image support. Default provider switched to AI Horde (free, SDXL, already built). `image-providers/index.js` default changed from `huggingface` to `aihorde`. `huggingface.js` updated to detect 410 and throw clear error. `.env` updated. `IMAGE_PROVIDER` GH Actions secret changed to `aihorde`. Reset all109 failed posts + 2 stuck pending_image posts: `status='pending_image', attempts=0, provider='aihorde'`. Cleaned up stale cooldown row. Added Groq fallback failure Slack notification (`notifyGeminiFallback('GROQ_FAILED', ...)` in gemini.js catch block). Short paragraph style confirmed working in latest posts (12/12 paragraphs 1-2 sentences). Pipeline: Gemini 3.5 Flash primary + Groq Llama 3.3 70B fallback; AI Horde images. Known tradeoffs: SDXL quality (not FLUX), ~30min queue wait (anonymous), but free. Fal.ai ($0.003/image, FLUX Schnell) available as upgrade.
+
+### ✅ Completed — Session #31 (19 July 2026)
+Server-side pagination built: new `/api/posts/list/route.ts` (offset+limit pagination, optional category filter), PostGrid.tsx rewritten to fetch next batch via API on "Load More" click, category/[slug]/page.tsx passes category prop. Build clean. Commit `f1f8062`. Push blocked — remote URL contains PAT belonging to `FAIT-Pro` which lacks push access to `FAIT-Blog/aitrends-ng` (HTTP 403). Felix needs to update remote URL with valid PAT. Documentation quality correction: Felix flagged summary-level updates; all three docs re-read from scratch, SESSION_LOG.html and TRAINING_MANUAL.html rewritten in established verbatim format with full code snippets.
+
+### ✅ Completed — Session #32 (22 July 2026)
+Adopted AEIF editorial constitution (816-page PDF): editorial identity, voice rules, evidence distinction, "Why this matters" closing added to all 3 Gemini prompts in `gemini.js`. Soft quality gate added to `publisher.js` (h3 check, word count 400–2500, banned words, "Why this matters" closing). `complete.js` updated to handle null return from quality gate. About page rewritten (`app/about/page.tsx`): leads with mission, 6 new sections (Mission, Philosophy, How We Work, Who We Write For, Editorial Principles, Why We Built It). Gemini key dead (HTTP 401) — switched to Groq-only mode: `callGeminiWithFallback` skips Gemini entirely when `GEMINI_API_KEY` unset, calls Groq Llama 3.3 70B directly. New Groq key `gsk_[REDACTED]` synced to `.env` and GitHub Actions. `llama-3.3-70b-versatile` initially blocked at org level (only `llama-3.1-8b-instant` worked); Felix enabled 70B in Groq org settings, confirmed working. Commits: `5773a81` (scout-agent), `8d0e235` (aitrends.ng).
+
+### ✅ Completed — Session #33 (26 July 2026)
+Diagnosed why pipeline stopped July 24: GHA free-tier minutes exhausted (~10:00 UTC, all runs get `runner_id: 0`). Deep minute audit: downloaded all 3,338 workflow runs, computed daily rates (June: ~52/day, July: ~74/day — 42% increase), three-period analysis (normal/drought/post-fix), actual Scout run durations (~2.5 min avg due to 65s waits), recalculated totals (June: ~1,857 min, July through day 24: ~2,094 min — over 2,000 free tier). Drought period (July 8-18) burned 814 minutes with zero posts published — Phase 2 ran 671 times finding empty queue. cron-job.org history traced to Session #4 (GHA native cron unreliable, `GITHUB_TOKEN` 403 on workflow_dispatch). Found `ReferenceError: i is not defined` at `scout.js:542` — introduced in Session #32 commit `60c8410` (65s delay check used `i` but loop was `for...of` with no index). Fixed: (1) `scout.js` — replaced `i` with `catIdx` counter via indexed `for` loop, (2) `complete.yml` — reduced Phase 2 cron from `*/15` to `*/30` (saves ~48 min/day), (3) `memory.js` — added fast count check before full `getPendingPosts()` query (returns early on empty queue), (4) `complete.js` + `slack.js` — URL trimming safety (`.toString().trim()` on all URL construction). All syntax checks passed. Commit `a0af3ed`, pushed to FAIT-Blog/scout-agent. Pipeline still blocked by minutes quota — needs payment method or Aug 1 reset.
+
+### ✅ Completed — Session #34 (1 Aug 2026)
+Restored publishing after the Session #32 quality-gate contradiction. Diagnosed zero posts published since July 18: both `gemini.js` prompts said "No minimum. No inflation." while `publisher.js:39` rejects under 400 words and requires a "Why this matters" closing — all 10 posts queued July 23-Aug 1 failed the gate (8 content-failed, 1 Supabase mime `image/jpeg; charset=binary` error, 1 AI Horde job expiry). Applied Felix's full improved instruction verbatim to `generateDigest()` + `generateBlendedDigest()`: 400-1000 words, synthesis from source facts only, ban on invented facts/quotes/speculation, ban on filler/repetition to hit the count, why-it-matters/who's-affected/risks-and-opportunities guidance when source-supported. Commit `b2596f4` pushed. Phase 2 cron dropped `*/30` → hourly (`0 * * * *`) to stay under the 2,000 min/month cap (native commit `b8ec2de`; cron-job.org set to hourly manually by Felix) — accepts ~1h publish delay. Deleted all 10 stale failed `pending_posts` rows (321-330, verified `[]` after). Then traced the "Scout Podcast Phase 1" cron-job.org job: all 43 podcast runs in GHA history were native `schedule`, zero `workflow_dispatch` — it had never fired since Session #17 setup, not intentionally disabled, never verified working. PAT ruled out (Phase 2's cron-job job uses same PAT and fires 48×/day). Felix enabled it: `0 7 * * *` (07:00 Africa/Lagos = 06:00 UTC, matching `scout-podcast.yml`'s `0 6 * * *`), failure notifications on, next executions verified Aug 2/3/4. Bonus: cron-job.org's reliability may fix the native cron's ~2-3h lateness on podcast posts.
+
+### ✅ Completed — Session #35 (2 Aug 2026)
+Four threads. (1) **Cloudflare Workers AI image provider** (commit `310e87b`, new default): AI Horde deprecated as default (SDXL quality, ~30min queue wait, anonymous). Cloudflare FLUX Schnell — ~10,000 neurons/day free, no credit card, synchronous (image buffer returned in Phase 2). New `image-providers/cloudflare.js`; `IMAGE_PROVIDER=cloudflare` GH secret set; Phase 2 Cloudflare env wired into complete.yml (`1b3d9a2`); `.gitignore` + `.DS_Store` cleanup (`fd97753`). Phase 2 still uses the provider stored on each `pending_posts` row, so mid-flight provider switches never break queued posts. (2) **Phase 1 quality-gate alignment** (commit `84fa17a`): `contentWordCount()` + `MIN_DIGEST_WORDS = 400` added to scout.js — every Phase 1 path (RSS, blend, editorial) now enforces the publisher.js 400-word gate *before* queueing, with a one-time expansion retry then hard stop. Editorial failures call `failEditorialRow()` — terminal, no silent re-loop. (3) **Provider re-ordering saga — final state Groq-primary + Groq TPD skip** (commit `479e025`, undo of `5b879a8`): a same-day experiment flipped to Gemini-primary; a live re-triggered run exposed the GH `GEMINI_API_KEY` secret was the old dead key (HTTP 400 "API key not valid") while Groq sat at 99,059/100,000 TPD — run `30716509840` timed out at 15m16s, every source hitting "Both providers failed" + Slack alerts. Secret synced via `gh secret set` (SET OK, length 53); run `30728426220` validated both keys and queued post 337, but hit the 15-min cap because the blend-mode 65s Groq TPM waits were firing on Gemini-served calls. Direct Gemini live test confirmed HTTP 200 (billing unlink took effect) AND exposed the structural constraint: **gemini-3.5-flash free tier caps at 20 requests/day** (`generate_content_free_tier_requests, limit: 20`; a 50s wait still 429'd) — not engineerable, too small for 4 runs/day × 4 categories. Felix's decision: Groq Llama 3.3 70B (100K TPD) is primary, Gemini is backup capacity only. Implemented in `479e025`: `parseGroqTpd()`/`groqTpdExhausted()` parse Groq's `tokens per day (TPD): Limit X, Used Y` error format and cache module-level — once ≥95% of daily limit is learned, Groq's 3×65s retry loop is skipped entirely and Gemini is called directly; `lastServedProvider` tracker gates the blend-mode 65s TPM wait to Groq-served calls only. All three commits pushed. Post 337 ("Content Creators Confront the Cognitive Cost of Generative AI") queued in `pending_image`/cloudflare — publishes on next Phase 2 run.
+
+### ✅ Completed — Session #36 (3 Aug 2026)
+Three threads. (1) **Single-source quality gate** (scout-agent commit `e06a907`, 16:36 UTC): the gate logic that had lived as duplicated copies in `publisher.js` (Phase 2) and `scout.js`/`scout-podcast.js` (Phase 1) was extracted into one shared `quality-gate.js` (own `evaluateQualityGate()`, `contentWordCount()`, `MIN_DIGEST_WORDS = 400`) — both phases now import the same gate, so a future rule change is one edit, not three. During alignment, found posts 337/339-343 (Cloudflare-era, queued Aug 2) were **dying at Phase 2**: their content had no literal "Why this matters" heading + were <400 words, so the publisher gate rejected them while Phase 1's earlier shorter gate had let them through — the two-phase gate drift was exactly the class of bug the single-source refactor was for. Applied Felix's improved editorial instructions ("Why This Matters" compliance + podcast section headings) verbatim to `gemini.js`'s `generateDigest()`/`generateBlendedDigest()` and to `gemini-podcast.js` so Phase 1 now produces gate-passing content directly. Post 344 ("Building Africa's Industrial Base: Terra Industries and Miva Partner to Train Drone Engineers") was the first post through the aligned pipeline — passed both Phase 1 and Phase 2 gates live, published 2026-08-03 12:00:23. (Correction, Session #37: the original S36 note mis-titled post 344 as the "Content Creators" post; that was post 337, a deleted stale row — live DB confirms id 344 is the Terra/Miva post.) Deleted the 6 stale Cloudflare-era failed `pending_posts` rows (337, 339-343) whose stored content can never pass the current gate (Phase 2 never regenerates content) — failed count dropped 16 → 10. (2) **Homepage category-count query optimized** (aitrends.ng commit `2e39f76`, deployed + verified): `lib/categoryCounts.ts` uses 5 parallel `head` count queries (HTTP 206-style partial reads) instead of fetching every published row (~300+ posts) per page load; both `page.tsx` and `category/[slug]/page.tsx` wired to it. Live TTFB 3.17s; sidebar counts verified 60/28/167/47/14. (3) **Admin panel MVP** (aitrends.ng commit `1eca1e5`, 19:08 UTC, 18 files / 1371 insertions): Felix asked for a blueprint first (verified none existed — it's the backlog item), approved the MVP. Built `/admin` overview (status + category counts, latest published, queue), `/admin/posts` + `/admin/posts/[id]` (publish/unpublish/delete + full review), `/admin/pending` + `/admin/pending/[id]` (status filters, full queued-post review with quality-gate pass/fail badge). Auth: single `ADMIN_PASSWORD` env var → `/api/admin/login` (timing-safe compare + in-memory brute-force throttle) → stateless HMAC-SHA256 token in httpOnly `aitrends_admin` cookie (12h), stateless verify in `lib/adminAuth.ts`, route-group guard `app/admin/(panel)/layout.tsx` redirects to `/admin/login`. Retry (`PATCH /api/admin/pending/[id]`) resets `status='pending_image'`, `attempts=0`, `updated_at` for the next hourly Phase 2 run — but is **blocked with 422 + reasons when the stored content fails the quality gate** (verified: post 320 → `too short (128 words, min 400); missing "Why this matters" closing`), so a retry can never silently fail at publish again. `lib/qualityGate.ts` mirrors the shared gate so the badge matches Phase 2 exactly. Tested locally (build + lint clean, dev server killed): unauth `/admin` → 307, wrong pw → 401, correct → 200, posts PATCH unauth → 401. **Felix decision:** the 10 AI Horde-era failed posts (171, 317-320, 331-335) are **held, not deleted** — none can pass the current gate (403/654-word ones lack "Why This Matters"; the rest <400 words), so only Delete makes sense once Felix reviews them in the panel. **⚠️ Action needed:** `ADMIN_PASSWORD` is only a temp value (`[REDACTED]`) in gitignored `.env.local` — needs a real value in Vercel env before the panel is usable in production.
+
+### ✅ Completed — Session #37 (4 Aug 2026)
+Admin panel verified live (Felix logged in successfully). Vercel Redeploy of deployment 5731258537 confirmed `state=success`. Post-344 title discrepancy discovered and corrected across all three docs: post 344 is "Building Africa's Industrial Base: Terra Industries and Miva" (pending_posts live query + Phase 2 GHA run 30811744277 log confirmed), not "Content Creators" (that was post 337, deleted stale row). CLAUDE.md admin-panel entry updated from ⚠️ to ✅. Pipeline status: Scout Agent (Phase 1) failing — 6 of last 7 runs, both providers exhausted simultaneously (Groq TPD 99,529/100K → skip → Gemini 429 on 20/day free cap). Phase 2 healthy but queue empty. 2 posts published since Aug 1. Remedies awaiting Felix's decision. Commits: CLAUDE.md (S37 row + S36 correction + admin-panel status) pushed; SESSION_LOG + TRAINING_MANUAL Chapter 47 committed locally.
+
+### ✅ Completed — Session #38 (4 Aug 2026)
+**Story Worthiness Score (SWS) gate** — built and integrated into scout.js. Felix approved the architecture (standalone zero-LLM module gating STEP 7 before any Groq/Gemini call), then four refinements: (1) renamed to SWS, reserving generic "quality"/"worthiness" terms; (2) structured diagnostics — `storyWorthinessReport()` (Richness / Fact Density / Source Diversity / Editorial Potential breakdown + reasons); (3) rollout modes observe (default) / shadow / enforce; (4) rebalanced weighting — Felix approved **Option C: richness 0.20, facts 0.35, diversity 0.20, potential 0.25** as v1 calibration values (shifts emphasis from raw source volume to fact density + editorial potential; a long volume-padded press release now correctly fails 59 → 54 SKIP while all worthy stories still pass), plus a **High/Medium/Low confidence classification** based on distance from the 55 threshold — diagnostics only, never in the decision logic. New `scout-agent/story-worthiness.js` (config, `assessStoryWorthiness`, `storyWorthinessReport`, `confidenceLevel`, `storySignature`/`sharedEntityCount`/`storiesOverlap` title-token-keyed duplicate helpers — entity-only dedup falsely merged two distinct stories during validation). Integration (commit `27e1944`, pushed): import; `queuedStoriesThisRun` tracker init before STEP 0.5; gate before STEP 7 with `SKIPPED_BEFORE_GENERATION` log + markSeen + continue (enforce only); tracker pushes after editorial + RSS queue success. Editorial path and podcast pipeline never gated, but editorial stories ARE tracked so RSS can't duplicate Felix's picks. Validation harness `.validate-sws.mjs` replays real run 30879318255: Alibaba 91 PASS, cross-category dup BLOCKED (~9 blend calls saved), OpenAI math 63 PASS (MEDIUM), reward model 68 PASS, thin summary 15 SKIP, fluff PR 39 SKIP, long fluff PR 54 SKIP (LOW confidence — the marginal-call case). SWS cannot fix quota exhaustion — its savings are cross-category duplicates + thin/fluff stories. Observed 3-mode runs (observe/shadow/enforce) all correct.
+
+### ✅ Completed — Session #39 (5 Aug 2026)
+Post-S38 follow-up. (1) **Live pipeline audit**: posts 345–348 landed Aug 3–5 (Anthropic $10B Volta, Washington frontier-AI framework, SA mining AI, Alibaba Qwen3.8-Max); post 348 body spot-check passed (grounded facts, clean h3s, "Why this matters" closing, 5 sources, no forced phrases); no general-news drift in the recent window. (2) **Verify OG meta tags closed** (🟡 since Session #14): post 348 serves all 10 social tags; og:image HTTP 200 jpg (95.6 KB) + webp (72.5 KB) from Supabase Storage. (3) **Part C closed**: the 10 held AI Horde-era failed posts all deleted — 8 (171, 317-320, 331-333) via Supabase REST with a status=failed guard (204, `content-range: */8`), 2 (334-335) already deleted by Felix in the panel; `pending_posts` now 0 failed rows. (4) **Admin detail-page delete 404 fixed** (aitrends.ng commit `8bc2587`, pushed, Vercel auto-deploy): delete from `/admin/pending/[id]`/`/admin/posts/[id]` called `router.refresh()` → server component re-ran → `notFound()` on the missing row → 404. `PendingActions` now `router.replace('/admin/pending')`; `PostActions` gained `redirectAfterDelete` (detail → `/admin/posts`, list keeps refresh). Typecheck + build clean. Docs: CLAUDE.md pushed; SESSION_LOG + TRAINING_MANUAL updated locally. Remaining to-do view: Phase 1 quota remedy (decision pending), Sierra Leone post, forced-phrase rewrites, monitoring items, 🔵 backlog.
+### ✅ Completed — Session #41 (7 Aug 2026)
+**P0 optimisation set #1–#5 + per-post ledger instrumentation** — the user-approved P0 batch. Implemented and `node --check`-verified; no commit yet (documentation mirror first). Changes: **P0-1** SWS gate flipped `observe` → `enforce` in `story-worthiness.js` (validate harness + real run 30879318255 proved the 55 threshold passes all worthy stories, skips only thin/fluff — now marks seen + skips before any Groq/Gemini call); **P0-2** `markSeen` on generation failure — new loop-scope `generationStarted` flag in `scout.js`, category catch marks the capped articles seen when failure happened during/after generation (they'd re-burn LLM calls next run) while quota sentinel + pre-generation infra failures keep retry-next-run behaviour; **P0-3** blend source cap `MAX_BLEND_SOURCES = 5` in `gemini.js` (was 8), sliced at the scout.js call site — every source costs one LLM call + a 65s Groq TPM wait, and source_urls already caps at 5, so sources 6+ were pure spend (Felix's choice of 5 over 4 to preserve editorial quality); **P0-4** `maxOutputTokens` capped 3000 for `generateDigest()` and `synthesizeBlendDigest()` (was 8192) — the 400–1000-word target needs ~2000 tokens, and 8192 enabled the 10K-token runaway synthesis that produced the >2500-word gate-rejected draft; Groq's source-digest call stays 2000, the ping stays 5, `gemini-podcast.js` untouched; **P0-5** synthesis-only expansion retry — `generateBlendedDigest` split into `digestBlendSources()` (PASS 1) + `synthesizeBlendDigest()` (PASS 2), scout.js caches PASS 1 digests in `blendSourceDigests` and a gate-failed synthesis re-runs PASS 2 alone (previously the whole blend — up to 5 source-digests + 4×65s waits — was re-burned for zero new information); the combined `generateBlendedDigest()` wrapper is kept for external callers. **Instrumentation:** `linkLedgerToPost()` in memory.js backfills `pending_post_id` (accepts a title OR an array — blend rows carry per-source titles) so per-post LLM calls/tokens are JOINable; `blend_sources` int recorded on the synthesis ledger row (average = blend cost per story); `gate-check` pseudo-purpose event (`provider: 'pipeline'`, `retry_attempt: -1`, reasons in `error_type`) when a Phase 1 digest fails the gate; `publish-outcome` events from `publishPost()` covering gate-reject / publish success (story_title = slug) / publish API failure; `quality-gate.js` gained `qualityGateFailures()` (reasons array) with `passesQualityGate = failures.length === 0`, so events record WHY without re-running the rules. complete.js needed no change — publishPost is the single Phase 2 choke point. **Migration required:** re-run `aitrends.ng/supabase/add-llm-request-ledger.sql` (adds `pending_post_id` + `blend_sources` + index) then `NOTIFY pgrst, 'reload schema';` — until then the new-column inserts fail-silent. **Backlog (deliberately NOT in this sprint):** verification overhaul, pipeline reordering (`getRecentDuplicate` before search, SWS before Tavily), Scout refactors (dead `relevantSourceUrls`, full-text only for top article), timeout redesign, Tavily `max_results: 5`, single-source rich-article preference, tools-category starvation. Adaptive blend-count item progressed: fixed max now 5 via `MAX_BLEND_SOURCES`, with `blend_sources` + SWS confidence bands as the future evidence base.
+
+### ✅ Completed — Session #42 (9 Aug 2026)
+**Gemini multi-part text extraction fix** — root cause: gemini-3.5-flash (thinking model) puts the final answer in a LATER `parts[]` element; reading only `parts[0].text` produced `''` for every Gemini synthesis on 2026-08 (0/19 queued, gate-failed "no digest produced"). New shared `extractGeminiText(data)` joins all text-bearing `parts[]` (`!p.thought`), wired into all four response-parsing call sites (`generateDigest()`, `digestBlendSources()`, `synthesizeBlendDigest()`, `generateEditorialDigest()`); `empty_response` guard in `callGeminiWithFallback()` records `success:false` / `error_type:'empty_response'` for 200-with-no-text (was a phantom success corrupting the ledger) and throws — no new retry, no prompt/quota/retry/blend/SWS/provider changes. Verified: `node --check` clean on all files, 10-test focused suite (`test-gemini-parts.mjs`, node module mocks, no real provider) covering single-part / multi-part / no-usable-text / Groq-TPD→Gemini fallback, all pass with ledger assertions on the empty case. Also verified live (read-only): S41 migration already applied (`pending_post_id` + `blend_sources` queryable, post 358 rows 231–236 JOINed, `blend_sources:5`); pipeline alive (post 358 published 2026-08-08) with last two Phase 1 runs failing on provider-exhaustion at the run tail (Groq TPD ~99.2K/100K + Gemini 20/day cap — the documented S35 structural constraint, flagged for Felix's next decision). Out-of-scope (flagged, not fixed): `gemini-podcast.js:192` + `.validate-blend3.mjs` still read `parts[0].text`. Commits: scout-agent `extractGeminiText` fix pushed; CLAUDE.md pushed; SESSION_LOG + TRAINING_MANUAL local-only (split rule).
+
+### ✅ Completed — Session #43 (9 Aug 2026)
+Registry design session (docs not captured at the time). Prototyped the open-world registry probe (`GENERAL` model — auto-discovered sources from the live scouting surface) in `add-source-registry.sql`. The design was subsequently reversed into the closed-world curated model (Session #44) because open-world discovery makes the source list a by-product of runtime behaviour instead of a governed, diffable list. No production code shipped. Reconstructed from Session #44 artifacts per the append-only convention.
+
+### ✅ Completed — Session #44 (9–10 Aug 2026)
+**Closed source registry — Stage 0/1/1A** (commit `5f7b630`, `867c4c9`, both pushed). Stage 0: `curated_source_registry` table (SQL `aitrends.ng/supabase/add-curated-source-registry.sql`), seed v2 (22 sources), explicit `seed-registry.js` (read-only diff without `--apply`, upsert by `source_name`), validation harness `.validate-registry.mjs` — closed-world governance replacing the S43 GENERAL probe. Stage 1: `registry-observe.js` → `registry-observe-report.json` (hard rules: zero DB writes, zero LLM calls, no prompting, no auth, no non-curated domains); baseline 9 Aug: 17 enabled / 2244 items / 14 new candidates / 25 LLM calls avoided. Stage 1A: source-health taxonomy (`HEALTHY`·`STALE`·`FEEDLESS`·`QUIET`·`BLOCKED`·`DEFERRED`) + six feed corrections (AIBase/iAfrica/Google AI/WeeTracker → full-site or full-site-filtered; Techpoint + IT News Nigeria → FEEDLESS); report 10 Aug: 15 enabled / 36 fresh / 13 candidates / health STALE 10 · FEEDLESS 5 · QUIET 3 · HEALTHY 2 · DEFERRED 2. Three corrections ratified in Session #45 (IT News Nigeria AI removed — defunct; WeeTracker monitoring_url → `https://weetracker.com/feed/`; registry adopted as canonical source list) and executed there. SESSION_LOG Session #44 entry (reconstructed from artifacts) + TRAINING_MANUAL Chapter 54 recorded 11 Aug; CLAUDE.md mirror (this section + registry subsection + MUST-NOT rules).
+
+### ✅ Completed — Session #45 (11 Aug 2026)
+**Curated registry adopted + Stage 2 production wiring** — the execution session. Ratified corrections executed: IT News Nigeria AI removed from seed v3 + DB (row id 8, registry now 21 sources); WeeTracker monitoring_url → `https://weetracker.com/feed/` applied via `npm run seed:registry -- --apply` (1 updated); curated registry formally adopted as canonical source list. Design check before wiring: registry has NO `tools` feed + only one `anthropic` feed → a registry-ONLY switch would kill tools + break MIN_ARTICLES=2 → correct wiring is curated-first + feeds.js gap-fill + pure fallback (matches "curated-first pipeline wiring"). New `sources.js` — `loadScoutSources()`: registry rows (enabled + feed_url) first with registryId carried, dedup by normalised feed_url, feeds.js gap-fills with registryId null, pure feeds.js fallback on error/empty, never throws. `scout.js` STEP 1 rewired to `loadScoutSources()`; `feeds.js` gained DEPRECATED banner (content untouched). Stage 2a: `registry-observe.js` now writes append-only `registry-observe-history.jsonl` (fail-silent) + `report.comparison` drift block (`vs_previous`/`vs_baseline` against the preserved Stage 1A baseline, null-safe) + STAGE 2 TRACKING console section; `.gitignore` covers the history file. Verification: `node --check` all 4 files clean (caught a duplicate `const t` → renamed `totals`), new `test-sources.mjs` 3-test suite (curated-first merge/dedup/gap-fill, error fallback, empty fallback — all pass), live read-only observe run (2250 items / 112 fresh / 55 candidates / 63 calls avoided; vs baseline items +6 · fresh +74 · candidates +41; history line 1 written). Docs: SESSION_LOG Session #45 entry + TRAINING_MANUAL Chapter 55 (Stage 2) + CLAUDE.md header bump. Commits per split rule (CLAUDE.md + scout-agent code pushed, docs local) — awaiting Felix's explicit go-ahead.
+
+### ✅ Completed — Session #46 (18 Aug 2026)
+**Groq provider restored** — dead `llama-3.3-70b-versatile` (HTTP 404, deprecated 2026-08-16) replaced with `openai/gpt-oss-120b` (120B params, 65K output, 1K RPD, 8K TPM free tier). Forensic search: 10 occurrences in 2 files (gemini.js × 9, slack.js × 1). Live verification: old model 404, new model initially 403 (org-blocked, Felix enabled), then HTTP 200 with standard OpenAI shape, all 5 structured fields present, no tool calls, reasoning tokens consumed internally but `choices[0].message.content` populated correctly. Minimal fix: `replaceAll` model string in gemini.js (9 locations) + slack.js display text (1 location). `normaliseGroqResponse()` and `extractGeminiText()` untouched. Verification: `node --check` all 4 pipeline files clean, zero remaining dead-model references, `test-gemini-parts.mjs` 10/10 pass, live E2E `callGeminiWithFallback()` → HTTP 200 + `getLastServedProvider() === 'groq'`. Tavily-off experiment preserved: `TAVILY_SEARCH_ENABLED=false` unchanged, `search.js` untouched, only gemini.js + slack.js modified. Aug 16–18 runs marked EXPERIMENT INVALID — PROVIDER FAILURE. Gemini fallback path (lines 278-339) completely independent of Groq model string, confirmed intact. Docs: SESSION_LOG Session #46 entry + TRAINING_MANUAL Chapter 56 + CLAUDE.md header bump. Commits per split rule.
+
+### ✅ Completed — Session #47 (25 Aug 2026)
+**P1A curated source coverage + P1B multimedia extraction.** P1A: forensic investigation of ~15+ feed candidates across Tools (from 0 curated) and Anthropic (from 1 curated) categories. Evaluated on Anthropic-primary content ratio, GHA fetchability, update frequency, and feed health. Tools +2: Simon Willison's Weblog (`simonwillison.net/atom/everything/`, specialist, 30 entries, 1-3/day) + Latent Space (`latent.space/feed`, specialist, 13 items, 2-3/week). Anthropic +1: Anthropic Engineering (`taobojlen/anthropic-rss-feed` GitHub mirror, core, 25 entries, ~2/month accelerating). Key discovery: Anthropic.com has NO RSS feed (all paths 404); the third-party mirror is the only viable infrastructure. Rejected: O'Reilly Radar (403), BAIR Berkeley (too academic), DeepLearning.AI The Batch (dead feed), TechCrunch/Ars Technica as Anthropic sources (only 9-14% Anthropic-primary). Existing Anthropic News mirror KEPT — Engineering supplements it. Registry v3→v4 (21→24 sources). Commit `f6a1523` pushed. 3/3 source-loading tests pass. P1B: additive-only YouTube multimedia extraction in `fetcher.js` (+73 lines). Two new exports: `extractMediaFromHtml(html)` + `getMediaForUrl(url)`. YouTube-only (no SSRF/noise), normalizes all URL variants to `watch?v={id}`, deduplicates by video ID, handles iframe/watch/shorts/youtu.be. `fetchContent()` return type unchanged (string or null) — zero caller breaks. Commit `77e9c94` pushed. 15/15 unit tests pass.
+
+### ✅ Completed — Session #48 (27 Aug 2026)
+**P0 production-starvation forensic.** Diagnosed why AITrends.ng published nothing since 2026-08-23 18:19:43 UTC. Root cause: **GitHub Actions free-tier minutes exhaustion** on the private `FAIT-Blog/scout-agent` repo. Cutover pinned to 2026-08-23 21:15:02 UTC — the preceding run (32663806208, Complete Posts, 20:14:34) succeeded; the next (32666934651, 21:15:02) and all ~100+ after failed with the Session #33 signature (job created, `runner_id: 0`, `steps: []`, ~3s, "log not found" — GitHub provisioned **no runner**). Same `head_sha 77e9c946` both sides → no code change correlates. All four workflows died simultaneously = account-level resource stop. Knife-edge: 103 consecutive successes Aug 20→23 20:14, then 100% failure. August: 1,042 runs created (727 schedule + 313 workflow_dispatch); agent-computed usage ≈ 1527.7 raw / ≈ 2240 ceil min vs 2,000/month free cap; billing API 404 + `/timing` reports `total_ms: 0` even on success → no direct line item, run signature is the evidence (matches Session #33 July precedent at ~2,094 min). P1A verified in production: last Scout run (32657410318, Aug 23 18:14:37) fetched Simon Willison's Weblog + Latent Space + Anthropic Engineering (67 fresh), queued 1 post (pending 403) → published 18:19:43; all 3 P1A feeds re-checked live on forensic date → HTTP 200, fresh Aug 26-27 items. Ruled out: code change, Supabase (366 published/7 pre-cutover failed rows, clean queue), image provider, LLM providers, SWS/gates, cron-job.org (dead since Aug 11 — but native schedule carried pipeline to cutover; secondary gap). Deliverable `PRODUCTION_STARVATION_FORENSIC.md` (sections A–H). Closure: `CODE CHANGES: NONE / CONFIGURATION CHANGES: NONE / RECOMMENDED NEXT ACTION` (restore GHA capacity or wait for Sept 1 free-tier reset, then dispatch one Scout run; re-verify cron-job.org). Docs: CLAUDE.md pushed; SESSION_LOG + TRAINING_MANUAL local-only (split rule).
+
+### ✅ Completed — Session #49 (3 Sep 2026)
+**P0 image-pipeline fix.** Verdict on the Sept 1 forensic: production ran committed HEAD `77e9c94` which still contains `trySourceImage` as the PRIMARY image path; the P0 change existed only as uncommitted working-tree edits. All 8 Sep 1 covers (405/406/408/411/412/413/414/415) were byte-for-byte source-og:image REUSE; the Aug 23 RuntimeWire post (403) also exact source reuse; Cloudflare FLUX was separately broken (HTTP 400 code 5006 — cloudflare.js sent `width/height/num_steps` which the model rejects; accepted schema is only `prompt`/`steps`/`seed`), so posts without a source photo failed to publish. Fix in commit `97ff9f8` (pushed): **P0-A** removed `trySourceImage()` + STEP-1 source-photo path from `complete.js` (working-tree change committed; `[OG_IMAGE]` editorial path preserved; no new source fallback); **P0-B** repaired `cloudflare.js` request to `{ prompt, steps: 4 }`. Verification: `node --check` clean; `test-gemini-parts.mjs` 10/10; `test-sources.mjs` 3/3; live `processJob()` → 843KB JPEG; **controlled production Phase 2 run `33706443309` (head_sha `97ff9f8`) passed all 9 mandatory conditions** — 4 fresh FLUX-generated posts published (covers 416/420/426/427, 1024×1024, not source-identical), no "Checking source article" log, cover_image_prompt matched requests; stuck posts 416/420 unblocked. Docs: CLAUDE.md pushed; SESSION_LOG Session #49 + TRAINING_MANUAL Chapter 58 local-only (split rule); historical-cover audit READ-ONLY, awaiting approval before any cover regeneration.
+
+### ✅ Completed — Session #50 (4 Sep 2026)
+**Image-prompt refinement (first controlled prompt-engineering change since S49).** Felix approved the full Section A–G implementation-safety proposal and two decisions: (1) supersede the CLAUDE.md "Every prompt ends with: 'No text, no logos'." rule with the new Visual Editorial Brief policy (mirrored in all three docs), (2) confirm scope = the three digest paths only, `gemini-podcast.js` out. Rewrote all three `IMAGE_PROMPT RULES` blocks in `scout-agent/gemini.js` (`generateDigest()`, `synthesizeBlendDigest()`, `generateEditorialDigest()`) as a **Visual Editorial Brief** (PRIMARY_SUBJECT → CENTRAL_EVENT → CENTRAL_NARRATIVE → PRIMARY_ACTION → KEY_ENTITIES → VISUAL_CONTEXT → BRAND_IDENTITY → PEOPLE → VISUAL_METAPHOR → AVOID) + a 10-part final-prompt structure (IMAGE TYPE → PRIMARY SUBJECT → CENTRAL EVENT → VISUAL NARRATIVE → SUPPORTING CONTEXT → BRAND/PRODUCT IDENTITY → VISUAL STYLE → COMPOSITION → TEXT POLICY → AVOID), with rules: central-narrative-not-noun-pile, concrete scenes over generic AI symbolism, people when central, brand only when warranted (source publisher NOT automatically the subject), show the meaning of a defining number not big graphic text, reported product dominant in competitive stories, no source-image imitation. Updated all three `IMAGE_PROMPT:` response lines and the three fallback strings (removed neural-network/electric-blue defaults → new "Original premium technology-news editorial illustration... cinematic composition" strings). All "no text, no logos" occurrences now only the intentional "Do not use a blanket..." instruction. **Verified:** `node --check gemini.js` clean; `scout.js` + `complete.js` `--check` clean (unchanged); `test-gemini-parts.mjs` 10/10 pass; grep-verified 3 new brief blocks, 3 new response lines, 0 legacy fallback defaults. Docs mirrored per atomic rule: CLAUDE.md (header + Section 3 + S50 row); SESSION_LOG Session #50 + TRAINING_MANUAL Chapter 59 (append-only). No production code beyond `gemini.js` touched; no providers/APIs/pipeline changed; no covers regenerated.
+
+### ✅ Completed — Session #51 (5 Sep 2026)
+**Post-deployment production observation of the Session #50 Visual Editorial Brief — docs-only, NO code change.** Felix reviewed live covers and reported the S50 refinement is a clear production improvement (strong examples: ChatGPT/Grok/Claude outage story, Claude malware/account-security story — primary entities + central events immediately recognizable). Three observation notes captured for the NEXT refinement cycle: (1) **over-ambitious scenes** — the system sometimes understands too many aspects of an article and tries to visualize them all at once → crowded editorial illustrations where the central relationship/event loses dominance (Legora, Google AI Mode, EAC AI implementation, Pentagon/Anthropic stories); (2) **relationships not made explicit** — comparison/transformation/causal/quantitative stories can include the relevant objects without making the relationship itself visually demonstrable; (3) **generated text drift** — excessive/inaccurate generated text on documents, institutional material, or signage. Future-direction note recorded but explicitly NOT implemented (ONE CENTRAL VISUAL IDEA → ONE PRIMARY ACTION/RELATIONSHIP → 1–3 supporting elements → omit the rest; relationships visually demonstrable; restrained purposeful text/branding over invented documents/labels/logos) — Session #50 behavior preserved by explicit instruction, still observing production. Mirrored per atomic rule: CLAUDE.md (header + Section 3 observation bullet + S51 row); SESSION_LOG Session #51 + TRAINING_MANUAL Chapter 60 (append-only). Commits follow split rule.
+
+### ✅ Completed — Session #52 (6 Sep 2026)
+**Editorial Feedback Loop framework — docs-only, NO implementation.** We are changing how feedback is given to the scout/editorial pipeline by applying the same evidence-based method that improved the Session #50 image prompts (actual result → diagnosis → preferred treatment → reusable lesson) to editorial output. Treated reviewed production posts as a small supervised feedback set. **Feedback-set structure** (per example): post/topic → what the scout/editor produced → specific defect → evidence/source finding → preferred treatment → generalizable editorial lesson. The goal is NOT to hard-code a rewritten sentence — it is for the generation process to **learn the reasoning pattern** behind the correction. **10 generalizable editorial lessons captured** from production review: (1) WHY THIS MATTERS — prefer the concrete consequence/decision/opportunity/risk/affected group over a generic "important"; (2) CAUSALITY — do not convert "AI was one contributing factor" into "AI caused the outcome" (Mount Shasta reference); (3) SOURCE PERSPECTIVE — do not convert an author's personal opinion into a general market fact (Anthropic IPO reference — Motley Fool value investor's personal interest, not community-wide "spark"); (4) OPINION VS NEWS — distinguish company claims / analyst-investor opinions / first-hand experiments / reported facts / independently corroborated findings; (5) NUMERICAL PRECISION — verify numerical claims against underlying tables/charts rather than prose summary only (GPT-6 Astra pelican reference); (6) SPECULATION — preserve speculation as speculation, don't upgrade an author's hypothesis into an explanation (pelican tokenizer/prompt-engineering reference); (7) SOURCE RICHNESS ≠ WORD COUNT — a short high-information source is not a poor source; do not pad with generic AI commentary (Simon Willison reference); (8) SOURCE BUCKET STATUS — verify whether the source belongs to the curated bucket; non-curated sources get additional scrutiny (Simon Willison curated Tools vs RuntimeWire not curated); (9) ARTICLE STRUCTURE — evaluate structure and information density separately; short article can fail structurally if Why This Matters empty; forcing prose into short first-hand source = low-value padding; (10) EDITORIAL CENTRAL NARRATIVE — build around the single most important idea connecting the evidence, not a mechanical description of every source detail. Image feedback principle unchanged (Session #50 system continues). No production code touched; NO request to implement yet — more reviewed examples will be supplied before implementation. Mirrored per atomic rule: CLAUDE.md (header + Section 6 Editorial Feedback Loop subsection + S52 row); SESSION_LOG Session #52 + TRAINING_MANUAL Chapter 61 (append-only). **Branch reconciliation + docs-push deviation:** the S52 push (during reconciliation between a divergent local `main` and `origin/main`) carried `SESSION_LOG.html` + `TRAINING_MANUAL.html` to origin (they were already there in S46-era form; now current S52-era). Felix chose "leave as-is, document it" — recorded as the §9 push-strategy amendment.
+
+### ✅ Completed — Session #53 (23 Sep 2026)
+**AITrends Backend Forensic Report (read-only).** Produced 23-section evidence audit of production backend 2026-08-25 → 2026-09-23. Read-only inventory: 455 GHA runs (342/113), ledger 781 (rewrite 490, gate-check 132, publish-outcome 148, podcast 11; 100% Groq, 0 Gemini/Tavily), posts 148 (industry 60/tools 35/ai-models 27/anthropic 20/ai 6), scout_memory 1175 seen, covers 100% Supabase with prompts. Confirmed Aug 25–31 starvation week = S48 minutes exhaustion (all Scout failures runner_id 0, steps 0, ~3s, empty logs), cutover 2026-08-23 21:15:02 UTC, recovery Sep 1 (0 Scout failures). Quantified bottlenecks: daily Groq rate_limit 1–10/day (132 total), gate rejections 132 (missing "Why this matters" 70), average Groq 3,483 in/924 out ~5.67s, gen→publish yield ~68.5% from successful rewrites, overall call→publish ~30.2%. Cover/image health 100%, pending 2 fresh pending_image + 4 terminal failed. No code/config changes, no triggers/DB writes. All three docs updated (CLAUDE.md header+history, SESSION_LOG Session #53 full verbatim, TRAINING_MANUAL Chapter 62).
+
+### ✅ Completed — Session #54 (23 Sep 2026)
+**Editorial-eligibility gate reconciliation series — READY FOR IMPLEMENTATION.** Four read-only forensic deliverables produced from the same 150-post window: (1) `SELECTION_FUNNEL_FORENSIC.md` — full-funnel audit (90 Scout runs × 4 category-slots = 360; 267 reached SWS → 228 passed → 150 published; dominant defect is UPSTREAM feed quality — the Bing-News-Anthropic feed yields ~19-char full-texts and drove 32% of scout_memory marks / 33 of 39 SWS rejects; "Why this matters" gate = #1 post-generation loss, 70 of 132). (2) `STORY_SELECTION_QUALITY_AUDIT.md` — 150-post editorial classification: 30 Strong / 85 Reasonable / 35 Weak / 0 Poor; SWS floor held (0 RSS posts below 55); concentration risk (simonwillison.net alone 34/150); re-coverage found only via topic clusters, not title-keyed dedup. (3) `CONTRASTIVE_SELECTION_ANALYSIS.md` — 65-story manual coding (30 Strong vs 35 Weak, 20 binary dims): SWS does NOT separate them (Strong mean 79.2 vs Weak 76.7); four decisive correlated discriminators = concrete development (97% vs 20%), source-established consequence (100% vs 3%), discrete dated event (97% vs 26%), freshness (100% vs 31%). (4) `EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md` — re-test of the proposed gate on all 65 coded rows: formulation A loses Strong #33 (a research finding, Google AI Mode 21.6% price study), so the anchor widens to `(dev OR finding)`; C-min `(dev OR finding) AND consequence AND fresh` keeps **30/30 Strong, rejects 35/35 Weak**; smallest rule = `consequence AND fresh`; Weak #60 (Anthropic class-action dup of #59) leaks only under title-keyed dedup → topic-signature freshness is the fix; podcast gets a SEPARATE eligibility path (never run through the RSS consequence gate — would terminate the whole lane). Decision: ✅ READY FOR IMPLEMENTATION. No code/config/prompt/SWS/pipeline changes — evidence-only.
+
+### ✅ Completed — Session #55 (23 Sep 2026)
+**Editorial Eligibility Gate implemented + committed (`ddb8231`).** Executed the Session #54 READY-FOR-IMPLEMENTATION decision. New `scout-agent/editorial-eligibility.js` (223 lines): deterministic ZERO-LLM gate — ELIGIBLE ⟺ `(development OR finding) AND source-established consequence AND fresh`. Consequence regexes (money/capability/policy/legal/research/launch/health channels + protocol/hire/passing exclusions) ported VERBATIM from the `/tmp/funnel/calibrate4.mjs` gold harness; freshness uses Session #38 `storiesOverlap()` topic signatures (title+content) against the latest 200 published posts via new `memory.getRecentPublishedPosts(windowMs, limit=200, client=supabase)` — optional client seam keeps the test suite offline (early drafts contacted real Supabase → `20 !== 2` test failures; fixed by passing `makeSupabase()` as 3rd arg). `scout.js` STEP 7b (line ~594, AFTER the SWS enforce gate, BEFORE digest): ineligible → `SKIPPED_BEFORE_GENERATION` + markSeen the capped articles + continue; fail-open both on recent-posts query error and on gate crash (log + proceed — a DB outage must never starve the pipeline). Verified: gold harness `verify-module.mjs` = **VERIFICATION PASS (STRONG 30/30 kept, RSS-lane Weak 0/28, Weak #60 rejected via freshness)**; `test-editorial-eligibility.mjs` 8/8; `test-sources.mjs` 3/3; `test-gemini-parts.mjs` 10/10; `node --check` clean on scout.js/memory.js/editorial-eligibility.js. Committed `ddb8231` (4 files, +441/−1) with ONLY the Step 7b files staged; scout-agent `gemini.js` edits + untracked FORENSIC_REPORT.md / TAVILY_FORENSIC_REPORT.md deliberately excluded; **pushed in Session #56 on Felix's explicit instruction**.
+
+### ✅ Completed — Session #56 (27 Sep 2026)
+**Documentation reconciliation against live production + 10 cleanup areas applied to CLAUDE.md.** Read-only pass over GH Actions run logs, the working tree, and current source, plus 10 scoped doc corrections (Q10): header/uncommitted-state notices, §2 pipeline diagram + provider reality, §3 image-prompt policy, §4 database (added `pending_posts`, `curated_source_registry`, `editorial_queue`, `gemini_quota_cooldown`, `llm_request_ledger`), §5 API routes + removed the stale `www` known issue, §6 Critical Rules (the blanket "maxOutputTokens must stay 8192" rule was **withdrawn** as contradicting S41 P0-4), pipeline/STEP 7b, File Structure (added `complete.js`, `image-providers/`, podcast + monitor modules, 4 workflows), and Section 7 split into **§7A Current Open Issues** / **§7B Historical Session Records**. Code: confirmed `ddb8231` was the only commit ahead of `origin/main` and **pushed it** (no amend, no scope expansion); then isolated the working-tree `gemini.js` diff — which turned out to be **4 WTM edits + 6 unrelated S51 image-prompt hunks**, not WTM-only — and committed the WTM half alone as `7133ebc` (17 insertions / 4 deletions across `generateDigest`, `synthesizeBlendDigest`, both `generateEditorialDigest` branches), restoring the image hunks uncommitted. Verified: `node --check` clean, `test-gemini-parts.mjs` 10/10, `test-sources.mjs` 3/3, `test-editorial-eligibility.mjs` 8/8 (21/21). Live findings: Gemini key HTTP 503 (Groq-only, no fallback), `TAVILY_SEARCH_ENABLED=false` (blend unreachable), last run `36288813810` queued zero posts, and no GHA run has yet executed `ddb8231` (all still `head_sha 6140f56`) — both recorded in §7A rather than fixed, per instruction. `7133ebc` left unpushed pending Felix's decision, then **pushed later the same day on his explicit instruction** — `origin/main` = `7133ebc`, S51 image work verified still uncommitted.
+
+### ✅ Completed — Documentation Refresh, Phase 1 (2 Oct 2026)
+**Read-only documentation audit + truth restoration. No production code changed.** Established the §0 Document Authority & Precedence tier structure (Foundational Constitution / Governing CLAUDE.md / Operational specs / Historical evidence) and **QUARANTINED** `SCOUT_AGENT_SPEC.md` + `AITRENDS_NG_SPEC.md`, whose retired Africa-first mandate is the single most dangerous stale instruction in the repository. Reconciled §7A against live production: Gemini **verified HTTP 200** (the "HTTP 503 / Groq-only" claim was wrong, though 0 Gemini ledger rows in 14 days means the fallback remains untested in production); STEP 7b **confirmed deployed and filtering** since 2026-09-27T11:01 with live ELIGIBLE/INELIGIBLE evidence and both rejection reasons; `7133ebc` WTM prompt **measured ineffective** (5/5 post-deploy Phase 1 gate rejections still fail WTM; 7/7 when scoped from `ddb8231`); throughput recorded as an open observation (5.9→2.2/day), explicitly not an editorial verdict. Corrected the `llm_request_ledger` time column from `created_at` to the real **`timestamp`**. Recorded two newly-found live defects without fixing them: the missing `passesQualityGate` import at `scout.js:28` (ReferenceError waiting on the editorial lane) and the prompt↔gate WTM contradiction. Supersession banners added to the forensic documents. The five proposed new governing rules were explicitly deferred to a later phase.
+
+### ✅ Completed — Documentation Refresh, Phase 1b — Historical-Evidence Reconciliation Sweep (2 Oct 2026)
+**Documentation-only. No production code changed.** Continued the Phase 1 sweep by reconciling the six root
+forensic/audit documents as *historical evidence* rather than current specification. Each received a detailed
+historical-status banner above its existing title, and the pre-existing generic §0.1 banner and all original
+wording were retained. Three received an additional chronology section fixing the
+**evidence → reconciliation → implementation (`ddb8231`) → later production verification** order:
+`STORY_SELECTION_QUALITY_AUDIT.md` (`## Post-Audit Status`), `CONTRASTIVE_SELECTION_ANALYSIS.md`
+(`## Post-Analysis Status`, 353 → 427 lines), and `EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md`
+(`## Post-Reconciliation Status`, 214 → 324 lines). The other three received banner-level treatment only:
+`PRODUCTION_STARVATION_FORENSIC.md` (incident marked resolved; the former `RECOMMENDED NEXT ACTION` retained as
+historical and explicitly closed; the single `MIN_ARTICLES=2` reference annotated with the current
+`MIN_ARTICLES=1`), `SINGLE_SOURCE_NEXT_PHASE_FORENSIC.md` (Area D recorded as **reversed by `97ff9f8`** /
+Session #49), and `SELECTION_FUNNEL_FORENSIC.md` (four recommended actions individually classified OPEN vs
+closed-as-action, with the historical `scout.js:673` reference preserved and the verified current location
+`scout.js:706` recorded alongside it).
+
+**Rule established:** no historical measurement, story number, formulation result, evidence table, or
+recommendation was rewritten, reordered, deleted, or silently corrected. Historical figures are labelled as
+properties of their specific past sample and explicitly **not** as current production accuracy guarantees —
+notably the Session #54 `30/30 Strong / 35/35 Weak` reconciliation result. Historical anti-pattern warnings
+(reject first-party / reject announcements / raise the SWS threshold / reject analysis) were **preserved as
+warnings and explicitly not described as adopted** by the later implementation. All content edits were
+purely additive. Verified per file: all 65 Appendix A rows, all A–K comparisons, all Q1–Q5, Formulation A = 29/30,
+stories #33 and #60, the podcast section, and the original read-only provenance footnotes all remain intact.
+
+**Outstanding (recorded, not actioned):** `scout-agent/FORENSIC_REPORT.md` remains the only §0.1
+Historical-tier document with **no historical marker at all**, and `scout-agent/TAVILY_FORENSIC_REPORT.md`
+carries only the generic banner — see §0.4. Note for the next documentation pass: `TRAINING_MANUAL.html` has a
+structural defect where `</body>` precedes Chapter 63, so appended chapters land outside the document body.
+
 ## 8. WHAT CLAUDE CODE MUST NOT DO (Both Projects)
 
 - Never hardcode API keys, secrets, or webhook URLs in source files
@@ -1328,4 +1717,5 @@ Felix's explicit instruction: SESSION_LOG.html and TRAINING_MANUAL.html are comm
 | S53 | 23 Sep 2026 | docs-only (forensic) | **AITrends Backend Forensic Report (read-only).** Produced 23-section evidence audit of production backend 2026-08-25 → 2026-09-23. Read-only inventory: 455 GHA runs (342/113), ledger 781 (rewrite 490, gate-check 132, publish-outcome 148, podcast 11; 100% Groq, 0 Gemini/Tavily), posts 148 (industry 60/tools 35/ai-models 27/anthropic 20/ai 6), scout_memory 1175 seen, covers 100% Supabase with prompts. Confirmed Aug 25–31 starvation week = S48 minutes exhaustion (all Scout failures runner_id 0, steps 0, ~3s, empty logs), cutover 2026-08-23 21:15:02 UTC, recovery Sep 1 (0 Scout failures). Quantified bottlenecks: daily Groq rate_limit 1–10/day (132 total), gate rejections 132 (missing "Why this matters" 70), average Groq 3,483 in/924 out ~5.67s, gen→publish yield ~68.5% from successful rewrites, overall call→publish ~30.2%. Cover/image health 100%, pending 2 fresh pending_image + 4 terminal failed. No code/config changes, no triggers/DB writes. All three docs updated (CLAUDE.md header+history, SESSION_LOG Session #53 full verbatim, TRAINING_MANUAL Chapter 62). |
 | S54 | 23 Sep 2026 | docs-only (read-only reconciliation) | **Editorial-eligibility gate reconciliation series — READY FOR IMPLEMENTATION.** Four read-only forensic deliverables produced from the same 150-post window: (1) `SELECTION_FUNNEL_FORENSIC.md` — full-funnel audit (90 Scout runs × 4 category-slots = 360; 267 reached SWS → 228 passed → 150 published; dominant defect is UPSTREAM feed quality — the Bing-News-Anthropic feed yields ~19-char full-texts and drove 32% of scout_memory marks / 33 of 39 SWS rejects; "Why this matters" gate = #1 post-generation loss, 70 of 132). (2) `STORY_SELECTION_QUALITY_AUDIT.md` — 150-post editorial classification: 30 Strong / 85 Reasonable / 35 Weak / 0 Poor; SWS floor held (0 RSS posts below 55); concentration risk (simonwillison.net alone 34/150); re-coverage found only via topic clusters, not title-keyed dedup. (3) `CONTRASTIVE_SELECTION_ANALYSIS.md` — 65-story manual coding (30 Strong vs 35 Weak, 20 binary dims): SWS does NOT separate them (Strong mean 79.2 vs Weak 76.7); four decisive correlated discriminators = concrete development (97% vs 20%), source-established consequence (100% vs 3%), discrete dated event (97% vs 26%), freshness (100% vs 31%). (4) `EDITORIAL_ELIGIBILITY_GATE_RECONCILIATION.md` — re-test of the proposed gate on all 65 coded rows: formulation A loses Strong #33 (a research finding, Google AI Mode 21.6% price study), so the anchor widens to `(dev OR finding)`; C-min `(dev OR finding) AND consequence AND fresh` keeps **30/30 Strong, rejects 35/35 Weak**; smallest rule = `consequence AND fresh`; Weak #60 (Anthropic class-action dup of #59) leaks only under title-keyed dedup → topic-signature freshness is the fix; podcast gets a SEPARATE eligibility path (never run through the RSS consequence gate — would terminate the whole lane). Decision: ✅ READY FOR IMPLEMENTATION. No code/config/prompt/SWS/pipeline changes — evidence-only. |
 | S55 | 23 Sep 2026 | scout-agent + docs | **Editorial Eligibility Gate implemented + committed (`ddb8231`, NOT pushed).** Executed the Session #54 READY-FOR-IMPLEMENTATION decision. New `scout-agent/editorial-eligibility.js` (223 lines): deterministic ZERO-LLM gate — ELIGIBLE ⟺ `(development OR finding) AND source-established consequence AND fresh`. Consequence regexes (money/capability/policy/legal/research/launch/health channels + protocol/hire/passing exclusions) ported VERBATIM from the `/tmp/funnel/calibrate4.mjs` gold harness; freshness uses Session #38 `storiesOverlap()` topic signatures (title+content) against the latest 200 published posts via new `memory.getRecentPublishedPosts(windowMs, limit=200, client=supabase)` — optional client seam keeps the test suite offline (early drafts contacted real Supabase → `20 !== 2` test failures; fixed by passing `makeSupabase()` as 3rd arg). `scout.js` STEP 7b (line ~594, AFTER the SWS enforce gate, BEFORE digest): ineligible → `SKIPPED_BEFORE_GENERATION` + markSeen the capped articles + continue; fail-open both on recent-posts query error and on gate crash (log + proceed — a DB outage must never starve the pipeline). Verified: gold harness `verify-module.mjs` = **VERIFICATION PASS (STRONG 30/30 kept, RSS-lane Weak 0/28, Weak #60 rejected via freshness)**; `test-editorial-eligibility.mjs` 8/8; `test-sources.mjs` 3/3; `test-gemini-parts.mjs` 10/10; `node --check` clean on scout.js/memory.js/editorial-eligibility.js. Committed `ddb8231` (4 files, +441/−1) with ONLY the Step 7b files staged; scout-agent `gemini.js` edits + untracked FORENSIC_REPORT.md / TAVILY_FORENSIC_REPORT.md deliberately excluded; **NOT pushed (explicit instruction)**. |
-| S56 | 27 Sep 2026 | scout-agent + docs | **Documentation reconciliation against live production + 10 cleanup areas applied to CLAUDE.md.** Read-only pass over GH Actions run logs, the working tree, and current source, plus 10 scoped doc corrections (Q10): header/uncommitted-state notices, §2 pipeline diagram + provider reality, §3 image-prompt policy, §4 database (added `pending_posts`, `curated_source_registry`, `editorial_queue`, `gemini_quota_cooldown`, `llm_request_ledger`), §5 API routes + removed the stale `www` known issue, §6 Critical Rules (the blanket "maxOutputTokens must stay 8192" rule was **withdrawn** as contradicting S41 P0-4), pipeline/STEP 7b, File Structure (added `complete.js`, `image-providers/`, podcast + monitor modules, 4 workflows), and Section 7 split into **§7A Current Open Issues** / **§7B Historical Session Records**. Code: confirmed `ddb8231` was the only commit ahead of `origin/main` and **pushed it** (no amend, no scope expansion); then isolated the working-tree `gemini.js` diff — which turned out to be **4 WTM edits + 6 unrelated S51 image-prompt hunks**, not WTM-only — and committed the WTM half alone as `7133ebc` (17 insertions / 4 deletions across `generateDigest`, `synthesizeBlendDigest`, both `generateEditorialDigest` branches), restoring the image hunks uncommitted. Verified: `node --check` clean, `test-gemini-parts.mjs` 10/10, `test-sources.mjs` 3/3, `test-editorial-eligibility.mjs` 8/8 (21/21). Live findings: Gemini key HTTP 503 (Groq-only, no fallback), `TAVILY_SEARCH_ENABLED=false` (blend unreachable), last run `36288813810` queued zero posts, and no GHA run has yet executed `ddb8231` (all still `head_sha 6140f56`) — both recorded in §7A rather than fixed, per instruction. `7133ebc` left unpushed pending Felix's decision. |
+| S56 | 27 Sep 2026 | scout-agent + docs | **Documentation reconciliation against live production + 10 cleanup areas applied to CLAUDE.md.** Read-only pass over GH Actions run logs, the working tree, and current source, plus 10 scoped doc corrections (Q10): header/uncommitted-state notices, §2 pipeline diagram + provider reality, §3 image-prompt policy, §4 database (added `pending_posts`, `curated_source_registry`, `editorial_queue`, `gemini_quota_cooldown`, `llm_request_ledger`), §5 API routes + removed the stale `www` known issue, §6 Critical Rules (the blanket "maxOutputTokens must stay 8192" rule was **withdrawn** as contradicting S41 P0-4), pipeline/STEP 7b, File Structure (added `complete.js`, `image-providers/`, podcast + monitor modules, 4 workflows), and Section 7 split into **§7A Current Open Issues** / **§7B Historical Session Records**. Code: confirmed `ddb8231` was the only commit ahead of `origin/main` and **pushed it** (no amend, no scope expansion); then isolated the working-tree `gemini.js` diff — which turned out to be **4 WTM edits + 6 unrelated S51 image-prompt hunks**, not WTM-only — and committed the WTM half alone as `7133ebc` (17 insertions / 4 deletions across `generateDigest`, `synthesizeBlendDigest`, both `generateEditorialDigest` branches), restoring the image hunks uncommitted. Verified: `node --check` clean, `test-gemini-parts.mjs` 10/10, `test-sources.mjs` 3/3, `test-editorial-eligibility.mjs` 8/8 (21/21). Live findings: Gemini key HTTP 503 (Groq-only, no fallback), `TAVILY_SEARCH_ENABLED=false` (blend unreachable), last run `36288813810` queued zero posts, and no GHA run has yet executed `ddb8231` (all still `head_sha 6140f56`) — both recorded in §7A rather than fixed, per instruction. `7133ebc` left unpushed pending Felix's decision, then **pushed later the same day on his explicit instruction** — `origin/main` = `7133ebc`, S51 image work verified still uncommitted. |
+| S57 | 5 Nov 2026 | docs only (read-only verification) | **Consolidated status update + live re-verification.** Felix asked for a full "what was done / what is pending" report, recorded in the documents. Read-only checks: `gh run list` (12/12 green, all `head_sha 7133ebc`), `posts` (655 published; 3.54/day over 2026-10-22→11-05; latest 2026-11-05T18:27Z), `pending_posts` (0 pending_image, 0 generating, 11 failed, 656 published), `llm_request_ledger` last 30d (385 rows; Groq 178 success/59 fail; 95 publish-outcome success/53 gate-check fail; **0 Gemini**), Gemini models-list HTTP 200 (50 models), `curated_source_registry` 22 enabled / 18 feed-bearing. **Key finding:** `7133ebc` is still ineffective — 40 of 53 Phase 1 gate-check failures in the last 30 days are "Why this matters"-related (20 pure + 20 WTM-plus-too-short). Throughput has recovered to 3.54/day, so the 2.2/day post-deploy dip was not permanent. No production code/config/data changed. Documentation: CLAUDE.md header + §7A live block + throughput update + this row; SESSION_LOG Session #57; TRAINING_MANUAL Chapter 69. |
