@@ -1020,6 +1020,26 @@ Per Felix's instruction, this phase makes the documentation truthful only.*
 
 *Status key: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Deferred / Later*
 
+### ⏰ Scheduled follow-up — due 2026-11-20 (Session #60)
+
+*The WTM gate-contract fix (`59e17b2`, 2026-11-06) needs a prospective measurement. **This entry is the
+reminder** — CLAUDE.md is the only persistent memory between sessions; there is no scheduler and no
+cross-session recall. Run this check at the start of the first session on or after **2026-11-20**, record the
+result here, and then close this entry.*
+
+- **Query:** `llm_request_ledger` rows with `purpose = 'gate-check'` and `timestamp >= '2026-11-06T00:00Z'`.
+  Classify `error_type` into the same five buckets used for the baseline: pure WTM, short+WTM, short-only,
+  "no digest produced", banned word.
+- **Baseline (the 30 days before the fix): 49 rows → 35 (71%) WTM-related** — 17 pure WTM, 18 short+WTM. The
+  other 14 were 8 "no digest produced", 3 short-only, 3 banned word.
+- **Success = the WTM share falls materially AND the absolute WTM count falls.** Compare both: the
+  denominator moves with run volume (4 runs/day × 4 categories, minus SWS/STEP 7b skips), so a quiet week
+  shrinks the total without the fix doing anything.
+- **Exclusions:** ignore rows written before the deploy; the **44 already-published bare-`<p>` posts are not
+  retro-fixed**, so only drafts generated after the change count.
+- **If the rate is flat:** the next lever is the `scout.js` expansion retry and the generator itself, **not**
+  another prompt rewrite — prompt-only tuning was the `7133ebc` mistake that cost six weeks.
+
 ### Live re-verification — 2026-11-05 (Session #57, read-only)
 
 *Re-checked one month after the 2026-10-02 reconciliation. Read-only: GHA run list via `gh`, `posts` /
@@ -1141,8 +1161,10 @@ to 3.54/day — so the drop should not be attributed to `7133ebc` alone. The unc
 - [ ] **Untracked forensic deliverables are uncommitted** — `FORENSIC_REPORT.md`, `TAVILY_FORENSIC_REPORT.md`
   (scout-agent), plus the S53/S54 reports in the project root. Evidence, not infrastructure; commit or
   discard at Felix's discretion.
-- [ ] **S53/S54/S55/S56 documentation work is uncommitted** in the root `aitrends-project` repo (this
+- [x] **S53/S54/S55/S56 documentation work is uncommitted** in the root `aitrends-project` repo (this
   file + `SESSION_LOG.html` + `TRAINING_MANUAL.html`), per the local-only rule in Section 9.
+  **CLOSED 2026-11-06:** all three documents are committed and pushed (`8edd973`, `524dac7`). Only the
+  untracked forensic deliverables listed in the item above remain uncommitted.
 
 ### 🟡 Medium — tracked, not actioned
 

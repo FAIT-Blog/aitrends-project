@@ -10809,5 +10809,39 @@ git diff --stat after restore: gemini.js | 15 insertions(+), 3 deletions(-)</cod
       fall, the next lever is the generation retry, not another prompt rewrite.
     </div>
   </div>
+
+  <h3>Leaving a reminder that survives the session</h3>
+
+  <p>There is a second lesson here, about how the work is tracked rather than how the code works. "Re-measure
+  in 14 days" is not a task unless something will actually surface it in 14 days. An AI assistant has no
+  persistent memory between sessions and no scheduler; a human has other things to do. Any check that depends
+  on either is a check that quietly never happens.</p>
+
+  <p>The mechanism this project uses is the document the next session is obliged to read. The re-check was
+  written into the top of <code>§7A</code> in <code>CLAUDE.md</code> — above the dated verification blocks,
+  where it cannot be missed — with four things that make it executable rather than aspirational:</p>
+
+  <pre><code>date      2026-11-20
+query     llm_request_ledger WHERE purpose = 'gate-check'
+          AND timestamp &gt;= '2026-11-06T00:00Z'
+buckets   pure WTM · short+WTM · short-only · no digest · banned word
+baseline  49 rows → 35 (71%) WTM-related
+success   WTM share falls AND absolute count falls
+ignore    pre-deploy rows; published bare-&lt;p&gt; posts are not retro-fixed
+if flat   go to the scout.js expansion retry, not another prompt rewrite</code></pre>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> a deferred check must record its date, its exact query, its baseline, and its
+      definition of success — in a document the next session reads. Naming the "if flat" path in advance is
+      what prevents the next session from repeating the same failed approach.
+    </div>
+  </div>
+
+  <p>Automating the query was considered and rejected for this one. A scheduled job can collect the numbers,
+  but the decision it feeds — did the contract change work, or do we change the generator? — still needs a
+  person to look at both the share and the absolute count, because the denominator moves with run volume.
+  Collecting data automatically while leaving the interpretation unowned is how a metric becomes decoration.</p>
 </div>
 

@@ -17325,4 +17325,56 @@ aitrends.ng:  f6dc329..0d8ebcb  main -&gt; main</code></pre>
   </div>
 </div>
 
+<hr>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Write option 1&gt;</p>
+    <p>And what is the next important to-do list pending?</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Why a written reminder is the only mechanism that works</h3>
+    <p>The obvious problem with "re-measure in 14 days" is that there is no scheduler and no cross-session
+    recall. If the check depends on remembering, it does not happen. It is also wrong to schedule it as a
+    cron job: a workflow that silently runs a query is not a decision, and the whole point of the re-measure
+    is to decide whether the gate change worked.</p>
+    <p>So the reminder is written into the place a future session is guaranteed to read — the top of
+    <code>§7A</code> in <code>CLAUDE.md</code>, above the dated re-verification blocks, with the query, the
+    baseline, the success criterion and the exclusions all inline. A future session that starts on or after
+    2026-11-20 cannot open §7A without seeing it.</p>
+
+    <pre><code>### ⏰ Scheduled follow-up — due 2026-11-20 (Session #60)
+
+  Query:    llm_request_ledger WHERE purpose = 'gate-check'
+            AND timestamp &gt;= '2026-11-06T00:00Z'
+  Buckets:  pure WTM · short+WTM · short-only · no digest · banned word
+  Baseline: 49 rows → 35 (71%) WTM-related (17 pure, 18 short+WTM)
+  Success:  WTM share falls AND absolute count falls
+  Ignore:   pre-deploy rows; the 44 published bare-&lt;p&gt; posts are not retro-fixed
+  If flat:  move to the scout.js expansion retry, not another prompt rewrite</code></pre>
+
+    <p>Two properties matter. The entry names a date, so it can be found by searching for it rather than
+    recalled. And it names the failure path in advance, which is what stops the next session from repeating
+    <code>7133ebc</code>.</p>
+
+    <div class="callout info">
+      <div class="callout-icon">i</div>
+      <div class="callout-body">
+        <strong>Rule:</strong> any instruction of the form "check this later" must be written into a document
+        the next session is obliged to read, with the date, the exact query, and the definition of success.
+        A reminder that lives only in a conversation is not a reminder.
+      </div>
+    </div>
+
+    <p>While in <code>§7A</code>, the stale "S53/S54/S55/S56 documentation work is uncommitted" item was also
+    closed — all three documents are committed and pushed (<code>8edd973</code>, <code>524dac7</code>). Only
+    the untracked forensic deliverables remain uncommitted.</p>
+  </div>
+</div>
+
 </html>
