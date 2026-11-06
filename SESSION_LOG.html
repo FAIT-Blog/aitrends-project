@@ -17377,4 +17377,71 @@ aitrends.ng:  f6dc329..0d8ebcb  main -&gt; main</code></pre>
   </div>
 </div>
 
+<hr>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Doncument this last session report</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Session #60 close-out report</h3>
+    <p>Recording the ranked pending list given at the end of the session. The items themselves already live in
+    <code>CLAUDE.md §7A</code>; this entry records the <em>ordering</em> and the reasoning behind it, so a
+    future session can see why this order was chosen rather than only what is open.</p>
+
+    <h4>Shipped this session</h4>
+    <ul>
+      <li><code>59e17b2</code> — scout-agent: substantive WTM gate (<code>quality-gate.js</code>), prompt
+      rewrite in all three digest paths (<code>gemini.js</code>), retry instructions
+      (<code>scout.js</code>), 10 new tests (<code>test-quality-gate.mjs</code>).</li>
+      <li><code>0d8ebcb</code> — aitrends.ng: the TypeScript mirror (<code>lib/qualityGate.ts</code>).</li>
+      <li><code>524dac7</code> — docs: Session #60 in all three documents.</li>
+      <li><code>c239773</code> — docs: the dated 2026-11-20 re-check written into <code>§7A</code>, plus the
+      stale S53–S56 documentation item closed.</li>
+    </ul>
+
+    <h4>Pending, ranked</h4>
+    <ol>
+      <li><strong>Watch the next 2–3 Phase 1 runs.</strong> No action unless throughput collapses. The gate is
+      stricter at generation now, so the 44/200 corpus shape will fail at Phase 1 until the prompt lands. If
+      WTM rejections spike <em>and</em> the expansion retry also fails, that is the signal to look at the
+      generator.</li>
+      <li><strong>Bing-News-Anthropic feed</strong> — the only 🔴 left. ~19-character full texts; it drove
+      ~32% of <code>scout_memory</code> marks and 33 of 39 SWS rejects. Cheapest high-value fix: remove or
+      replace the feed.</li>
+      <li><strong>Decide the S51 image rules</strong> — 3 blocks, already written and verified, uncommitted.
+      A yes/no, not work.</li>
+      <li><strong><code>gemini-podcast.js:192</code></strong> — still reads <code>parts?.[0]?.text</code>. The
+      latent bug is live again because Gemini is reachable; one-line fix using
+      <code>extractGeminiText()</code>.</li>
+      <li><strong>Housekeeping</strong> — commit or discard the 7 untracked forensic deliverables; fix the
+      <code>TRAINING_MANUAL.html</code> TOC gap.</li>
+    </ol>
+
+    <p>Smaller and evidence-gated, deliberately not actioned: the banned-word substring check (3 recent
+    failures — <code>"incredible"</code> can match quoted source text) and the 8 "no digest produced" rows.
+    Neither is worth touching until the 2026-11-20 measurement shows what is left.</p>
+
+    <div class="callout info">
+      <div class="callout-icon">i</div>
+      <div class="callout-body">
+        <strong>Why this order:</strong> item 1 costs nothing and protects against a regression the session
+        itself introduced. Item 2 is the largest measured loss in the funnel and has a cheap fix. Items 3 and 4
+        are already-decided or already-written changes sitting behind a single approval. Item 5 is hygiene.
+        The evidence-gated items are last because acting on them now would be guessing.
+      </div>
+    </div>
+
+    <p><strong>Files changed in this documentation pass:</strong> <code>SESSION_LOG.html</code> (this turn)
+    and <code>TRAINING_MANUAL.html</code> (Chapter 72 close-out subsection). <code>CLAUDE.md</code> was not
+    changed for the report itself — every item in it already exists in <code>§7A</code>, and duplicating the
+    list there would create a second source of truth that could drift.</p>
+  </div>
+</div>
+
 </html>

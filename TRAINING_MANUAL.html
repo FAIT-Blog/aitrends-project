@@ -10843,5 +10843,66 @@ if flat   go to the scout.js expansion retry, not another prompt rewrite</code><
   but the decision it feeds — did the contract change work, or do we change the generator? — still needs a
   person to look at both the share and the absolute count, because the denominator moves with run volume.
   Collecting data automatically while leaving the interpretation unowned is how a metric becomes decoration.</p>
+
+  <h3>Close-out: how the remaining work was ranked</h3>
+
+  <p>The session ended with a ranked pending list. The ranking is worth keeping because the order is an
+  argument, not an inventory:</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>Watch the next 2–3 Phase 1 runs.</strong> Costs nothing, and protects against a regression this
+        session introduced. The gate is stricter at generation now, so the 44/200 corpus shape will fail at
+        Phase 1 until the prompt lands. Only if WTM rejections spike <em>and</em> the expansion retry also
+        fails is the generator at fault.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>Remove or replace the Bing-News-Anthropic feed.</strong> The largest measured loss in the
+        funnel — ~19-character full texts, ~32% of <code>scout_memory</code> marks, 33 of 39 SWS rejects — with
+        the cheapest possible fix.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>Approve or reject the Session #51 image rules.</strong> Already written, already verified,
+        sitting uncommitted behind a single yes/no.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <strong>Fix <code>gemini-podcast.js:192</code>.</strong> It still reads <code>parts?.[0]?.text</code>;
+        the bug is live again now that Gemini is reachable. One line, using the existing
+        <code>extractGeminiText()</code>.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <strong>Hygiene.</strong> Commit or discard the untracked forensic deliverables; fix the manual's table
+        of contents.
+      </div>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> rank by (a) risk created by the change just made, (b) size of the measured loss,
+      (c) how close an item already is to done, (d) hygiene — and put anything that needs new evidence last.
+      The banned-word substring check and the 8 "no digest produced" rows were left alone for exactly that
+      reason: acting on them now would be guessing.
+    </div>
+  </div>
+
+  <p>One more decision was recorded: the report itself does not get a copy in <code>CLAUDE.md</code>. Every
+  item already exists in <code>§7A</code>, and duplicating the list in the spec would create a second source
+  of truth that can drift. The report lives in the session log and here; the spec stays the inventory.</p>
 </div>
 
