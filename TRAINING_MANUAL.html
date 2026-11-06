@@ -10430,3 +10430,159 @@ node --experimental-test-module-mocks --test test-editorial-eligibility.mjs
   </div>
 </div>
 
+<div class="chapter" id="chapter-71">
+  <div class="chapter-num">Chapter 71</div>
+  <h2>Editorial Polish: Alt Text, Headline Caps, and Subject-Based Categories</h2>
+
+  <p>This chapter records three defects that had been invisible for months because each one was
+  <em>plausible</em>: the alt text looked like a description, the headline looked like a headline, and the
+  category looked like a category. All three were produced by the same mistake — <strong>treating an internal
+  implementation detail as if it were the published artifact.</strong></p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>The three defects:</strong> (1) every cover image used the image-generation prompt as its
+      <code>alt</code> text, so screen readers read an art-direction brief; (2) headlines were unbounded, and
+      the model produced a ~171-character comma-separated metric dump; (3) the RSS lane hard-injected the
+      feed bucket as the category, so an Anthropic $2T IPO story arriving through a curated <code>tools</code>
+      feed was published as <code>tools</code>.
+    </div>
+  </div>
+
+  <h3>Lesson 1 — accessibility metadata describes the artifact, not the instruction</h3>
+
+  <p>The frontend rendered <code>alt={post.cover_image_prompt}</code>. That value is the prompt sent to the
+  image model: long, art-directed, and full of instructions like "cinematic composition". A sighted reader
+  never sees it. A screen-reader user heard it instead of a description of the picture.</p>
+
+  <p>The fix is not a frontend string swap. The pipeline must <em>produce</em> a description of the rendered
+  image, carry it through the queue, and store it next to the image URL:</p>
+
+  <pre><code>Phase 1  gemini.js   → IMAGE_ALT: [concise description of the final image]
+         memory.js   → pending_posts.image_alt
+Phase 2  complete.js → resolvedImageAlt
+         publisher.js→ POST /api/posts/create { cover_image_alt }
+         createPost  → posts.cover_image_alt
+Frontend PostCard / HeroPost / post page / admin → alt={cover_image_alt || title}</code></pre>
+
+  <p>There is one deliberate exception. The <code>[OG_IMAGE]</code> editorial path does not generate an
+  illustration — it downloads the source article's photograph. The generated <code>IMAGE_ALT</code> would
+  describe an image that is not displayed, so that path uses the post title instead:</p>
+
+  <pre><code>const resolvedImageAlt = post.image_prompt?.startsWith('[OG_IMAGE]')
+  ? (post.title || '')
+  : (post.image_alt || post.title || '')</code></pre>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> when two representations of the same field exist (the instruction that produced an
+      artifact and the description of the artifact), store both. Never let the consumer guess which one it
+      received.
+    </div>
+  </div>
+
+  <h3>Lesson 2 — prompt instructions are not guarantees; add a deterministic backstop</h3>
+
+  <p>The prompts now ask for a 55–80-character headline with one central claim. That improves the average
+  case, but it cannot be trusted: the same model produced a 171-character title listing revenue growth,
+  margins, profit, cash, and lifetime burn. The published artifact needs a hard limit that runs in code.</p>
+
+  <pre><code>export const MAX_HEADLINE_CHARS = 90
+export const TARGET_HEADLINE_CHARS = 80
+const MIN_HEADLINE_CUT = 40
+
+export function normaliseHeadline(title) {
+  const raw = String(title || '').replace(/\s+/g, ' ').trim()
+  if (!raw || raw.length &lt;= MAX_HEADLINE_CHARS) return raw
+
+  // Prefer the latest natural clause boundary between 40 and 80 characters.
+  let cut = -1
+  for (const delimiter of [',', ';', ':', ' — ', ' – ', ' | ']) { /* scan */ }
+
+  // Otherwise cut at the last word boundary at or before 80.
+  if (cut === -1) { /* lastIndexOf(' ') */ }
+
+  return raw.slice(0, cut).replace(/[\s,;:—–|-]+$/g, '').trim()
+}</code></pre>
+
+  <p>Two properties matter. It is <strong>deterministic</strong> (same input, same output), and it prefers a
+  <strong>semantic boundary</strong> (a comma or dash) over a mid-word chop. The cap lives in the shared
+  <code>quality-gate.js</code>, so every lane that publishes goes through the same rule.</p>
+
+  <h3>Lesson 3 — classify by subject, not by the pipe the story arrived through</h3>
+
+  <p>The RSS lane called <code>generateDigest(articles, category)</code>, and the prompt contained
+  <code>CATEGORY: ${category}</code>. That value was the feed bucket. The model was never asked to classify
+  anything; the saved category was <code>digest.category || 'tools'</code>. The category was therefore a
+  property of the <em>source plumbing</em>, not of the <em>story</em>.</p>
+
+  <p>The visible failure: <code>latent.space</code> is a curated <code>tools</code> feed. A story about
+  Anthropic filing a $2 trillion IPO — clearly an <code>anthropic</code> story — arrived through that feed
+  and was published as <code>tools</code>. The taxonomy was internally consistent and externally wrong.</p>
+
+  <pre><code>// Before — the feed bucket IS the category
+CATEGORY: ${category}
+category: digest.category || 'tools'
+
+// After — the model classifies; the feed is only a tie-breaker
+CATEGORY — classify by the story's PRIMARY SUBJECT, not the feed it arrived through:
+- anthropic → primarily about Anthropic or Claude
+- ai-models → model releases, benchmarks, research, comparisons
+- tools     → AI tools, developer utilities, coding agents, workflows
+- industry  → AI companies, funding, policy, regulation, market news
+Use this feed hint only as a tie-breaker: ${category}
+
+// scout.js — deterministic validation after parsing
+const finalCategory = normaliseCategory(digest.category, category)</code></pre>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> if a field is meant to describe the content, it must be derived from the content.
+      Deriving it from the transport (feed, folder, channel, file extension) produces confident, consistent,
+      wrong metadata.
+    </div>
+  </div>
+
+  <h3>The deployment-order trap</h3>
+
+  <p>Adding a column to code is not the same as adding it to the database. The frontend now inserts
+  <code>cover_image_alt</code> and Phase 2 updates it; the queue now writes <code>image_alt</code>. If either
+  ships before the migration, every insert fails with <code>column does not exist</code> — and Phase 1 fails
+  <em>after</em> paying for the LLM digest.</p>
+
+  <div class="callout danger">
+    <div class="callout-icon">✕</div>
+    <div class="callout-body">
+      <strong>Order is part of the change:</strong> run
+      <code>aitrends.ng/supabase/add-cover-image-alt.sql</code> first, verify both columns respond over
+      PostgREST, then deploy the frontend / Phase 2. The migration uses idempotent
+      <code>ALTER TABLE ... ADD COLUMN IF NOT EXISTS</code> plus <code>NOTIFY pgrst, 'reload schema'</code>.
+    </div>
+  </div>
+
+  <h3>Verification</h3>
+
+  <ul>
+    <li><code>node --check</code> clean on <code>gemini.js</code>, <code>scout.js</code>,
+    <code>memory.js</code>, <code>complete.js</code>, <code>publisher.js</code>,
+    <code>quality-gate.js</code>.</li>
+    <li><code>test-quality-gate.mjs</code> — 11/11 (category normalisation + headline tightening).</li>
+    <li>Existing suites — <code>test-sources</code> 3/3, <code>test-gemini-parts</code> 10/10,
+    <code>test-editorial-eligibility</code> 8/8 (all with <code>--experimental-test-module-mocks</code>).</li>
+    <li><code>npx tsc --noEmit</code> in <code>aitrends.ng</code> — exit 0.</li>
+  </ul>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Shipped:</strong> <code>3b4004c</code> (scout-agent) and <code>f6dc329</code> (aitrends.ng).
+      The Session #51 image-prompt refinement remains uncommitted in <code>gemini.js</code> by design — the
+      commit was staged from a temporary copy with those hunks removed, then the full file was restored to
+      the working tree.
+    </div>
+  </div>
+</div>
+

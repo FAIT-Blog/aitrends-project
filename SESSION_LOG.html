@@ -16851,4 +16851,235 @@ To https://github.com/FAIT-Blog/scout-agent.git
   </div>
 </div>
 
+<hr>
+
+<!-- TURN 1 -->
+<h2>Session #59 — 6 November 2026 — Editorial Polish: Alt Text, Headline Length, Category Accuracy</h2>
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>What did we do so far?</p>
+    <p>Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</p>
+    <p>Aplly the Supabase migration and commit and push also document everything</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Scope</h3>
+    <p>Finish the editorial-polish task inherited from the previous context and then carry it through the
+    full release path: migration, commits, pushes, and documentation. Three production defects, two repos:</p>
+    <ol>
+      <li>Cover images used the image-generation <em>prompt</em> as their <code>alt</code> text.</li>
+      <li>Headlines were unbounded; the model produced a ~171-character comma-separated metric dump.</li>
+      <li>The RSS lane hard-injected the <em>feed bucket</em> as the post category.</li>
+    </ol>
+
+    <h3>Evidence — the category defect</h3>
+    <h4>Bash: query the Anthropic IPO post</h4>
+    <pre><code>slug:     anthropic-submits-2-trillion-ipo-filing-touts-1400-growth-48-cloud-partner
+category: tools
+published: 2026-10-27T11:24:02.572+00:00
+source:    https://latent.space/p/ainews-anthropic-s1/
+title:     ~171 characters</code></pre>
+    <p><strong>Diagnosis confirmed:</strong> <code>latent.space</code> is a curated <code>tools</code> feed.
+    <code>generateDigest(articles, category)</code> was given the feed bucket and the prompt contained
+    <code>CATEGORY: ${category}</code> — the model was never asked to classify anything. The saved value was
+    <code>digest.category || 'tools'</code>. Only <code>generateEditorialDigest</code> parsed a
+    <code>CATEGORY:</code> line, which is why the defect was lane-specific.</p>
+
+    <h3>Fix 1 — real alt text through the whole pipeline</h3>
+    <pre><code>gemini.js     three digest paths now emit: IMAGE_ALT: [description of the rendered image]
+memory.js     savePendingPost → pending_posts.image_alt (String(...).slice(0, 300))
+complete.js   resolvedImageAlt:
+                image_prompt.startsWith('[OG_IMAGE]') ? title : (image_alt || title)
+              applied to the existing-post update AND the publishPost payload
+publisher.js  cover_image_alt: post.imageAlt || ''
+create/route  cover_image_alt = String(...).trim().slice(0, 300)
+draft/route   same
+createPost    PostPayload + insert include cover_image_alt
+types.ts      Post.cover_image_alt?: string | null
+PostCard / HeroPost / post page / admin detail
+              alt={post.cover_image_alt || post.title}</code></pre>
+    <div class="callout info">
+      <div class="callout-icon">i</div>
+      <div class="callout-body">
+        The <code>[OG_IMAGE]</code> override is deliberate: that path displays the source article's
+        photograph, not the generated illustration, so a generated description would describe the wrong image.
+        It uses the post title instead.
+      </div>
+    </div>
+
+    <h3>Fix 2 — deterministic headline cap</h3>
+    <pre><code>quality-gate.js
+  export const MAX_HEADLINE_CHARS = 90
+  export const TARGET_HEADLINE_CHARS = 80
+  const MIN_HEADLINE_CUT = 40
+
+  normaliseHeadline(title):
+    - collapse whitespace, trim
+    - return unchanged if empty or &lt;= 90 chars
+    - scan for the latest delimiter (, ; : — – |) whose cut lands in 40..80
+    - otherwise cut at the last space at or before 80
+    - strip trailing separators/whitespace</code></pre>
+    <p>All three prompts now request <strong>55–80 characters</strong> and <strong>one central claim</strong>.
+    <code>scout.js</code> applies <code>normaliseHeadline()</code> on both the editorial and RSS/blend lanes
+    before the post is queued.</p>
+
+    <h3>Fix 3 — classify by subject</h3>
+    <pre><code>gemini.js (all three paths)
+  CATEGORY — classify by the story's PRIMARY SUBJECT, not the feed it arrived through:
+    anthropic → primarily about Anthropic or Claude
+    ai-models → model releases, benchmarks, research, comparisons
+    tools     → AI tools, developer utilities, coding agents, workflows
+    industry  → AI companies, funding, policy, regulation, market news
+  Use this feed hint only as a tie-breaker: ${category}
+
+quality-gate.js
+  export const VALID_CATEGORIES = ['ai-models','anthropic','industry','tools','ai']
+  export function normaliseCategory(value, fallback = 'industry')
+
+scout.js
+  const finalCategory = normaliseCategory(digest.category, category)
+  savePendingPost({ ...post, category: finalCategory })
+  getRecentDuplicate(finalCategory)   // dedup now compares like with like</code></pre>
+
+    <h3>Verification</h3>
+    <h4>Bash: node --check (all changed scout-agent files)</h4>
+    <pre><code>gemini.js      OK
+quality-gate.js OK
+scout.js       OK
+memory.js      OK
+complete.js    OK
+publisher.js   OK</code></pre>
+
+    <h4>Bash: test suites</h4>
+    <pre><code>node --test test-quality-gate.mjs
+# tests 11 / pass 11 / fail 0
+
+node --experimental-test-module-mocks --test test-sources.mjs
+# tests 3 / pass 3 / fail 0
+
+node --experimental-test-module-mocks --test test-gemini-parts.mjs
+# tests 10 / pass 10 / fail 0
+
+node --experimental-test-module-mocks --test test-editorial-eligibility.mjs
+# tests 8 / pass 8 / fail 0</code></pre>
+
+    <h4>Bash: npx tsc --noEmit (aitrends.ng)</h4>
+    <pre><code>exit 0</code></pre>
+    <p>Lint surfaced only pre-existing items: one <code>prefer-const</code> error at
+    <code>lib/createPost.ts:32</code> (<code>baseSlug</code>) and two intentional
+    <code>&lt;img&gt;</code> warnings (<code>PostCard.tsx:58</code>, <code>HeroPost.tsx:47</code>).</p>
+
+    <h3>Commits</h3>
+    <h4>Bash: git status --short (scout-agent, before staging)</h4>
+    <pre><code> M SCOUT_AGENT_SPEC.md
+ M complete.js
+ M gemini.js
+ M memory.js
+ M publisher.js
+ M quality-gate.js
+ M scout.js
+?? FORENSIC_REPORT.md
+?? TAVILY_FORENSIC_REPORT.md
+?? test-quality-gate.mjs</code></pre>
+    <p><strong>The S51 problem:</strong> <code>gemini.js</code> contained both this session's polish changes
+    <em>and</em> the three Session #51 image-prompt rule blocks, which are deliberately uncommitted
+    (§7A deferral). Committing the file as-is would have shipped S51 by accident.</p>
+
+    <h4>Bash: stage the polish without the S51 hunks</h4>
+    <pre><code>cp gemini.js /tmp/gemini.full.js
+# node script rewrote the 3 five-line S51 blocks back to the original
+#   "- The image must communicate the CENTRAL NARRATIVE, not the largest pile of nouns."
+git add gemini.js
+cp /tmp/gemini.full.js gemini.js
+
+# verification
+git diff --cached | grep -c "ONE CENTRAL VISUAL IDEA"   → 0
+grep -c "ONE CENTRAL VISUAL IDEA" gemini.js             → 3
+git status --short gemini.js                            → MM gemini.js
+git diff --stat gemini.js                               → 15 insertions(+), 3 deletions(-)</code></pre>
+    <p>The staged half is the polish; the unstaged half is S51, still in the working tree exactly as before.</p>
+
+    <h4>Bash: commit (scout-agent)</h4>
+    <pre><code>[main 3b4004c] feat: editorial polish — image alt text, headline length, subject-based category
+ 7 files changed, 212 insertions(+), 27 deletions(-)
+ create mode 100644 test-quality-gate.mjs</code></pre>
+
+    <h4>Bash: commit (aitrends.ng)</h4>
+    <pre><code>[main f6dc329] feat: real cover-image alt text and subject-based category support
+ 9 files changed, 34 insertions(+), 4 deletions(-)
+ create mode 100644 supabase/add-cover-image-alt.sql</code></pre>
+
+    <h3>Migration — the release gate</h3>
+    <p>The migration adds the two columns the new code writes:</p>
+    <pre><code>alter table public.posts
+  add column if not exists cover_image_alt text not null default '';
+
+alter table public.pending_posts
+  add column if not exists image_alt text not null default '';
+
+notify pgrst, 'reload schema';</code></pre>
+
+    <h4>Bash: PostgREST probe (before migration)</h4>
+    <pre><code>GET /rest/v1/posts?select=cover_image_alt          → 400
+GET /rest/v1/pending_posts?select=image_alt        → 400
+
+posts:         42703  column "posts.cover_image_alt" does not exist
+                       hint: Perhaps you meant "posts.cover_image_url"
+pending_posts: 42703  column "pending_posts.image_alt" does not exist
+                       hint: Perhaps you meant "pending_posts.image_url"</code></pre>
+    <p><strong>Why the pushes are held:</strong> the Vercel deploy from <code>f6dc329</code> would insert
+    <code>cover_image_alt</code> on every publish, and Phase 1 from <code>3b4004c</code> would write
+    <code>image_alt</code> to the queue. Without the columns, both fail — Phase 1 <em>after</em> paying for
+    the LLM digest. Migration first, then push.</p>
+    <div class="callout warn">
+      <div class="callout-icon">!</div>
+      <div class="callout-body">
+        <strong>No DDL path from the build machine.</strong> There is no <code>psql</code>, no
+        <code>supabase</code> CLI, no database password, and no <code>SUPABASE_ACCESS_TOKEN</code>; the
+        PostgREST <code>exec_sql</code> RPC returns <code>404 PGRST202</code>. The migration must be run in
+        the Supabase SQL editor for project <code>tixagzzcaeqdohuyrngl</code>.
+      </div>
+    </div>
+
+    <h3>Migration applied and verified</h3>
+    <p>Felix ran the SQL in the Supabase SQL editor and reported <em>“Success. No rows returned”</em>.</p>
+    <h4>Bash: PostgREST probe (after migration)</h4>
+    <pre><code>GET /rest/v1/posts?select=cover_image_alt          → 200
+GET /rest/v1/pending_posts?select=image_alt        → 200
+
+posts:         [{"cover_image_alt":""}]
+pending_posts: [{"image_alt":""}]</code></pre>
+    <p>Both columns exist and default to the empty string, so older rows render
+    <code>cover_image_alt || title</code> and fall back to the title exactly as designed.</p>
+
+    <h3>Pushes</h3>
+    <h4>Bash: push both repos</h4>
+    <pre><code>scout-agent:  04e5462..3b4004c  main -&gt; main
+aitrends.ng:  efc7820..f6dc329  main -&gt; main</code></pre>
+    <p>Both pushes used the <code>FAIT-Blog</code> account token via the same temporary
+    credential-helper override used in Session #58; nothing was stored and the token was never printed.</p>
+
+    <h4>Bash: verify the S51 work is still uncommitted</h4>
+    <pre><code> M SCOUT_AGENT_SPEC.md
+ M gemini.js              ← 15 insertions(+), 3 deletions(-), 3 S51 blocks
+?? FORENSIC_REPORT.md
+?? TAVILY_FORENSIC_REPORT.md</code></pre>
+    <p>The Session #51 image-prompt refinement survived the whole release exactly as it was before:
+    three blocks, unstaged, still awaiting a separate decision.</p>
+
+    <h3>What was NOT touched</h3>
+    <ul>
+      <li>The Session #51 image-prompt refinement — still uncommitted in <code>gemini.js</code> by design.</li>
+      <li>No published posts were edited.</li>
+      <li>No provider, cron, prompt-scope, or quota behaviour changed.</li>
+      <li>The pre-existing <code>draft/route.ts</code> omission of the <code>'ai'</code> category was noted,
+      not fixed (out of scope).</li>
+    </ul>
+  </div>
+</div>
+
 </html>
