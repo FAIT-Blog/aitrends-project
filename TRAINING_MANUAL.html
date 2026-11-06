@@ -10586,3 +10586,228 @@ const finalCategory = normaliseCategory(digest.category, category)</code></pre>
   </div>
 </div>
 
+<div class="chapter" id="chapter-72">
+  <div class="chapter-num">Chapter 72</div>
+  <h2>When a Prompt and a Gate Disagree: Fixing "Why This Matters"</h2>
+
+  <p>This chapter is about a defect that survived two attempts to fix it. The first attempt was a prompt
+  rewrite (Session #56, commit <code>7133ebc</code>). It did not work. The reason it did not work is the
+  lesson: <strong>the gate and the prompt were enforcing different contracts, and the weaker one always
+  wins.</strong></p>
+
+  <div class="callout danger">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Two halves of one contract disagreed.</strong> The prompt said the literal phrase "Why This
+      Matters" was mandatory, then four lines later said a separate section was optional. The gate checked
+      only that the phrase appeared <em>anywhere</em> in the HTML. Together they accepted a bare label.
+    </div>
+  </div>
+
+  <h3>The measurement that changed the diagnosis</h3>
+
+  <p>The ledger records every gate rejection. Thirty days of <code>purpose=gate-check</code> rows:</p>
+
+  <pre><code>49 gate-check rows
+  17  missing "Why this matters" closing
+  18  too short + missing "Why this matters" closing
+   3  too short (only)
+   8  no digest produced
+   3  banned word ("incredible")
+
+35 of 49 (71%) were WTM-related</code></pre>
+
+  <p>That told us <em>where</em> the loss was: Phase 1 generation, not Phase 2 publishing. It did not tell us
+  what "missing" meant. For that we had to look at what the gate <em>accepted</em>:</p>
+
+  <pre><code>last 200 published posts
+  /why this matters/i  → 200 / 200 contain the phrase
+  WTM &lt;h3&gt; headings    → 18
+  prose closings       → 182
+  WTM heading not last → 0
+
+44 of the 200 end with a bare &lt;p&gt;Why This Matters&lt;/p&gt; and nothing after it</code></pre>
+
+  <p>An earlier audit had scanned for <code>&lt;h3&gt;</code> headings whose body was too short and reported
+  zero violations. It was answering a narrower question than the one that mattered. The majority form is a
+  prose paragraph, and the defect lived there — invisible to a heading-only scan.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Measurement rule:</strong> before trusting a "zero violations" result, check that the query can
+      actually express the violation. A scan that only inspects one structural form will report success on a
+      corpus dominated by the other form.
+    </div>
+  </div>
+
+  <h3>The new contract</h3>
+
+  <p>A post passes the closing requirement if <em>either</em> form is substantive:</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>Heading form.</strong> The <em>final</em> <code>&lt;h2&gt;</code> or
+        <code>&lt;h3&gt;</code> contains "why this matters" and is followed by at least 12 words of body.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>Prose form.</strong> No such heading exists, the phrase sits in the final 20% of the text, and
+        at least 12 words follow it.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>Everything else fails</strong> — with a distinct reason, so the ledger says which rule broke:
+        missing, too short, early mention, or not the final section.
+      </div>
+    </div>
+  </div>
+
+  <pre><code>export const MIN_WTM_WORDS = 12
+
+export function whyThisMattersFailures(content) {
+  const html = String(content || '')
+  const headingRe = /&lt;h([23])[^&gt;]*&gt;([\s\S]*?)&lt;\/h\1&gt;/gi
+
+  let last = null
+  let match
+  while ((match = headingRe.exec(html))) {
+    if (/why this matters/i.test(plainText(match[2]))) last = match
+  }
+
+  if (last) {
+    const after = html.slice(last.index + last[0].length)
+    if (/&lt;h[23][^&gt;]*&gt;/i.test(after)) {
+      return ['"Why this matters" section is not the final section']
+    }
+    const words = countWords(plainText(after))
+    return words &gt;= MIN_WTM_WORDS ? [] : [`"Why this matters" section too short (${words} words, min ${MIN_WTM_WORDS})`]
+  }
+
+  const text = plainText(html)
+  const idx = text.toLowerCase().lastIndexOf('why this matters')
+  if (idx === -1) return ['missing "Why this matters" closing']
+
+  const after = text.slice(idx + 'why this matters'.length)
+  const words = countWords(after)
+  if (idx &gt;= Math.floor(text.length * 0.8) &amp;&amp; words &gt;= MIN_WTM_WORDS) return []
+  return [`"Why this matters" closing is not a substantive final section (${words} words after the phrase)`]
+}</code></pre>
+
+  <p>The TypeScript mirror in <code>aitrends.ng/lib/qualityGate.ts</code> carries the same function so the
+  admin panel's pass/fail badge predicts Phase 2 exactly. The two files must stay structurally identical;
+  they are duplicated only because the frontend cannot import the pipeline's ES module.</p>
+
+  <h3>Changing the prompt to match</h3>
+
+  <p>The prompt must demand the stronger form unconditionally. The self-cancelling sentence was deleted, not
+  softened:</p>
+
+  <pre><code>- End with a literal "Why This Matters" closing (keep the literal phrase ...)
++ End with a FINAL &lt;h3&gt;Why This Matters&lt;/h3&gt; section. The heading must use that exact
++ literal phrase and the section must have its own body text (at least one substantive
++ sentence, 12+ words) — the publishing gate requires both the heading and the body.
+
+- ... if the significance is already expressed naturally, keep it there rather than
+-   forcing a separate section.
++ ... do not fold the significance into an earlier paragraph instead of writing the final
++   section — the section must always be present and substantive.</code></pre>
+
+  <p>The same change was applied to the blend prompt and both editorial branches, and the two Phase 1
+  expansion-retry instructions now name the heading and the word floor, because the retry is the last chance
+  to rescue a draft before the hard stop.</p>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> when a prompt instruction and a code check describe the same requirement, they must
+      state it identically. If the prompt hedges ("or keep it where it reads naturally"), the model will take
+      the hedge and the check will not notice.
+    </div>
+  </div>
+
+  <h3>The tests caught the author, not the code</h3>
+
+  <p>The first run of the new suite failed three tests. Both causes were mistakes in the tests:</p>
+
+  <pre><code># tests 21
+# pass 18
+# fail 3
+
+not ok 15 - WTM: a final heading with a substantive body passes
+not ok 16 - WTM: a substantive prose closing near the end passes
+not ok 20 - WTM: the full gate accepts a valid post with a substantive closing</code></pre>
+
+  <ul>
+    <li>The shared fixture called <code>SUBSTANTIVE</code> was only 10 words —
+    <code>"Regulators will now audit every deployment before it reaches customers."</code> — below the new
+    12-word floor. The gate was right; the fixture was wrong. It was widened to 19 words.</li>
+    <li>One assertion still expected the old <code>section too short</code> reason for a non-final heading,
+    but the gate now returns the more precise <code>section is not the final section</code>. The assertion was
+    replaced with an exact comparison.</li>
+  </ul>
+
+  <p>That is a healthy failure mode. A test that encodes the old contract should break when the contract
+  changes; the danger is a test that passes because it never expressed the rule.</p>
+
+  <h3>Backward compatibility, measured rather than assumed</h3>
+
+  <pre><code>156 / 200 published posts pass unchanged
+ 44 / 200 fail — all with "0 words after the phrase"</code></pre>
+
+  <p>The 44 failures are exactly the bare-label posts. Every post with a real closing still passes, in both
+  forms. This is why the prose branch was kept: 182 of the 200 use it, and a heading-only rule would have
+  declared the dominant healthy form invalid overnight.</p>
+
+  <h3>Shipping a file that contains someone else's uncommitted work</h3>
+
+  <p><code>gemini.js</code> carried this session's four WTM edits <em>and</em> the Session #51 image-prompt
+  refinement, which is still deliberately uncommitted. Committing the file whole would have shipped a
+  deferred change by accident. The file was split:</p>
+
+  <pre><code>cp gemini.js /tmp/gemini.full.js
+git show HEAD:gemini.js &gt; /tmp/gemini.head.js
+node /tmp/wtm_split.mjs          # apply only the WTM replacements to the HEAD copy
+
+diff /tmp/gemini.wtm.js /tmp/gemini.full.js
+  → only the 3 S51 image blocks remain
+
+cp /tmp/gemini.wtm.js gemini.js
+git add quality-gate.js gemini.js scout.js test-quality-gate.mjs
+git commit -m "fix(gate): require a substantive final Why This Matters section"
+cp /tmp/gemini.full.js gemini.js   # restore S51, unstaged
+
+git diff --stat after restore: gemini.js | 15 insertions(+), 3 deletions(-)</code></pre>
+
+  <p>The diff after restoring is the proof that the deferred work is intact and unstaged. Never rely on
+  "I didn't stage it" — verify with a diff.</p>
+
+  <h3>Verification</h3>
+
+  <ul>
+    <li><code>node --check</code> clean on <code>quality-gate.js</code>, <code>scout.js</code>,
+    <code>gemini.js</code>.</li>
+    <li><code>test-quality-gate.mjs</code> — 21/21 (10 new WTM tests).</li>
+    <li>Existing suites — <code>test-sources</code> 3/3, <code>test-gemini-parts</code> 10/10,
+    <code>test-editorial-eligibility</code> 8/8.</li>
+    <li><code>npx tsc --noEmit</code> in <code>aitrends.ng</code> — exit 0; <code>eslint</code> on the changed
+    file — exit 0.</li>
+  </ul>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Shipped:</strong> <code>59e17b2</code> (scout-agent, 4 files) and <code>0d8ebcb</code>
+      (aitrends.ng, the TS mirror). The real test is prospective — re-measure
+      <code>purpose=gate-check</code> over ~14 days against the 35/49 baseline. If the failure rate does not
+      fall, the next lever is the generation retry, not another prompt rewrite.
+    </div>
+  </div>
+</div>
+

@@ -17082,4 +17082,247 @@ aitrends.ng:  efc7820..f6dc329  main -&gt; main</code></pre>
   </div>
 </div>
 
+<hr>
+
+<!-- SESSION #60 -->
+<h2>Session #60 — 6 November 2026 — "Why This Matters" Gate Contract</h2>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p><em>(Answering the design question)</em> <strong>Option A — Structural + substance check.</strong></p>
+    <p>Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Scope</h3>
+    <p>Close the "Why This Matters" loss that survived <code>7133ebc</code> (Session #56). The previous session
+    had already established that the prompt-only fix did not move the metric. This session changed the
+    <em>contract</em> on both sides: the prompts must always produce a final section, and the gate must require
+    that section to carry substance.</p>
+
+    <h3>Evidence before the change — read-only</h3>
+    <h4>Bash: 30-day gate-check breakdown from the ledger</h4>
+    <pre><code>purpose=gate-check, last 30 days → 49 rows
+  17  missing "Why this matters" closing
+  18  too short + missing "Why this matters" closing
+   3  too short (only)
+   8  no digest produced
+   3  banned word ("incredible")
+  → 35 of 49 (71%) are WTM-related</code></pre>
+
+    <h4>Bash: phrase presence across the last 200 published posts</h4>
+    <pre><code>/why this matters/i  → 200 / 200 contain the phrase
+/why it matters/i    → 0
+WTM &lt;h3&gt; headings    → 18 / 200
+prose closings       → 182 / 200
+WTM heading not last → 0</code></pre>
+
+    <p>So the phrase was never missing from published output. The loss was entirely pre-publish, and the
+    published corpus looked healthy at a glance — which is exactly why the defect survived two sessions of
+    prompt tuning.</p>
+
+    <h3>The discovery that reframed the problem</h3>
+    <p>Running the <em>new</em> candidate check against the live corpus (before deploying anything) produced the
+    finding that the earlier "heading-only" scan had missed:</p>
+    <pre><code>WTM failures across 200 published posts: 44
+
+Anthropic's Claude chatbot now reads bank data through Plaid ...
+TAIL: "...&lt;p&gt;For now, Claude remains a conversational analyst ...&lt;/p&gt;
+       &lt;p&gt;Why This Matters&lt;/p&gt;"</code></pre>
+    <p><strong>44 of the last 200 published posts end with a bare
+    <code>&lt;p&gt;Why This Matters&lt;/p&gt;</code> and nothing after it</strong> — 22% of recent output. The old
+    presence-only gate passed every one of them. The earlier scan had only looked for an
+    <code>&lt;h3&gt;</code> heading with a short body, so it reported "0 violations". The defect was in the
+    <em>paragraph</em> form, which is the majority form.</p>
+
+    <div class="callout warn">
+      <div class="callout-icon">!</div>
+      <div class="callout-body">
+        This is the same class of mistake the project keeps finding: a measurement that answers a narrower
+        question than the one being asked. "No heading has a short body" is not "no post has an empty closing".
+      </div>
+    </div>
+
+    <h3>Root cause — two halves of one contract</h3>
+    <pre><code>gemini.js:374  "End with a literal 'Why This Matters' closing ... keep the literal phrase
+                (the publishing gate requires it)."
+gemini.js:378  "... if the significance is already expressed naturally, keep it there
+                rather than forcing a separate section."
+
+quality-gate.js:59  if (!/why this matters/i.test(content)) → reject</code></pre>
+    <p>The prompt told the model that the phrase was mandatory and, four lines later, that a separate section
+    was optional. The gate then accepted the phrase anywhere — including as a bare label. Both sides agreed on
+    the weakest possible interpretation, so neither could catch the other.</p>
+
+    <h3>Decision — Option A</h3>
+    <ul>
+      <li><strong>Prompts:</strong> always emit a <em>final</em> <code>&lt;h3&gt;Why This Matters&lt;/h3&gt;</code>
+      with its own body of 12+ words. Delete the self-cancelling sentence.</li>
+      <li><strong>Gate:</strong> accept a final heading with 12+ words of body, <em>or</em> a prose closing whose
+      phrase sits in the final 20% with 12+ words after it.</li>
+      <li><strong>Why not heading-only:</strong> 182 of 200 published posts are prose closings. Making a heading
+      mandatory would retroactively invalidate the dominant healthy form and create a style break.</li>
+      <li><strong>Why not presence-only + stronger prompt:</strong> that is exactly what <code>7133ebc</code> was,
+      and it produced 44 bare labels.</li>
+    </ul>
+
+    <h3>Implementation — <code>quality-gate.js</code></h3>
+    <h4>Before</h4>
+    <pre><code>// why it matters
+if (!/why this matters/i.test(content)) reasons.push('missing "Why this matters" closing')</code></pre>
+    <h4>After</h4>
+    <pre><code>reasons.push(...whyThisMattersFailures(content))
+
+export const MIN_WTM_WORDS = 12
+
+export function plainText(html) { ... strip tags, decode entities, collapse whitespace ... }
+export function countWords(text) { ... }
+
+export function whyThisMattersFailures(content) {
+  const html = String(content || '')
+  const headingRe = /&lt;h([23])[^&gt;]*&gt;([\s\S]*?)&lt;\/h\1&gt;/gi
+  // find the LAST heading whose text contains "why this matters"
+  // if any heading appears after it → "section is not the final section"
+  // else count words in the remaining HTML → short → "too short (N words, min 12)"
+  // no heading at all → plain-text fallback:
+  //   phrase absent            → 'missing "Why this matters" closing'
+  //   phrase before final 20%  → 'closing is not a substantive final section (N words after the phrase)'
+  //   final 20% + >=12 words   → pass
+}</code></pre>
+
+    <h3>Implementation — the TypeScript mirror</h3>
+    <p><code>aitrends.ng/lib/qualityGate.ts</code> is a hand-maintained mirror (it cannot import the ESM module).
+    The same <code>MIN_WTM_WORDS</code>, <code>plainText</code>, <code>countWords</code> and
+    <code>whyThisMattersFailures</code> were added, and line 44 was replaced with
+    <code>reasons.push(...whyThisMattersFailures(content))</code>. The admin pending-post badge therefore shows
+    exactly what Phase 2 will do.</p>
+
+    <h3>Implementation — prompts (3 digest paths, 4 sites)</h3>
+    <pre><code>generateDigest (RSS)
+- End with a literal "Why This Matters" closing (keep the literal phrase ...)
++ End with a FINAL &lt;h3&gt;Why This Matters&lt;/h3&gt; section. The heading must use that exact
++ literal phrase and the section must have its own body text (at least one substantive
++ sentence, 12+ words) — the publishing gate requires both the heading and the body.
+
+- ... if the significance is already expressed naturally, keep it there rather than
+-   forcing a separate section.
++ ... do not fold the significance into an earlier paragraph instead of writing the final
++   section — the section must always be present and substantive.
+
+synthesizeBlendDigest (blend)   → same restructure, "12+ words total"
+generateEditorialDigest (x2)    → "End the post with a FINAL &lt;h3&gt;Why This Matters&lt;/h3&gt; section
+                                  (required by the publishing gate — it checks both the heading
+                                  and that the section has at least 12 words of body text)."</code></pre>
+
+    <p>Both <code>scout.js</code> expansion-retry instructions were also updated, because the retry is the last
+    chance to rescue a short draft before the hard stop:</p>
+    <pre><code>(3) end with a FINAL &lt;h3&gt;Why This Matters&lt;/h3&gt; section containing at least 12 words of body text</code></pre>
+
+    <h3>Verification round 1 — three failures, all in the tests</h3>
+    <pre><code># tests 21
+# pass 18
+# fail 3
+
+not ok 15 - WTM: a final heading with a substantive body passes
+not ok 16 - WTM: a substantive prose closing near the end passes
+not ok 20 - WTM: the full gate accepts a valid post with a substantive closing</code></pre>
+    <p>Two separate mistakes, both mine:</p>
+    <ol>
+      <li>The shared fixture <code>SUBSTANTIVE</code> was 10 words, not 12:
+      <code>"Regulators will now audit every deployment before it reaches customers."</code> — the gate was
+      right to reject it. Fixed by making the fixture 19 words.</li>
+      <li>One assertion was stale: the non-final-heading case still expected <code>/section too short/</code>,
+      but the gate now returns the more precise
+      <code>"Why this matters" section is not the final section</code>. Replaced with an exact
+      <code>deepEqual</code>.</li>
+    </ol>
+    <div class="callout success">
+      <div class="callout-icon">✓</div>
+      <div class="callout-body">
+        Worth keeping in the record: the first failing run was not a gate bug. The gate refused a closing the
+        test <em>called</em> substantive but which was below the contract's word floor. The test was the thing
+        that was wrong.
+      </div>
+    </div>
+
+    <h3>Verification round 2 — all green</h3>
+    <pre><code>node --check quality-gate.js && node --check scout.js && node --check gemini.js   → JS OK
+node --test test-quality-gate.mjs                                                 → 21/21
+node --test --experimental-test-module-mocks \
+     test-sources.mjs test-gemini-parts.mjs test-editorial-eligibility.mjs        → 13/13 + 8/8
+npx tsc --noEmit (aitrends.ng)                                                    → exit 0
+npx eslint lib/qualityGate.ts                                                     → exit 0</code></pre>
+
+    <h3>Backward-compatibility check against the live corpus</h3>
+    <pre><code>156 / 200 published posts pass unchanged
+ 44 / 200 fail — every one with "closing is not a substantive final section (0 words after the phrase)"</code></pre>
+    <p>The 44 are exactly the bare-label posts. Nothing that has a real closing regressed. The check also
+    confirms the prose-closing branch works: the 182 prose posts that do carry a sentence still pass.</p>
+
+    <h3>Commit — staging <code>gemini.js</code> without the S51 work</h3>
+    <p><code>gemini.js</code> carried two unrelated change sets: this session's WTM edits and the Session #51
+    image-prompt refinement, which is still deliberately uncommitted. The file was split rather than committed
+    whole:</p>
+    <pre><code>cp gemini.js /tmp/gemini.full.js
+git show HEAD:gemini.js &gt; /tmp/gemini.head.js
+node /tmp/wtm_split.mjs          # applies only the 4 WTM replacements to HEAD
+
+diff /tmp/gemini.wtm.js /tmp/gemini.full.js
+  → only the 3 S51 image blocks (5 added / 1 removed each)
+
+cp /tmp/gemini.wtm.js gemini.js
+git add quality-gate.js gemini.js scout.js test-quality-gate.mjs
+git commit -m "fix(gate): require a substantive final Why This Matters section"
+cp /tmp/gemini.full.js gemini.js   # restore S51, unstaged
+
+git diff --stat after restore: gemini.js | 15 insertions(+), 3 deletions(-)</code></pre>
+    <p>Commit <code>59e17b2</code> — 4 files, 133 insertions, 16 deletions. <code>SCOUT_AGENT_SPEC.md</code>
+    (pre-existing uncommitted edit) and the two untracked forensic reports were left alone.</p>
+
+    <h3>Commit — the TypeScript mirror</h3>
+    <pre><code>git add lib/qualityGate.ts
+git commit -m "fix(admin): mirror the substantive Why This Matters gate"
+→ 0d8ebcb — 1 file, 43 insertions, 2 deletions</code></pre>
+
+    <h3>Push</h3>
+    <pre><code>scout-agent:  3b4004c..59e17b2  main -&gt; main
+aitrends.ng:  f6dc329..0d8ebcb  main -&gt; main</code></pre>
+    <p>Both pushes used the <code>GH_TOKEN</code> credential-helper override from Session #58. Nothing was
+    stored; the token was never printed.</p>
+
+    <h3>Documentation</h3>
+    <ul>
+      <li><code>CLAUDE.md</code> — header bumped to Session #60 (with the 35/49 and 44/200 baselines); the two
+      §7A WTM items marked resolved with the historical measurements preserved; the throughput note updated; the
+      WTM gate-contract change removed from the deferred list; a new Scout Critical Rule added ("Why This
+      Matters is a contract, not a phrase"); pipeline STEP 8 and the <code>quality-gate.js</code> file-structure
+      entry updated; §0.2's contradiction example annotated as resolved; Session #60 row added.</li>
+      <li><code>SESSION_LOG.html</code> — this entry.</li>
+      <li><code>TRAINING_MANUAL.html</code> — Chapter 72.</li>
+    </ul>
+
+    <h3>What was NOT touched</h3>
+    <ul>
+      <li>The Session #51 image-prompt refinement — still uncommitted in <code>gemini.js</code> by design
+      (re-verified after the release: 3 blocks, 15 insertions / 3 deletions).</li>
+      <li>No published posts were edited. The 44 bare-label posts remain as they are.</li>
+      <li><code>gemini-podcast.js</code> — its own prompt already asks for
+      <code>&lt;h3&gt;Why This Matters&lt;/h3&gt;</code>; the podcast lane is out of scope.</li>
+      <li>The Bing-News-Anthropic feed, the 8 "no digest produced" rows, and the banned-word substring check
+      remain separate open defects.</li>
+      <li>No provider, cron, quota, or image behaviour changed.</li>
+    </ul>
+
+    <h3>Risk and the next measurement</h3>
+    <p>The prompt now makes a visible <code>&lt;h3&gt;</code> the norm, where 182 of 200 recent posts used a
+    prose closing. That is a deliberate style shift. The real test is prospective: re-measure
+    <code>purpose=gate-check</code> over ~14 days and compare against the 35/49 baseline. If the failure rate
+    does not fall, the next lever is the generation retry, not another prompt rewrite.</p>
+  </div>
+</div>
+
 </html>
