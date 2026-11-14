@@ -11061,3 +11061,57 @@ node --experimental-test-module-mocks --test test-sources.mjs
     </div>
   </div>
 </div>
+
+<div class="chapter" id="chapter-74">
+  <div class="chapter-num">Chapter 74</div>
+  <h2>Announcing a Post Is a Publish Side Effect</h2>
+
+  <p>Once a post is live, the natural next step is distribution: tell Telegram, Bluesky, Mastodon, a
+  Facebook Page, a LinkedIn profile. The first platform is Telegram — free, no review, a bot token that never
+  expires. But the interesting engineering question is not the API call. It is where that call is allowed to
+  live, and what it is allowed to do when it fails.</p>
+
+  <p>In <code>complete.js</code>, publishing is one <code>try</code> block: image, upload, publish, mark
+  published, notify Slack, reply to the editor. The <code>catch</code> resets the row to
+  <code>pending_image</code> or marks it <code>failed</code> after enough attempts. A social announcement
+  placed inside that block inherits a dangerous property: <strong>if it throws, it can rewrite the publish
+  state of a post that is already live.</strong> A rate limit, a timeout, or an expired token would look
+  exactly like a failed publish.</p>
+
+  <p>So the contract has three parts. First, the module catches everything and returns
+  <code>{ ok: false, reason }</code> — it never raises. Second, it no-ops when
+  <code>TELEGRAM_BOT_TOKEN</code> or <code>TELEGRAM_CHANNEL_ID</code> is missing, so the pipeline is
+  unchanged until the channel exists. Third, there are no retries: Phase 2 can re-run a row, and a blind
+  retry risks announcing the same post twice. A missed announcement is recoverable; a duplicate is noise
+  in front of your audience.</p>
+
+  <p>Media has its own constraints. Telegram caps a photo caption at 1,024 characters, so the caption is
+  assembled from a fixed header (the title), a fixed suffix (the canonical URL), and whatever room is left
+  for the excerpt. The excerpt is truncated at a word boundary, never the URL. Text is HTML-escaped, because
+  a headline containing <code>&amp;</code> or <code>&lt;</code> would otherwise break
+  <code>parse_mode: HTML</code>. If the photo URL is rejected, the code falls back to a plain message rather
+  than failing the announcement.</p>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> a side effect of publishing must never be able to change the outcome of
+      publishing. Keep it after the state is committed, catch its errors inside the module, and make it
+      idempotent or non-retrying. Then add a test that proves it does not throw even when the network dies.
+    </div>
+  </div>
+
+  <p>The platform economics matter as much as the code. X is no longer a zero-cost option: the free tier
+  ended in February 2026, and pay-per-use charges $0.015 per post — $0.20 when the post contains a URL,
+  which every news post does. At three to four posts a day that is roughly eighteen dollars a month for
+  distribution alone. Telegram, Bluesky, Mastodon, a Facebook Page, Instagram, Threads and a LinkedIn
+  personal profile are free; a LinkedIn company page is free but needs an access review; Meta apps can stay
+  in development mode while posting only to accounts that hold a role on the app. "Free" still has an
+  operational cost — LinkedIn and Threads tokens last about sixty days and must be refreshed.</p>
+
+  <p>Finally, the distribution layer is useless on its own. On 14 November 2026 the site had two newsletter
+  subscribers (both from June), two feedback messages (none since mid-October), and no social links at all
+  in the footer — only an RSS link. Metadata pointed at <code>@aitrends_ng</code>, a handle that does not
+  exist. The lesson is that traffic is a product of <em>linked, existing</em> profiles plus search
+  visibility; a posting integration without profiles merely publishes into a void.</p>
+</div>

@@ -17590,6 +17590,98 @@ node --experimental-test-module-mocks --test test-sources.mjs
         The durable fix is still Option B.
       </div>
     </div>
+
+    <h3>Continuation — commit, and the Telegram social lane</h3>
+
+    <p>Felix's three decisions, verbatim: <em>"We will use X manually"</em>, <em>"Yes, commit the
+    session"</em>, <em>"Yes, Telegram first"</em>, <em>"No, handle non existent"</em>. That resolves the
+    open commit question, fixes the platform priority, and confirms that no owned social account exists
+    anywhere — so the site's <code>twitter.site: '@aitrends_ng'</code> metadata currently points at an
+    unregistered handle.</p>
+
+    <h4>Bash: git status (both repos)</h4>
+    <pre><code>scout-agent:  M SCOUT_AGENT_SPEC.md   M feeds.js   M gemini.js   ?? FORENSIC_REPORT.md   ?? TAVILY_FORENSIC_REPORT.md
+project root: M CLAUDE.md   M SESSION_LOG.html   M TRAINING_MANUAL.html
+              ?? AI Trends Editorial Constitution.pdf  + 6 untracked forensic reports</code></pre>
+
+    <p>Only <code>feeds.js</code> belongs to this change in the code repo — <code>gemini.js</code> still
+    carries the deliberately-uncommitted Session #51 image rules, and both forensic files are untracked
+    evidence, so none of them were staged. Per the split rule the root repo takes two commits: CLAUDE.md
+    first, then the two HTML documents.</p>
+
+    <h4>Bash: git commit (scout-agent)</h4>
+    <pre><code>[main 663fa77] fix(feeds): remove Bing-News-Anthropic aggregator feed
+ 1 file changed, 5 deletions(-)</code></pre>
+
+    <h4>Bash: git commit (project root)</h4>
+    <pre><code>[main 482e724] docs: Session #61 — Bing-News-Anthropic feed removed
+ 1 file changed, 30 insertions(+), 11 deletions(-)
+[main d608a7d] docs: log Session #61 and add TRAINING_MANUAL Chapter 73
+ 2 files changed, 304 insertions(+)</code></pre>
+
+    <h3>Telegram first — what was built</h3>
+    <ul>
+      <li><strong>New <code>scout-agent/social.js</code></strong> — <code>announcePost()</code> fans out
+      to platforms and <code>announceTelegram()</code> does the actual call. Uses
+      <code>sendPhoto</code> with the Supabase cover, falls back to <code>sendMessage</code> if Telegram
+      rejects the photo URL, and falls back again to no-op-with-reason if no published URL exists.</li>
+      <li><strong>Caption builder</strong> — bold title, excerpt shortened to fit, then the canonical URL
+      as an anchor. Telegram's hard 1,024-character caption cap is respected by computing the room left
+      after the fixed header/suffix and truncating the body at a word boundary; HTML is escaped so a
+      headline containing <code>&amp;</code> or <code>&lt;</code> cannot break the message.</li>
+      <li><strong>Never throws</strong> — every path returns <code>{ ok, platform, mode, id, reason }</code>
+      instead of raising. This matters because <code>complete.js</code> STEP 5b sits inside the publish
+      <code>try</code> block whose <code>catch</code> resets the row to <code>pending_image</code> or marks
+      it <code>failed</code>; an uncaught social error would therefore corrupt publish state.</li>
+      <li><strong>Env-gated</strong> — with <code>TELEGRAM_BOT_TOKEN</code> or
+      <code>TELEGRAM_CHANNEL_ID</code> unset it returns <code>{ skipped: true }</code> and logs nothing to
+      Slack, so the pipeline behaves exactly as it does today until the channel exists.</li>
+      <li><strong>20-second timeout</strong> (<code>AbortSignal.timeout</code>) and <strong>no retries</strong>
+      — a duplicate announcement is worse than a missed one, and Phase 2 can re-run a row.</li>
+      <li><strong>Wiring</strong> — <code>complete.js</code> imports <code>announcePost</code> and calls it
+      as <strong>STEP 5b</strong>, after Slack and before the editorial reply, passing
+      <code>{ ...publishResult, coverImageUrl: publicUrl }</code> because the publisher's response does not
+      carry the image URL.</li>
+      <li><strong>Workflow</strong> — <code>complete.yml</code> maps
+      <code>TELEGRAM_BOT_TOKEN</code> and <code>TELEGRAM_CHANNEL_ID</code> into the Phase 2 step's env.</li>
+    </ul>
+
+    <h4>Bash: verification</h4>
+    <pre><code>node --check social.js            → clean
+node --check complete.js          → clean
+node --experimental-test-module-mocks --test test-social.mjs
+  # tests 7   # pass 7   # fail 0
+node --experimental-test-module-mocks --test test-sources.mjs test-quality-gate.mjs \
+     test-gemini-parts.mjs test-editorial-eligibility.mjs
+  # tests 42  # pass 42  # fail 0</code></pre>
+
+    <p>The new suite (<code>test-social.mjs</code>) pins the properties the pipeline depends on: a clean
+    no-op without credentials, the exact <code>sendPhoto</code> endpoint/payload, HTML-escaped captions
+    that still contain the canonical URL, the <code>sendMessage</code> fallback when the photo is
+    rejected, a network failure returning <code>{ ok: false }</code> rather than throwing, a missing-URL
+    failure, aggregation, and the 1,024-character truncation.</p>
+
+    <h3>Traffic reality check (read-only, 2026-11-14)</h3>
+    <pre><code>newsletter_subscribers  2 total, both 2026-06-21 (own tests)
+feedback                2 total, 0 since 2026-10-15
+posts                   675 published, 87 in the last 30 days
+vercel whoami           No existing credentials found → Analytics not readable from here</code></pre>
+
+    <p>Vercel Analytics is installed and counting since Session #18, but the numbers live only in the
+    Vercel dashboard. No social profile is linked from <code>Footer.tsx</code> (it carries only the RSS
+    link), no <code>sameAs</code> JSON-LD exists, and the share buttons are intents rather than owned
+    accounts — so social referral traffic is structurally impossible today, independent of content
+    quality.</p>
+
+    <div class="callout warn">
+      <div class="callout-icon">!</div>
+      <div class="callout-body">
+        <strong>Not live yet.</strong> Two GitHub Actions secrets
+        (<code>TELEGRAM_BOT_TOKEN</code>, <code>TELEGRAM_CHANNEL_ID</code>) and an existing channel are
+        required before the first announcement. X remains manual: its free tier ended in February 2026 and
+        pay-per-use charges $0.015 per post, or $0.20 when the post contains a URL.
+      </div>
+    </div>
   </div>
 </div>
 
