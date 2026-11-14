@@ -10906,3 +10906,158 @@ if flat   go to the scout.js expansion retry, not another prompt rewrite</code><
   of truth that can drift. The report lives in the session log and here; the spec stays the inventory.</p>
 </div>
 
+
+<div class="chapter" id="chapter-73">
+  <div class="chapter-num">Chapter 73</div>
+  <h2>Removing a Source Is a Funnel Fix, Not a Content Fix</h2>
+
+  <p>Session #61 removed one feed. That sounds small, and as a code change it is: four deleted lines. The
+  reason it matters is that the feed was the single largest measured loss in the pipeline, and every previous
+  attempt to deal with it had been aimed at the wrong layer.</p>
+
+  <p>The feed was a Bing News search for <code>Anthropic</code>, used as a gap-fill source for the
+  <code>anthropic</code> category. It returned twelve items per fetch. Every item was a teaser: a
+  65–210-character description and a link of the form
+  <code>bing.com/news/apiclick?…&amp;url=…</code>. Session #54 measured the consequences across a 150-post
+  window:</p>
+
+  <ul>
+    <li>~32% of all rows in <code>scout_memory</code> came from this one feed.</li>
+    <li>33 of 39 Story Worthiness Score (SWS) rejects traced to it.</li>
+    <li>Full-text extraction yielded roughly <strong>19 characters</strong> per item.</li>
+  </ul>
+
+  <div class="callout danger">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>The ordering is what made it expensive.</strong> The per-category cap
+      (<code>MAX_ARTICLES = 5</code>, <code>scout.js:449</code>) is applied <em>before</em> full text is
+      fetched (<code>scout.js:484</code>). A source whose items are content-free can therefore occupy slots
+      that a real story would have taken — and the truth about its content is only discovered afterwards. A
+      bad feed does not just fail on its own; it displaces.
+    </div>
+  </div>
+
+  <h3>Why the cheaper-looking fixes were wrong</h3>
+
+  <p>Three options were on the table. Only one addressed the defect:</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">A</div>
+      <div class="step-content">
+        <strong>Delete the feed.</strong> ~5 minutes of code, ~10 minutes of documentation. The real cost was
+        governance, not effort: the standing rule says the curated registry is the canonical source list and
+        <code>feeds.js</code> must not be edited. But this source had no registry row at all — it existed only
+        in the deprecated gap-fill surface — so the seed could not retire it. The exception was explicit,
+        narrow, and recorded.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">B</div>
+      <div class="step-content">
+        <strong>Teach the registry to deny gap-fill.</strong> Disabled registry rows would act as a deny-list
+        in <code>sources.js</code>, then add Bing as <code>enabled=false</code>. This is the durable
+        governance fix — roughly 45–60 minutes, a DB write, and test changes. Correct long-term, but it
+        answers "how should future removals work", not "is this feed worth keeping".
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">C</div>
+      <div class="step-content">
+        <strong>Replace it with another aggregator.</strong> 2–4 hours, and it re-imports the same failure
+        mode: search aggregators optimise for clickthrough, not for extractable content.
+      </div>
+    </div>
+  </div>
+
+  <p>Option A shipped; Option B was deferred and written down. That ordering is the lesson: when a source is
+  proven to be structurally incapable of producing a usable article, removing it is the fix. Filtering it,
+  re-ranking it, or replacing it with a similar aggregator just moves the loss further down the funnel.</p>
+
+  <h3>The change itself</h3>
+
+  <pre><code>diff --git a/feeds.js b/feeds.js
+index 663e541..5079430 100644
+--- a/feeds.js
++++ b/feeds.js
+@@ -97,11 +97,6 @@ const feeds = [
+     category: 'anthropic',
+     source: 'Anthropic'
+   },
+-  {
+-    url: 'https://www.bing.com/news/search?q=Anthropic&amp;format=rss',
+-    category: 'anthropic',
+-    source: 'Bing News - Anthropic'
+-  },
+ 
+   // ── AI Industry (Global context) ───────────────────────────
+   {</code></pre>
+
+  <p>Verification was deliberately minimal and complete:</p>
+
+  <pre><code>node --check feeds.js &amp;&amp; node --check sources.js &amp;&amp; node --check scout.js
+node --experimental-test-module-mocks --test test-sources.mjs
+
+1..3
+# pass 3
+# fail 0</code></pre>
+
+  <p>Two pieces of the old feature were left behind on purpose. <code>resolveTrackingLink()</code>
+  (<code>scout.js:72</code>) still rewrites <code>bing.com/news/apiclick</code> links — it is now effectively
+  dead, but it is a cheap prefix check and removing it would have widened a one-line change into a refactor.
+  The historical fixture in <code>.validate-sws.mjs</code> also keeps its Bing row, because a test that
+  replays a real past run should keep replaying it.</p>
+
+  <h3>What the category looks like now</h3>
+
+  <p><code>anthropic</code> resolves to two curated first-party mirrors:</p>
+
+  <ul>
+    <li><code>Anthropic News</code> — registry id 17</li>
+    <li><code>Anthropic Engineering</code> — registry id 89</li>
+  </ul>
+
+  <p>Because <code>MIN_ARTICLES = 1</code> (<code>scout.js:35</code>), a quiet run skips the category rather
+  than failing. That is the desired behaviour — but it also means the new risk is silent.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>New risk: correlated failure.</strong> Both remaining feeds are served by the same third-party
+      GitHub mirror repository (<code>taobojlen/anthropic-rss-feed</code>). They do not fail independently. If
+      that mirror drifts or goes quiet, the category disappears in one step with no error. Removing a source
+      does not end the monitoring obligation — it moves it.
+    </div>
+  </div>
+
+  <h3>Lessons that generalise</h3>
+
+  <ol>
+    <li><strong>Fix the funnel where the loss happens.</strong> A downstream gate that rejects a story has
+    already spent the slot, the fetch, and often the LLM call. The Bing feed's loss was recorded at SWS and
+    STEP 7b, but it was caused at ingest.</li>
+    <li><strong>A source must be able to produce an article.</strong> The test is not "does it mention AI" or
+    "is the title relevant". It is "can full text be extracted from the link". Aggregators and search
+    results pages usually fail that test by construction.</li>
+    <li><strong>Check the ordering of caps and fetches.</strong> Capping before fetching is usually correct
+    for cost, but it silently promotes whatever arrives first. Any low-quality source upstream of the cap is
+    disproportionately damaging.</li>
+    <li><strong>A governance exception must be named as an exception.</strong> The "never edit
+    <code>feeds.js</code>" rule was not repealed. One source, which had no registry row and no other way to
+    be retired, was removed, and the reason was written into the spec. The durable fix (registry deny-list)
+    remains open on purpose.</li>
+    <li><strong>No money was saved, and that was never the point.</strong> These rejections happen before any
+    model call, so the cost of keeping the feed was wasted slots and memory noise, not tokens. Estimating the
+    value of a fix in the wrong currency is how small correct fixes get deferred indefinitely.</li>
+  </ol>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> when a source is measured as structurally unusable, remove it and record why.
+      Do not filter it, re-rank it, or swap it for a similar aggregator — those changes cost more and leave
+      the displacement effect intact. Then write down the new dependency that removal creates.
+    </div>
+  </div>
+</div>

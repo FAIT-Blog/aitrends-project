@@ -17444,4 +17444,153 @@ aitrends.ng:  f6dc329..0d8ebcb  main -&gt; main</code></pre>
   </div>
 </div>
 
+<hr>
+
+<!-- SESSION 61 -->
+
+<h2>Session #61 — 14 November 2026 — Bing-News-Anthropic feed removed (Option A)</h2>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Do A</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>What "A" was</h3>
+    <p>The previous turn compared three ways to retire the Bing-News-Anthropic feed, which Session #54 had
+    measured as the largest upstream defect in the funnel:</p>
+    <ul>
+      <li><strong>A</strong> — delete the four-line entry from <code>feeds.js</code>. ~5 minutes of code,
+      ~10 minutes of documentation, low risk — but it is a one-time exception to the standing rule
+      <em>"never edit <code>feeds.js</code>"</em>.</li>
+      <li><strong>B</strong> — make the curated registry able to suppress gap-fill (query disabled rows as a
+      deny-list in <code>sources.js</code>, insert Bing as <code>enabled=false, deferred=true</code>, update the
+      seed and <code>test-sources.mjs</code>). ~45–60 minutes, medium risk, requires a registry DB write.</li>
+      <li><strong>C</strong> — replace it with another aggregator. 2–4 hours, not recommended.</li>
+    </ul>
+    <p>Felix chose <strong>A</strong>. The justification for the exception is that the feed existed
+    <em>only</em> in the deprecated gap-fill surface: it has no <code>curated_source_registry</code> row, so
+    the seed — the normal governance mechanism — cannot retire it. Option B (the governance fix) remains the
+    right long-term change and stays deferred.</p>
+
+    <h3>The edit</h3>
+    <pre><code>git -C scout-agent diff -- feeds.js
+
+diff --git a/feeds.js b/feeds.js
+index 663e541..5079430 100644
+--- a/feeds.js
++++ b/feeds.js
+@@ -97,11 +97,6 @@ const feeds = [
+     category: 'anthropic',
+     source: 'Anthropic'
+   },
+-  {
+-    url: 'https://www.bing.com/news/search?q=Anthropic&amp;format=rss',
+-    category: 'anthropic',
+-    source: 'Bing News - Anthropic'
+-  },
+ 
+   // ── AI Industry (Global context) ───────────────────────────
+   {
+</code></pre>
+    <p>Nothing else moved. The Anthropic News mirror entry above it is unchanged; it is a duplicate of
+    registry row 17 and is deduplicated by normalised <code>feed_url</code> in <code>sources.js</code>, so it
+    remains a harmless gap-fill fallback if the registry is unreachable.</p>
+
+    <h3>Verification</h3>
+    <pre><code>node --check feeds.js &amp;&amp; node --check sources.js &amp;&amp; node --check scout.js
+SYNTAX OK
+node --experimental-test-module-mocks --test test-sources.mjs
+
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 103.7195</code></pre>
+    <p>A content search for <code>bing.com|Bing News|resolveTrackingLink</code> after the edit finds only:</p>
+    <ul>
+      <li><code>scout.js:68–73, 402</code> — the <code>resolveTrackingLink()</code> helper and its call site.
+      Left in place deliberately: it is a cheap prefix check on every link, it still resolves any historical
+      Bing link that might appear in stored data, and removing it in the same commit would widen a one-line
+      change into a refactor. It is now effectively dead code.</li>
+      <li><code>.validate-sws.mjs:65, 72</code> — the historical validation fixture that replays a real run
+      containing a Bing-sourced story. Tests are evidence of the past; the fixture keeps its Bing row.</li>
+      <li><code>audit-script.js:103</code> — a one-off manual maintenance script that skips Bing/hnrss/HN URLs.</li>
+    </ul>
+
+    <h3>Why removing it is the right call</h3>
+    <p>The feed was a search-results aggregator, not a publisher. Every item was a teaser: the live RSS
+    (checked before removal: HTTP 200, 11.5 KB, 12 items) carried 65–210-character descriptions and links of
+    the form <code>bing.com/news/apiclick?…&amp;url=…</code>. <code>fetcher.js</code> therefore extracted
+    roughly 19 characters of "full text", which meant:</p>
+    <ol>
+      <li><strong>It could never pass the gates.</strong> Session #54 measured it as ~32% of all
+      <code>scout_memory</code> marks and 33 of 39 SWS rejects. It consumed the funnel at the first filter.</li>
+      <li><strong>It crowded out real stories before the truth was known.</strong> The per-category cap
+      <code>MAX_ARTICLES = 5</code> (<code>scout.js:449</code>) is applied <em>before</em> full-text fetch
+      (<code>scout.js:484</code>), so twelve content-free Bing items could occupy anthropic slots that a real
+      first-party post would otherwise have taken.</li>
+      <li><strong>It was redundant.</strong> The two curated first-party mirrors
+      (<code>Anthropic News</code> id 17, <code>Anthropic Engineering</code> id 89) are the canonical
+      anthropic sources.</li>
+    </ol>
+    <p>What it was never doing is saving money: the gate rejects happen before any LLM call, so the cost of
+    keeping it was wasted slots and <code>scout_memory</code> noise, not tokens. That is why the fix is a
+    deletion rather than a filter.</p>
+
+    <div class="callout warn">
+      <div class="callout-icon">!</div>
+      <div class="callout-body">
+        <strong>New monitoring risk — correlated failure.</strong> Both remaining anthropic feeds are served
+        by the <em>same</em> third-party GitHub mirror repository
+        (<code>taobojlen/anthropic-rss-feed</code>). If that mirror drifts or goes quiet, anthropic does not
+        degrade — it disappears in one step. <code>MIN_ARTICLES = 1</code> (<code>scout.js:35</code>) means a
+        quiet run simply skips the category, so this will be silent. Watch the anthropic category's posting
+        cadence after this change.
+      </div>
+    </div>
+
+    <h3>Documentation mirrored (three-document rule)</h3>
+    <ul>
+      <li><code>CLAUDE.md</code> — header bumped to Session #61; the §2 diagram feed count 25 → 24; the §6
+      "RSS Feeds" heading 25 → 24; the §6 Anthropic block rewritten (it still listed the retired Hacker News
+      filter and claimed <em>"satisfies MIN_ARTICLES=2"</em>, both stale) with a Session #61 note recording
+      the exception, the measured evidence, and the mirror-drift risk; the §7A 🔴 item marked closed with the
+      historical measurement preserved; the "What Has Been Built" feed line updated; the §10 Session #61 row
+      added.</li>
+      <li><code>SESSION_LOG.html</code> — this entry, verbatim.</li>
+      <li><code>TRAINING_MANUAL.html</code> — Chapter 73.</li>
+    </ul>
+
+    <h3>What was NOT touched</h3>
+    <ul>
+      <li>No registry row was added, disabled, or deleted — this change required no DB write.</li>
+      <li>The <code>feeds.js</code> DEPRECATED banner and the rest of the gap-fill list are unchanged.</li>
+      <li><code>resolveTrackingLink()</code> left in place (dead but harmless).</li>
+      <li>No prompt, gate, provider, cron, quota, or image behaviour changed.</li>
+      <li>The Session #51 image-prompt refinement in <code>gemini.js</code> remains uncommitted by design.</li>
+      <li>The scheduled 2026-11-20 WTM re-measurement was <strong>not</strong> run early.</li>
+    </ul>
+
+    <div class="callout info">
+      <div class="callout-icon">i</div>
+      <div class="callout-body">
+        <strong>Rule applied:</strong> the canonical source list is the curated registry, and the seed is the
+        way to change it. Deleting from <code>feeds.js</code> is legitimate <em>only</em> for a source that
+        never had a registry row and exists solely in the deprecated gap-fill surface. That condition was met
+        and checked before the edit; the exception is recorded here rather than treated as a new precedent.
+        The durable fix is still Option B.
+      </div>
+    </div>
+  </div>
+</div>
+
 </html>
