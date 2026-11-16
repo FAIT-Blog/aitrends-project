@@ -11115,3 +11115,35 @@ node --experimental-test-module-mocks --test test-sources.mjs
   exist. The lesson is that traffic is a product of <em>linked, existing</em> profiles plus search
   visibility; a posting integration without profiles merely publishes into a void.</p>
 </div>
+
+<div class="chapter" id="chapter-75">
+  <div class="chapter-num">Chapter 75</div>
+  <h2>Test the Path Production Uses, Not the Easy One</h2>
+
+  <p>Telegram's <code>sendPhoto</code> and <code>sendMessage</code> are different endpoints with different
+  failure modes. Text always works if the token and chat ID are right. The photo path additionally needs
+  Telegram's servers to fetch the image URL — a Supabase Storage object, in this case — which can fail for
+  reasons that never show up in a text test. The production code prefers the photo, so the photo is the
+  path worth proving.</p>
+
+  <p>The smoke test therefore pulled a real published post from Supabase, passed its real cover URL, and
+  asserted <code>mode: "photo"</code>. The message was then deleted with <code>deleteMessage</code>, so the
+  channel kept no stale test content. That is the difference between "the credentials are valid" and "the
+  announcement a reader will actually see renders correctly".</p>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> when an integration has a preferred branch and a fallback branch, test the
+      preferred branch with real data. A passing fallback proves only that failure handling works. Delete
+      your test artefacts from user-facing surfaces afterwards.
+    </div>
+  </div>
+
+  <p>One environment detail deserves recording because it will recur. Both repositories are private and
+  owned by the <code>FAIT-Blog</code> account, but the machine's active GitHub CLI login is a personal
+  account with no access — so <code>git push</code> reports "Repository not found", which reads like a
+  deleted repo. The fix is not a new remote: push with the right account's token via an explicit credential
+  helper, then confirm the branch reports <code>main...origin/main</code> with no ahead/behind count. Do not
+  rewrite the remote URL or paste a token into it — that is how the Session #31 push outage started.</p>
+</div>

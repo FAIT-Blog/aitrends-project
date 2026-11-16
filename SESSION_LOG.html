@@ -17682,6 +17682,31 @@ vercel whoami           No existing credentials found → Analytics not readable
         pay-per-use charges $0.015 per post, or $0.20 when the post contains a URL.
       </div>
     </div>
+
+    <h3>Live — 2026-11-16</h3>
+    <p>Felix created the bot and channel, made the bot a channel administrator, and added both repository
+    secrets to <code>FAIT-Blog/scout-agent</code>. Verified from here:</p>
+    <pre><code>gh secret list  → TELEGRAM_BOT_TOKEN   2026-11-16T15:40:32Z
+                   TELEGRAM_CHANNEL_ID  2026-11-16T15:42:00Z
+pending_posts (pending_image) → 0   (no publish imminent, so no passive test possible)
+announceTelegram(text)  → {"ok":true,"platform":"telegram","mode":"message","id":2}
+announceTelegram(photo) → {"ok":true,"platform":"telegram","mode":"photo","id":3}
+                          cleanup deleted: true  (real published cover, deleted afterwards)</code></pre>
+    <p>The photo test used a real published post's Supabase cover, which proves the production path —
+    <code>sendPhoto</code> with a 1,024-character HTML caption — rather than only the text fallback. The
+    test message was then deleted so the channel contains no stale test content. The first real
+    announcement will arrive with the next Phase 1 → Phase 2 publish.</p>
+    <div class="callout info">
+      <div class="callout-icon">i</div>
+      <div class="callout-body">
+        <strong>Push note:</strong> both repositories were pushed as the <strong>FAIT-Blog</strong> GitHub
+        account. The active <code>felicota</code> login returns <em>"Repository not found"</em> on these
+        private repos, so pushes here use
+        <code>git -c credential.helper= -c credential.helper='!f() { ... gh auth token --user FAIT-Blog ... }; f'</code>
+        rather than the keychain credential. Keep that in mind for the next session instead of re-diagnosing
+        it as a broken remote.
+      </div>
+    </div>
   </div>
 </div>
 
