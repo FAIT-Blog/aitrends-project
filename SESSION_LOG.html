@@ -17705,6 +17705,16 @@ announceTelegram(photo) → {"ok":true,"platform":"telegram","mode":"photo","id"
         <code>git -c credential.helper= -c credential.helper='!f() { ... gh auth token --user FAIT-Blog ... }; f'</code>
         rather than the keychain credential. Keep that in mind for the next session instead of re-diagnosing
         it as a broken remote.
+        <br><br>
+        <strong>Update, same day:</strong> that diagnosis was only half right. The real cause was a macOS
+        keychain entry for <code>github.com</code> whose account name was the literal placeholder
+        <code>YOUR_ACTUAL_PAT</code> — git was authenticating with a garbage credential, so GitHub answered
+        "Repository not found" for a private repo. Erasing that single entry:
+        <code>printf "protocol=https\nhost=github.com\nusername=YOUR_ACTUAL_PAT\n\n" | git credential-osxkeychain erase</code>.
+        The remaining <code>FAIT-Pro</code> entry authenticates and reports
+        <code>push=true</code> on <code>FAIT-Blog/scout-agent</code>, so plain <code>git push</code> works
+        again and the token-borrowing helper is no longer needed. gh's own stored tokens
+        (<code>gh:github.com</code>) were not touched.
       </div>
     </div>
   </div>
