@@ -11147,3 +11147,65 @@ node --experimental-test-module-mocks --test test-sources.mjs
   helper, then confirm the branch reports <code>main...origin/main</code> with no ahead/behind count. Do not
   rewrite the remote URL or paste a token into it — that is how the Session #31 push outage started.</p>
 </div>
+
+<div class="chapter" id="chapter-76">
+  <div class="chapter-num">Chapter 76</div>
+  <h2>Two Ways an Unshipped Change Can Hurt You</h2>
+
+  <p>Chapter 75 ended by blaming a credential-account mismatch for "Repository not found". That was half
+  the story, and the correction is instructive. The keychain held an entry for <code>github.com</code> whose
+  account name was the literal placeholder <code>YOUR_ACTUAL_PAT</code> — a junk credential that git
+  happily offered to GitHub. Private repositories answer unauthenticated requests with a 404, so a stale
+  keychain item disguised itself as a deleted repository. One targeted erase fixed it:</p>
+
+  <pre><code>printf "protocol=https\nhost=github.com\nusername=YOUR_ACTUAL_PAT\n\n" \
+  | git credential-osxkeychain erase</code></pre>
+
+  <p>The remaining <code>FAIT-Pro</code> entry authenticates and reports <code>push=true</code>, so plain
+  <code>git push</code> works again and the token-borrowing helper is no longer needed.</p>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Diagnostic order for a "missing" private repo:</strong> check the error is 404 not 403, then
+      check <em>which credential git used</em> before touching the remote. Read access proves nothing about
+      which identity was offered, and write access proves nothing about which identity was stored.
+    </div>
+  </div>
+
+  <h3>The other kind of unshipped change</h3>
+
+  <p>The same session closed a diff that had been waiting since 5 September: three image-prompt rule blocks
+  drafted at the three <code>RULES:</code> lines of <code>gemini.js</code>, 15 insertions and 3 deletions,
+  held back from the <code>7133ebc</code> commit so that commit would change exactly one contract. They had
+  never produced a single production cover. Felix chose to discard them, and the discard was one command:</p>
+
+  <pre><code>git diff --stat gemini.js      # 1 file changed, 15 insertions(+), 3 deletions(-)
+git checkout -- gemini.js       # back to HEAD, byte-identical
+node --check gemini.js          # clean
+node --experimental-test-module-mocks --test test-gemini-parts.mjs test-quality-gate.mjs   # 0 failures</code></pre>
+
+  <p>Discarding is not the same as failing. A refinement that was never measured, never deployed and never
+  evaluated has no evidence behind it in either direction, and it competes for attention every time someone
+  reads <code>git status</code>. Worse, an unshipped diff is precisely how the Session #49 incident
+  happened: production ran the committed image path while a "better" version sat uncommitted, so covers were
+  silent source-photo reuse until the logs were read. Either commit a change or delete it; a permanent
+  pending diff is the riskiest third option.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> at the end of every session, every modified tracked file in both repositories
+      gets one of three verdicts — committed, explicitly parked with a reason, or discarded. "Still
+      uncommitted, awaiting a decision" is only acceptable when the decision is named and scheduled.
+    </div>
+  </div>
+
+  <h3>Closing a session deliberately</h3>
+
+  <p>Conversation history does not survive between sessions; only the documents do. So the ten remaining
+  items were written into <code>CLAUDE.md</code> §7A in priority order, with the single dated item marked
+  (the WTM gate re-measurement, due on or after 20 November 2026) and the discarded item struck through so
+  the next session does not re-litigate it. Then both repositories were confirmed in sync with
+  <code>origin</code>, and no dev server or pipeline process was left running.</p>
+</div>

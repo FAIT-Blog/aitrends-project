@@ -17717,6 +17717,53 @@ announceTelegram(photo) → {"ok":true,"platform":"telegram","mode":"photo","id"
         (<code>gh:github.com</code>) were not touched.
       </div>
     </div>
+
+    <h3>Session close — 2026-11-16</h3>
+    <p>Felix decided the drafted Session #51 image-prompt rules should be <strong>discarded, not
+    deployed</strong>. They had never shipped: 3 blocks at the 3 <code>RULES:</code> lines of
+    <code>gemini.js</code>, 15 insertions / 3 deletions, held back from <code>7133ebc</code> to keep that
+    commit's contract narrow. The discard was a single restore:</p>
+    <pre><code>cd scout-agent &amp;&amp; git diff --stat gemini.js
+ gemini.js | 18 +++++++++++++++---
+ 1 file changed, 15 insertions(+), 3 deletions(-)
+
+git checkout -- gemini.js
+git status --short
+ M SCOUT_AGENT_SPEC.md
+?? FORENSIC_REPORT.md
+?? TAVILY_FORENSIC_REPORT.md</code></pre>
+    <p><code>gemini.js</code> is now byte-identical to <code>HEAD</code>. Re-verified after the restore:
+    <code>node --check gemini.js</code> clean, and <code>test-gemini-parts</code> +
+    <code>test-quality-gate</code> pass with 0 failures. The Session #50 Visual Editorial Brief therefore
+    remains the live image-prompt policy, and the Session #51 observations stay on the record as
+    observations only.</p>
+
+    <div class="callout tip">
+      <div class="callout-icon">✓</div>
+      <div class="callout-body">
+        <strong>Why discard instead of deploying?</strong> The rules were an improvement hypothesis, not a
+        measured fix. They had never produced a single production cover, so there was no evidence either
+        way — and unshipped edits sitting in a working tree are the exact condition that caused the Session
+        #49 incident, where production ran a committed image path nobody intended. A decision either way is
+        healthier than a permanently pending diff.
+      </div>
+    </div>
+
+    <h3>The next-session queue</h3>
+    <p>Because conversation history does not survive to the next session, the ten remaining items were
+    written into <code>CLAUDE.md</code> §7A in priority order, with the single dated item flagged:</p>
+    <pre><code>1. WTM re-measurement            — due on/after 2026-11-20 (only dated item)
+2. First real Telegram announce  — watch next Phase 2 log for 🔔 telegram: announced (photo)
+3. S51 image rules               — CLOSED: discarded
+4. Forensic files                — commit or discard (6 root + 2 scout-agent + spec banner)
+5. Social presence               — register handles, Footer links, sameAs, via=aitrends_ng
+6. Documentation debt            — TOC gap, FORENSIC_REPORT marker, &lt;/body&gt; before Ch.63
+7. Feed-drift monitoring         — 4 items + re-verify registry counts
+8. Option B governance fix       — deny-list in sources.js
+9. Podcast lane                  — eligibility gate undecided; parts[0] read
+10. Backlog                      — newsletter tool, Render, YouTube proxy, PDF, adaptive blend</code></pre>
+    <p>Both repositories were confirmed in sync with <code>origin</code> before shutdown, and no local
+    process (dev server, scout run, phase-2 worker) was left running.</p>
   </div>
 </div>
 
