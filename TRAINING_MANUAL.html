@@ -11345,5 +11345,142 @@ gh run watch 44309656310 --repo FAIT-Blog/scout-agent --interval 5 --exit-status
   </div>
 </div>
 
+<div class="chapter" id="chapter-78">
+  <div class="chapter-num">Chapter 78</div>
+  <h2>Queued cleanup: eligibility gates, registry deny-list, social profiles, and verification discipline</h2>
+
+  <p>Session #63 picked up the outstanding items in the §7A next-session queue. The order was deliberate:
+  finish the podcast lane, confirm the first real Telegram announcement, close the social-profile correction,
+  implement the registry deny-list, repeat feed-drift monitoring, and leave the dated WTM re-measurement open
+  until its due date. No push was authorized.</p>
+
+  <h3>Why the podcast lane needed its own gate</h3>
+
+  <p>The RSS Editorial Eligibility Gate had been measured against the podcast lane in Session #54 and would
+  have rejected every sampled podcast post. Applying it would have terminated the lane. The correct design was
+  therefore a separate zero-LLM gate that checks only the evidence available before cost is committed: a
+  substantive transcript, a dated or current marker, an attributed-claim marker, and a concrete-claim marker.</p>
+
+  <pre><code>const MIN_TRANSCRIPT_CHARS = 6000
+
+export function evaluatePodcastEligibility({ transcript = '' } = {}) {
+  const text = typeof transcript === 'string' ? transcript : ''
+  const reasons = []
+
+  if (text.trim().length === 0) reasons.push('no_transcript')
+  if (text.length &lt; MIN_TRANSCRIPT_CHARS) reasons.push('insufficient_transcript')
+  if (!TEMPORAL_MARKERS.some((pattern) =&gt; pattern.test(text))) reasons.push('no_dated_or_current_claim_marker')
+  if (!CLAIM_MARKERS.some((pattern) =&gt; pattern.test(text))) reasons.push('no_attributed_claim_marker')
+  if (!CONCRETE_MARKERS.some((pattern) =&gt; pattern.test(text))) reasons.push('no_concrete_claim_marker')
+
+  return { eligible: reasons.length === 0, reasons }
+}</code></pre>
+
+  <p>The gate runs in <code>scout-podcast.js</code> after transcript extraction and before thumbnail download
+  or any Gemini call. Failed candidates are marked seen and skipped, so an ineligible episode cannot consume
+  image or LLM budget on every run.</p>
+
+  <h3>Fixing a latent multi-part response bug</h3>
+
+  <p>The general Gemini path had already been fixed in Session #42: thinking models can place the final answer
+  in a later <code>parts[]</code> element, so reading only <code>parts[0].text</code> returns an empty string.
+  The podcast path still used the old read. Session #63 changed it to the shared helper:</p>
+
+  <pre><code>-import { callGeminiWithFallback } from './gemini.js'
++import { callGeminiWithFallback, extractGeminiText } from './gemini.js'
+
+-  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
++  const raw  = extractGeminiText(data)</code></pre>
+
+  <p>This was a correctness fix, not a prompt or model change. The dev-only fixture
+  <code>.validate-blend3.mjs</code> still reads the first part directly, but it is not on the scheduled
+  production path.</p>
+
+  <h3>Registry rows as a gap-fill deny-list</h3>
+
+  <p>The curated registry is the canonical source list. <code>feeds.js</code> survives only as a gap-fill and
+  fallback surface. A disabled or deferred registry row should therefore do more than disappear from the
+  curated set: it must also prevent a matching deprecated <code>feeds.js</code> entry from being reintroduced
+  as a gap-fill. Session #63 implemented that rule by loading all registry rows and deriving deny sets:</p>
+
+  <pre><code>const curated = registryRows.filter((row) =&gt; row.enabled &amp;&amp; row.feed_url)
+const deniedRows = registryRows.filter((row) =&gt; row.enabled === false || row.deferred === true)
+const deniedUrls = new Set(deniedRows.map((row) =&gt; normUrl(row.feed_url)).filter(Boolean))
+const deniedDomains = new Set(deniedRows.map((row) =&gt; normDomain(row.domain, row.feed_url)).filter(Boolean))
+
+for (const f of feeds) {
+  const key = normUrl(f.url)
+  const domain = normDomain('', f.url)
+  if (deniedUrls.has(key) || deniedDomains.has(domain)) {
+    denied++
+    continue
+  }
+  ...
+}</code></pre>
+
+  <p>The deny-list applies only to gap-fill candidates. A registry read error or zero registry rows still
+  falls back to <code>feeds.js</code> untouched, preserving the fail-open rule that prevents source
+  governance from starving the pipeline.</p>
+
+  <h3>Owned social profile links</h3>
+
+  <p>Social metadata was scattered across the footer, share buttons, and JSON-LD. Session #63 centralized the
+  stable facts in <code>aitrends.ng/lib/social.ts</code>:</p>
+
+  <pre><code>export const SOCIAL_PROFILES = {
+  telegram: 'https://t.me/aitrends_ng',
+}
+
+export const SOCIAL_VIA_HANDLE = 'aitrends_ng'
+
+export const SOCIAL_SAME_AS = [SOCIAL_PROFILES.telegram]</code></pre>
+
+  <p>Telegram is linked from <code>Footer.tsx</code> and listed in JSON-LD <code>sameAs</code>. The X share
+  intent uses <code>via=aitrends_ng</code>, but <code>x.com/aitrends_ng</code> returned HTTP 404 on
+  2026-11-18, so no X profile link or <code>sameAs</code> entry was added. This distinction matters: a share
+  handle is not proof of a registered owned profile.</p>
+
+  <h3>Verification and evidence</h3>
+
+  <p>The podcast gate was validated with six offline tests and one live transcript
+  (<code>IWdvG9Up8Mc</code>, 12,159 characters) that passed with no rejection reasons. The source resolver
+  passed five focused tests including new deny-by-domain and deny-by-feed-url cases. The frontend passed
+  <code>npx tsc --noEmit</code>, lint with zero errors and two pre-existing image warnings, and a production
+  build.</p>
+
+  <p>The first real Telegram announcement was confirmed from Phase 2 run <code>44309656310</code>, which
+  logged <code>🔔 telegram: announced (photo)</code> twice at <code>2026-11-18T13:02:40Z</code> and
+  <code>2026-11-18T13:02:59Z</code>. Feed-drift monitoring on 2026-11-18 found 24 registry rows, 22 enabled,
+  18 feed-bearing, and no sports or general-news drift in the sampled posts.</p>
+
+  <h3>Document mirroring</h3>
+
+  <p>Every <code>CLAUDE.md</code> change was mirrored into this chapter and into the Session #63 record in
+  <code>SESSION_LOG.html</code>. The header was advanced to Session #63, the stale commit-state notice was
+  replaced, the podcast lane and file structure were corrected, the social links were added, the stale
+  <code>parts[0]</code> claims were removed, and a Session History row was appended. The old §7A queue and
+  tracked-status entries were updated earlier in the session to close completed items and keep the WTM
+  re-measurement explicitly open until 2026-11-20. The commit-state wording was then corrected from
+  “production changes are staged for local commits only” to “production changes are committed locally only”
+  before the three local commits were created.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Do not confuse a sample with the formal measurement.</strong> The ten-post feed-drift sample
+      checked structure and source alignment. It does not close the WTM ledger re-measurement due on or after
+      2026-11-20.
+    </div>
+  </div>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Outcome:</strong> the queued production work is complete and verified. Commits are local only.
+      No push is authorized, and the dated WTM re-measurement remains the next explicit follow-up.
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

@@ -17950,5 +17950,302 @@ All original report content preserved.</code></pre>
   </div>
 </div>
 
+<!-- SESSION 63 -->
+
+<h2>Session #63 — 18 November 2026 — Queued cleanup completed; first Telegram announcement verified</h2>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>get to work on the to do list as earlier presented</p>
+    <p>Commit only. Do not push.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I read the §7A next-session queue and worked the outstanding items in order: item 9 (podcast lane), item 5 (social profile links), item 8 (registry deny-list), and item 7 (feed-drift monitoring). Item 1 (WTM re-measurement) was left open because its date is 2026-11-20. Before any commit, the changes had to be mirrored into all three governing documents.</p>
+    <h4>Read: CLAUDE.md §7A next-session queue</h4>
+    <pre><code>1. WTM re-measurement — due on/after 2026-11-20
+2. Confirm the first real Telegram announcement
+3. S51 image rules — discarded 2026-11-16
+4. Commit-or-discard the untracked forensic files
+5. Social presence — Telegram linked; X handle unverified
+6. Documentation debt — closed in Session #62
+7. Feed-drift monitoring — recurring
+8. Option B governance fix — registry deny-list in sources.js
+9. Podcast lane — eligibility gate + parts[0] read
+10. Backlog — newsletter tool, Render, YouTube proxy, PDF, adaptive blend</code></pre>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Item 9 — podcast eligibility gate and Gemini multi-part parse fix</h3>
+    <p>The RSS consequence gate was deliberately not reused: Session #54 had recorded that it would terminate the entire podcast lane. A dedicated zero-LLM gate was added before thumbnail download and before any Gemini call. The Gemini parse path was changed from <code>parts?.[0]?.text</code> to the shared <code>extractGeminiText()</code> helper so a later thinking/answer part is not silently discarded.</p>
+    <h4>Edit: scout-agent/gemini-podcast.js</h4>
+    <pre><code>-import { callGeminiWithFallback } from './gemini.js'
++import { callGeminiWithFallback, extractGeminiText } from './gemini.js'
+...
+-  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
++  const raw  = extractGeminiText(data)</code></pre>
+    <h4>Write: scout-agent/podcast-eligibility.js (new file)</h4>
+    <pre><code>const TEMPORAL_MARKERS = [
+  /\b(today|yesterday|this week|this month|this year|last week|last month|last year|recently|now|currently|new|newly|just|latest|announced|launched|released|unveiled|published)\b/i,
+  /\b(in|on|during)\s+(20\d{2}|january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+]
+
+const CLAIM_MARKERS = [
+  /\b(said|says|explained|argues?|claimed|reported|shared|described|told|according to|walked (?:us )?through|demoed|showed|believes?|expects?|predicted|noted|pointed out)\b/i,
+  /\b(i think|i believe|my view|the point is|what we found|what we learned|the idea is)\b/i,
+]
+
+const CONCRETE_MARKERS = [
+  /\b\d[\d,.]*\s*(?:%|percent|million|billion|trillion|thousand|users|customers|developers|people|models|tokens|dollars|bucks|years|months|weeks|days|hours|minutes|times|x)\b/i,
+  /\b(gpt-?\d|claude|gemini|llama|openai|anthropic|deepmind|google|meta|mistral|nvidia|hugging face|llm|api|model|agent|robot|benchmark|paper|research|dataset|product|startup|company)\b/i,
+]
+
+const MIN_TRANSCRIPT_CHARS = 6000
+
+export function evaluatePodcastEligibility({ transcript = '' } = {}) {
+  const text = typeof transcript === 'string' ? transcript : ''
+  const reasons = []
+
+  if (text.trim().length === 0) reasons.push('no_transcript')
+  if (text.length &lt; MIN_TRANSCRIPT_CHARS) reasons.push('insufficient_transcript')
+  if (!TEMPORAL_MARKERS.some((pattern) =&gt; pattern.test(text))) reasons.push('no_dated_or_current_claim_marker')
+  if (!CLAIM_MARKERS.some((pattern) =&gt; pattern.test(text))) reasons.push('no_attributed_claim_marker')
+  if (!CONCRETE_MARKERS.some((pattern) =&gt; pattern.test(text))) reasons.push('no_concrete_claim_marker')
+
+  return { eligible: reasons.length === 0, reasons }
+}</code></pre>
+    <h4>Edit: scout-agent/scout-podcast.js</h4>
+    <pre><code>+import { evaluatePodcastEligibility } from './podcast-eligibility.js'
+...
++      const eligibility = evaluatePodcastEligibility({ transcript })
++      if (!eligibility.eligible) {
++        console.log(`      ⏭️  Podcast eligibility gate failed (${eligibility.reasons.join(', ')}) — skipping`)
++        await markSeen(feed.url, videoId, title, null).catch(() =&gt; {})
++        continue
++      }</code></pre>
+    <h4>Write: scout-agent/test-podcast-eligibility.mjs</h4>
+    <pre><code>6 tests:
+- accepts a substantive transcript with a dated, attributed, concrete claim
+- rejects an empty transcript
+- rejects a short transcript even when claim markers are present
+- rejects a long transcript with no dated or current marker
+- rejects a long transcript with no attributed claim
+- rejects a long transcript with no concrete claim marker</code></pre>
+    <h4>Bash: podcast verification</h4>
+    <pre><code>node --check gemini-podcast.js
+node --check scout-podcast.js
+node --check podcast-eligibility.js
+node --test test-podcast-eligibility.mjs
+node --experimental-test-module-mocks --test test-gemini-parts.mjs
+Result: syntax checks clean; podcast eligibility 6/6 pass; Gemini parts 10/10 pass.</code></pre>
+    <h4>Bash: live podcast gate validation</h4>
+    <pre><code>node -e "import('./podcast-eligibility.js').then(... transcript from IWdvG9Up8Mc ...)"
+Result: transcript length 12,159 chars; skip=false; eligible=true; reasons=[]</code></pre>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Item 8 — registry disabled/deferred deny-list</h3>
+    <p><code>sources.js</code> now reads every registry row, takes enabled rows with a <code>feed_url</code> as curated feeds, and derives a deny-list from disabled or deferred rows. The deny-list is applied only to <code>feeds.js</code> gap-fill candidates, by normalized <code>feed_url</code> and normalized <code>domain</code>. Registry errors and a completely empty registry still degrade to pure <code>feeds.js</code> untouched.</p>
+    <h4>Edit: scout-agent/sources.js</h4>
+    <pre><code>+function normDomain(value, fallbackUrl = '') {
++  const raw = (value || '').trim().toLowerCase()
++  if (raw) {
++    return raw
++      .replace(/^https?:\/\//, '')
++      .replace(/^www\./, '')
++      .split('/')[0]
++  }
++  try {
++    return new URL(fallbackUrl).hostname.replace(/^www\./, '').toLowerCase()
++  } catch {
++    return ''
++  }
++}
+...
+-    .select('id, source_name, category, feed_url')
+-    .eq('enabled', true)
+-    .not('feed_url', 'is', null)
++    .select('id, source_name, domain, category, feed_url, enabled, deferred')
+...
++  const curated = registryRows.filter((row) =&gt; row.enabled &amp;&amp; row.feed_url)
++  const deniedRows = registryRows.filter((row) =&gt; row.enabled === false || row.deferred === true)
++  const deniedUrls = new Set(deniedRows.map((row) =&gt; normUrl(row.feed_url)).filter(Boolean))
++  const deniedDomains = new Set(deniedRows.map((row) =&gt; normDomain(row.domain, row.feed_url)).filter(Boolean))
+...
++    if (deniedUrls.has(key) || deniedDomains.has(domain)) {
++      denied++
++      continue
++    }
+...
+-  console.log(`  📋 Production feeds: ${merged.length} total (${curatedCount} curated registry + ${gapFilled} feeds.js gap-fill, deduped by feed_url)`)
++  console.log(`  📋 Production feeds: ${merged.length} total (${curatedCount} curated registry + ${gapFilled} feeds.js gap-fill, ${denied} denied by registry, deduped by feed_url)`)</code></pre>
+    <h4>Edit: scout-agent/test-sources.mjs</h4>
+    <pre><code>+test('denies feeds.js gap-fill rows whose domain is disabled in the registry', async () =&gt; { ... })
++test('denies feeds.js gap-fill rows whose feed_url is disabled in the registry', async () =&gt; { ... })
+-assert.match(warns[0], /no feed-bearing enabled rows/)
++assert.match(warns[0], /no rows/)</code></pre>
+    <h4>Bash: source resolver verification</h4>
+    <pre><code>node --check sources.js
+node --experimental-test-module-mocks --test test-sources.mjs
+Result: 5/5 pass.</code></pre>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Item 7 — feed-drift monitoring</h3>
+    <p>Live <code>curated_source_registry</code> read on 2026-11-18 returned 24 rows, 22 enabled, 18 feed-bearing, and 2 disabled/deferred rows (id 21 BBC AI, id 22 Axios Automation &amp; AI). Category distribution was industry 10, ai-models 4, anthropic 2, tools 2.</p>
+    <h4>Bash: registry observe</h4>
+    <pre><code>node registry-observe.js
+Result: 24 registry sources loaded; 897 scout_memory titles; 124 items ingested; 56 candidates; 25 seen.
+Health: STALE=5 · FEEDLESS=4 · BLOCKED=3 · QUIET=4 · HEALTHY=5 · FILTERED_EMPTY=1 · DEFERRED=2
+Blocked feeds: AIBase.ng AI News fetch failed; iAfrica AI News HTTP 415; IT News Africa AI XML parse error.</code></pre>
+    <p>Ten recent published posts were sampled. They were 415–610 words, each had a final WTM heading, none ended with a bare <code>&lt;p&gt;Why This Matters&lt;/p&gt;</code>, and each had a topic-aligned source URL. One BusinessDay source title was <em>Google picks three Nigerian startups for AI Lab, opening access to Gemini, global investors - Businessday NG</em>. No sports or general-news drift was observed. This is a sample, not the formal 2026-11-20 WTM ledger re-measurement.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Item 2 — first real Telegram announcement</h3>
+    <p>The announcement had been smoke-tested but not confirmed from a real publish run. The Phase 2 run log supplied the missing evidence.</p>
+    <h4>Bash: Telegram run-log confirmation</h4>
+    <pre><code>gh run view 44309656310 --log --repo FAIT-Blog/scout-agent | grep -i telegram
+Result:
+2026-11-18T13:02:40.2078325Z 🔔 telegram: announced (photo)
+2026-11-18T13:02:59.4832786Z 🔔 telegram: announced (photo)</code></pre>
+    <p>This closed the “first real Telegram announcement” item. The two log lines matched the two posts published by that run.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <h3>Item 5 — social profile links and frontend lint fixes</h3>
+    <p>A shared constants module was introduced so the profile URL, X via handle, and JSON-LD <code>sameAs</code> are defined once. Telegram <code>@aitrends_ng</code> resolves and is linked; <code>x.com/aitrends_ng</code> returned HTTP 404 on 2026-11-18, so no X profile link and no X <code>sameAs</code> were added.</p>
+    <h4>Write: aitrends.ng/lib/social.ts (new file)</h4>
+    <pre><code>export const SOCIAL_PROFILES = {
+  telegram: 'https://t.me/aitrends_ng',
+}
+
+export const SOCIAL_VIA_HANDLE = 'aitrends_ng'
+
+export const SOCIAL_SAME_AS = [SOCIAL_PROFILES.telegram]</code></pre>
+    <h4>Edit: aitrends.ng/components/Footer.tsx</h4>
+    <pre><code>+import { SOCIAL_PROFILES } from '@/lib/social'
+...
+-      &lt;p style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>
++      &lt;p style={{ color: 'var(--muted)', fontSize: '0.75rem', display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+         &lt;a href="/feed.xml" style={{ color: 'var(--muted)' }}&gt;RSS&lt;/a&gt;
++        &lt;a href={SOCIAL_PROFILES.telegram} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--muted)' }}&gt;Telegram&lt;/a&gt;
+       &lt;/p&gt;</code></pre>
+    <h4>Edit: aitrends.ng/components/ShareButtons.tsx</h4>
+    <pre><code>+import { SOCIAL_VIA_HANDLE } from '@/lib/social'
+...
+-          href={`https://twitter.com/intent/tweet?text=${encoded.title}&amp;url=${encoded.url}`}
++          href={`https://twitter.com/intent/tweet?text=${encoded.title}&amp;url=${encoded.url}&amp;via=${SOCIAL_VIA_HANDLE}`}</code></pre>
+    <h4>Edit: aitrends.ng/app/post/[slug]/page.tsx</h4>
+    <pre><code>+import { SOCIAL_SAME_AS } from '@/lib/social'
+...
+-    author: { '@type': 'Organization', name: 'AITrends.ng', url: 'https://www.aitrends.ng' },
++    author: { '@type': 'Organization', name: 'AITrends.ng', url: 'https://www.aitrends.ng', sameAs: SOCIAL_SAME_AS },
+...
++      sameAs: SOCIAL_SAME_AS,</code></pre>
+    <h4>Edit: aitrends.ng/components/SearchDropdown.tsx</h4>
+    <pre><code>-  // Debounce: wait 300ms after typing stops before fetching.
+-  useEffect(() =&gt; {
+-    if (query.trim().length &lt; 2) {
++  function handleQueryChange(value: string) {
++    setQuery(value)
++    if (value.trim().length &lt; 2) {
+       setResults([])
+       setStatus('idle')
+       return
+     }
+     setStatus('loading')
++  }
++
++  // Debounce: wait 300ms after typing stops before fetching.
++  useEffect(() =&gt; {
++    if (query.trim().length &lt; 2) return
+...
+-          onChange={(e) =&gt; setQuery(e.target.value)}
++          onChange={(e) =&gt; handleQueryChange(e.target.value)}</code></pre>
+    <h4>Edit: aitrends.ng/lib/createPost.ts</h4>
+    <pre><code>-  let baseSlug = slugify(title)
++  const baseSlug = slugify(title)</code></pre>
+    <h4>Bash: frontend verification</h4>
+    <pre><code>npx tsc --noEmit &amp;&amp; npm run lint &amp;&amp; npm run build
+Result: TypeScript passed; lint 0 errors, 2 warnings:
+  components/HeroPost.tsx:47:13  @next/next/no-img-element
+  components/PostCard.tsx:58:13   @next/next/no-img-element
+Next.js 16.2.6 Turbopack build compiled successfully; 16 routes generated.</code></pre>
+    <p>The two warnings were pre-existing and were not “fixed” by replacing plain <code>&lt;img&gt;</code> tags, because the project’s critical rules require plain image tags for Supabase-hosted covers.</p>
+  </div>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>What did we do so far?</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I produced a continuity summary with the objective, important constraints, completed work, active work, blockers, next move, and relevant files. It recorded that the work was complete except for the three-document mirror, final verification, and local commits.</p>
+  </div>
+</div>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I continued directly. The remaining work was documentation mirroring, final verification, and committing only the intended files locally.</p>
+    <h4>Bash: status and diffs</h4>
+    <pre><code>root: M CLAUDE.md
+scout-agent: M gemini-podcast.js, scout-podcast.js, sources.js, test-sources.mjs;
+             ?? podcast-eligibility.js, ?? test-podcast-eligibility.mjs
+aitrends.ng: M AITRENDS_NG_SPEC.md, app/post/[slug]/page.tsx, components/Footer.tsx,
+             components/SearchDropdown.tsx, components/ShareButtons.tsx, lib/createPost.ts;
+             ?? lib/social.ts, ?? supabase/add-provider-quota-state.sql,
+             ?? supabase/add-story-memory.sql, ?? supabase/remediate-source-reputation.sql</code></pre>
+    <p>Commit scope decision: include the production code files for the queued tasks and the three root documentation mirrors. Exclude <code>AITRENDS_NG_SPEC.md</code> (unrelated quarantine banner), the untracked SQL files, and generated observation artifacts unless explicitly requested.</p>
+    <h4>Edit: CLAUDE.md</h4>
+    <pre><code>- Header changed from Session #62 to Session #63 and marked no push.
+- Stale Session #56 uncommitted-state block replaced with the Session #63 commit-state notice.
+- §2 podcast lane updated to name the separate zero-LLM eligibility gate.
+- §5 key files: Footer.tsx Telegram/RSS note and components/lib/social.ts added.
+- §5 built features: owned social profile links added.
+- §6 file structure: gemini-podcast.js parse note corrected; podcast-eligibility.js,
+  scout-podcast.js, and test-podcast-eligibility.mjs descriptions updated.
+- §6 podcast details: RSS gate exemption preserved; multi-part parse fix corrected.
+- §7A next-session queue and tracked-status entries were already updated earlier in the session.
+- Section 10: S63 history row added.</code></pre>
+    <p>This session entry and the new training-manual chapter below are the required mirrors of every CLAUDE.md change.</p>
+    <p>The commit-state wording was then adjusted from “production changes are staged for local commits only”
+    to “production changes are committed locally only”, because the three intended local commits were about to
+    be created. This one-line correction is mirrored here and in Chapter 78.</p>
+  </div>
+</div>
+
 </body>
 </html>
