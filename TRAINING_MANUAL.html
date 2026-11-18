@@ -381,6 +381,13 @@ li { margin-bottom: 6px; }
       </ul>
     </li>
     <li><a href="#ch13">Session #7 — Quality Overhaul, Image Styling &amp; Documentation Rules</a>
+      <ul class="sub">
+        <li><a href="#ch13-audit">The 5-Problem Audit</a></li>
+        <li><a href="#ch13-fixes">The Fixes</a></li>
+        <li><a href="#ch13-war10">War Story 10: Acting Without Being Asked</a></li>
+        <li><a href="#ch13-docphilosophy">TRAINING_MANUAL Documentation Philosophy</a></li>
+      </ul>
+    </li>
     <li><a href="#ch14">Session #8 — Site Audit, Black Images, Gemini Simplification &amp; Mobile</a>
       <ul class="sub">
         <li><a href="#ch14-audit">The Audit Findings</a></li>
@@ -389,13 +396,19 @@ li { margin-bottom: 6px; }
         <li><a href="#ch14-mobile">Mobile Responsive Fix</a></li>
       </ul>
     </li>
-      <ul class="sub">
-        <li><a href="#ch13-audit">The 5-Problem Audit</a></li>
-        <li><a href="#ch13-fixes">The Fixes</a></li>
-        <li><a href="#ch13-war10">War Story 10: Acting Without Being Asked</a></li>
-        <li><a href="#ch13-docphilosophy">TRAINING_MANUAL Documentation Philosophy</a></li>
-      </ul>
-    </li>
+    <li><a href="#chapter-15">Content Signal Filtering — Blocking Non-AI Articles</a></li>
+    <li><a href="#chapter-16">Search-Aggregate Pipeline — Multi-Source Blend and Self-Learning Priority Sources</a></li>
+    <li><a href="#ch17">Redesigning the Editorial Channel: From Polling to Push</a></li>
+    <li><a href="#ch18">The Session Log Is Not Optional: Document Everything or Start Over</a></li>
+    <li><a href="#ch19">The Editorial Override — Exempting Felix From the Africa GATE</a></li>
+    <li><a href="#ch20">The Editorial Consumption Bug — When consumeEditorialRows() Fires With the Wrong Post</a></li>
+    <li><a href="#ch21">The Workflow Env Block Trap: When a Secret Exists But the Process Can't See It</a></li>
+    <li><a href="#ch22">Security Auditing an Autonomous AI Pipeline</a></li>
+    <li><a href="#chapter-23">SEO for an Autonomous AI Blog</a></li>
+    <li><a href="#chapter-24">Project Documentation Strategy</a></li>
+    <li><a href="#chapter-25">The YouTube Podcast Pipeline: Transcripts, Multimodal Gemini, and Inline Video Embeds</a></li>
+    <li><a href="#chapter-26">The Day After: Three Bugs That Appeared After Deployment</a></li>
+    <li><a href="#chapter-27">Adding Visitor Engagement: Newsletter, Feedback, and Analytics</a></li>
     <li><a href="#ch28">Session #19 — The Audit That Found Four Silent Failures</a>
       <ul class="sub">
         <li><a href="#ch28-method">Verify Against Live State, Not Against Last Session's Notes</a></li>
@@ -428,12 +441,44 @@ li { margin-bottom: 6px; }
     <li><a href="#chapter-44">Sizing Providers to Their True Quotas</a></li>
     <li><a href="#chapter-45">The Earliest Documentation Style Is the Standard</a></li>
     <li><a href="#ch65">When the Spec Outlives the System — Reading a Document Against the Live Tree</a></li>
+    <li><a href="#chapter-46">One Quality Gate, One Query, One Review Room</a></li>
+    <li><a href="#chapter-47">Admin Panel Goes Live — and the Post-344 Title Discrepancy</a></li>
+    <li><a href="#chapter-48">The Story Worthiness Score (SWS) Gate — Spending Generation Tokens Only on Stories That Can Win</a></li>
+    <li><a href="#chapter-49">The Admin Delete 404: A Navigation Bug, Not a Data Bug — and Part C Closes</a></li>
+    <li><a href="#chapter-50">The Run Post-Mortem: Four Quota-Death Defects and the LLM Request Ledger</a></li>
+    <li><a href="#chapter-51">The Post-Mortem Verdict: Validation, Hard Stops, and the Adaptive-Blend Backlog Item</a></li>
+    <li><a href="#chapter-52">The P0 Optimisation Set: Cutting the Cost of a 36-Call Run</a></li>
+    <li><a href="#chapter-53">Thinking-Model Parts Parsing: Why Gemini Syntheses Silently Gate-Failed</a></li>
+    <li><a href="#chapter-54">The Closed Source Registry: From Open-World Probing to Curated Governance</a></li>
+    <li><a href="#chapter-55">Stage 2: Wiring the Registry into Production</a></li>
+    <li><a href="#chapter-56">Groq Provider Restoration: From Dead Model to Live Pipeline</a></li>
+    <li><a href="#chapter-57">Curated Source Coverage Expansion + Multimedia Extraction</a></li>
+    <li><a href="#chapter-58">P0 Image-Pipeline Fix — Source og:image Reuse Removal + Cloudflare FLUX Schema Repair</a></li>
+    <li><a href="#chapter-59">Image-Prompt Refinement — The Visual Editorial Brief</a></li>
+    <li><a href="#chapter-60">Production Observation of the Visual Editorial Brief — Notes for the Next Image-Prompt Refinement</a></li>
+    <li><a href="#chapter-61">Editorial Feedback Loop — Observation + Training Examples for the Scout/Editorial Pipeline</a></li>
+    <li><a href="#chapter-62">Session #53 — AITrends Backend Forensic Report (Read-Only Audit, 2026-08-25 → 2026-09-23)</a></li>
+    <li><a href="#chapter-63">Session #54 — Editorial-Eligibility Gate Reconciliation Series (Read-Only, READY FOR IMPLEMENTATION)</a></li>
+    <li><a href="#chapter-64">Session #55 — The Editorial Eligibility Gate: Implementation + Clean Commit (STEP 7b)</a></li>
+    <li><a href="#chapter-66">Session #56 Wrap-Up: Deploying the Eligibility Gate, Isolating the "Why This Matters" Commit, and Reconciling CLAUDE.md Against Live Production</a></li>
+    <li><a href="#chapter-67">Session #56 Close-Out: Recording the Final Production State After the Push</a></li>
+    <li><a href="#chapter-63-phase1">Documentation Refresh, Phase 1 Audit (Read-Only) — 2 October 2026</a></li>
+    <li><a href="#chapter-68">Documentation Refresh, Phase 1b: Reconciling Historical Evidence Documents</a></li>
+    <li><a href="#chapter-69">Live Re-Verification: When the Documentation Is Right and Still a Month Old</a></li>
+    <li><a href="#chapter-70">The Latent ReferenceError: Exported Is Not Imported</a></li>
+    <li><a href="#chapter-71">Editorial Polish: Alt Text, Headline Caps, and Subject-Based Categories</a></li>
+    <li><a href="#chapter-72">When a Prompt and a Gate Disagree: Fixing "Why This Matters"</a></li>
+    <li><a href="#chapter-73">Removing a Source Is a Funnel Fix, Not a Content Fix</a></li>
+    <li><a href="#chapter-74">Announcing a Post Is a Publish Side Effect</a></li>
+    <li><a href="#chapter-75">Test the Path Production Uses, Not the Easy One</a></li>
+    <li><a href="#chapter-76">Two Ways an Unshipped Change Can Hurt You</a></li>
+    <li><a href="#chapter-77">When the Gate Is a Dashboard Setting — Verifying Access Before Changing Code</a></li>
   </ol>
 </div>
 
-<!-- NOTE (Session #19): The Table of Contents above does not list Chapters 15–27 —
-     this drift predates this session and was flagged to Felix rather than silently
-     rewritten. Chapter 28 below is appended in the correct chronological position. -->
+<!-- NOTE (Session #62): Session #19 recorded that this Table of Contents omitted Chapters 15–27.
+     The gap was repaired in Session #62; entries 15–27 and 46–77 are now listed above,
+     and the duplicate Chapter 63 label has been given the unique id "chapter-63-phase1". -->
 
 <!-- ═══════════════════ CHAPTER 1 ═══════════════════ -->
 <div class="chapter" id="ch1">
@@ -9921,11 +9966,9 @@ Stopping here. No further changes.</code></pre>
   <p>That is the correct posture for a pipeline whose next real input is a scheduled run nobody has
   seen yet. Fixing the policy before observing the outcome would replace measurement with
   guesswork.</p>
-</div>
+  </div>
 
-</body>
-
-<div class="chapter" id="ch63">
+<div class="chapter" id="chapter-63-phase1">
   <div class="chapter-num">Chapter 63</div>
   <h2>Documentation Refresh, Phase 1 Audit (Read-Only) — 2 October 2026</h2>
 
@@ -9966,9 +10009,7 @@ Documentation-only. No production files modified.
     <li><code>gemini-podcast.js:192</code> reads <code>parts?.[0]?.text</code> (S42 fix not applied)</li>
     <li>S51 image-prompt refinements remain uncommitted</li>
   </ul>
-</div>
-
-</html>
+  </div>
 
 <div class="chapter" id="chapter-68">
   <div class="chapter-num">Chapter 68</div>
@@ -11209,3 +11250,100 @@ node --experimental-test-module-mocks --test test-gemini-parts.mjs test-quality-
   the next session does not re-litigate it. Then both repositories were confirmed in sync with
   <code>origin</code>, and no dev server or pipeline process was left running.</p>
 </div>
+
+<div class="chapter" id="chapter-77">
+  <div class="chapter-num">Chapter 77</div>
+  <h2>When the Gate Is a Dashboard Setting — Verifying Access Before Changing Code</h2>
+
+  <p>Session #62 began with a question about what had been done and what remained pending. The answer came
+  from <code>CLAUDE.md</code>, not from memory: the publish path was blocked by Vercel Authentication, the WTM
+  re-measurement was dated for 20 November 2026, the first Telegram announcement was still unverified, and the
+  forensic/documentation work had an explicit authorization but no commit. Then Felix reported that he had
+  disabled Vercel Authentication and asked for a post to go live that day.</p>
+
+  <h3>Verifying the access change before touching code</h3>
+
+  <p>The important lesson is that the failure was not in <code>publisher.js</code>. The code was constructing
+  the correct API URL and sending the correct key; Vercel was intercepting the request before the Next.js
+  route could see it. The proof was simple and non-destructive:</p>
+
+  <pre><code>curl -sS -D - -o /dev/null https://www.aitrends.ng/
+curl -sS -D - -o /dev/null https://aitrends.ng/
+curl -sS -i https://www.aitrends.ng/api/health
+curl -sS -i -X OPTIONS https://www.aitrends.ng/api/posts/create</code></pre>
+
+  <p>The results were HTTP/2 200 on both domains, <code>{"status":"ok"}</code> from <code>/api/health</code>,
+  and HTTP/2 204 from <code>OPTIONS /api/posts/create</code> with
+  <code>allow: OPTIONS, POST</code>. No SSO redirect and no Vercel authentication JSON remained. That was the
+  point at which a code change would have been wrong: the platform setting was the fix.</p>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Rule:</strong> when a request fails before application code runs, verify the platform boundary first.
+      A 302 to <code>vercel.com/sso-api</code> is not an application error; editing the publish code would have
+      added complexity without addressing the actual gate.
+    </div>
+  </div>
+
+  <h3>Publishing the queued posts</h3>
+
+  <p>Queued rows 720 and 721 were still <code>pending_image</code> with <code>attempts: 2</code> and no
+  <code>post_id</code>. A manual Phase 2 run was dispatched:</p>
+
+  <pre><code>gh workflow run complete.yml --repo FAIT-Blog/scout-agent --ref main
+gh run watch 44309656310 --repo FAIT-Blog/scout-agent --interval 5 --exit-status</code></pre>
+
+  <p>The run completed successfully. Both rows moved to <code>published</code>, attempts became 3, and
+  <code>post_id</code> values were set. The two live post URLs returned HTTP 200:</p>
+
+  <ul>
+    <li><code>/post/openai-launches-chatgpt-sales-assistant-to-speed-up-deals</code></li>
+    <li><code>/post/google-selects-three-nigerian-startups-for-africa-ai-lab-giving-gemini-access</code></li>
+  </ul>
+
+  <p>The follow-up question was whether this would now work automatically. The answer was yes for the publish
+  boundary, with caveats around triggering: scheduled Phase 2 runs are green, but cron-job.org is not firing and
+  there is no <code>GITHUB_PAT</code> direct Phase 1 → Phase 2 dispatch. GitHub Actions free minutes also remain
+  a systemic risk. A natural end-to-end cycle is still the final proof.</p>
+
+  <h3>Documenting the resolution</h3>
+
+  <p><code>CLAUDE.md</code> was updated to close the Vercel incident under §7A Critical, while preserving the
+  original failure evidence and the fact that the exact UI change trigger was not recorded locally. The
+  §7A next-session queue was corrected: Telegram remains unverified until a run log shows
+  <code>🔔 telegram: announced (photo)</code>; the forensic files now have an explicit COMMIT authorization with
+  no push; and the documentation-debt item was closed.</p>
+
+  <p>§0.4 was updated to reflect that <code>scout-agent/FORENSIC_REPORT.md</code> had finally received its
+  historical banner and post-report chronology. The sweep is now DONE for all six root forensic documents and
+  for <code>FORENSIC_REPORT.md</code>; <code>TAVILY_FORENSIC_REPORT.md</code> keeps only the generic
+  historical banner because its analysis was never acted on later.</p>
+
+  <h3>Repairing the training manual as a document system</h3>
+
+  <p>The <code>TRAINING_MANUAL.html</code> table of contents had two separate defects. It omitted Chapters
+  15–27, and it had a malformed Chapter 13/14 nesting block. It also stopped at Chapter 65 even though the
+  document continued through Chapter 76. Session #62 inserted the missing entries with their real target ids,
+  added Chapters 46–76, and gave the later duplicate Chapter 63 label the unique id
+  <code>chapter-63-phase1</code>. The stale Session #19 note was replaced with a dated repair note rather than
+  silently deleted.</p>
+
+  <p>The document also had an early <code>&lt;/body&gt;</code> before the later Chapter 63 and an early
+  <code>&lt;/html&gt;</code> before Chapters 68–76, which meant appended chapters were outside the document
+  body. Both were removed and final closing tags restored at EOF. The same early-body defect was fixed in
+  <code>SESSION_LOG.html</code>, and this chapter plus the Session #62 log entry were appended in the
+  established style.</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Outcome:</strong> the live publishing blocker is closed, two posts are live, the master spec and
+      its two mirrors are synchronized, and the authorized forensic evidence is ready to commit. No production
+      code was changed in this session, and no push was authorized.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
