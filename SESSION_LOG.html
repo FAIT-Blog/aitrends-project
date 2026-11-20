@@ -18994,5 +18994,58 @@ git log --oneline -3
   </div>
 </div>
 
+<hr>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>The logo of Bluesky (butterfly) is not showing; it's blank</p>
+    <p>I have checked what you did and they are beautifully done</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I diagnosed the blank butterfly as a coordinate-system mismatch: the path I copied for the Bluesky glyph used a 640×640 coordinate space, but both SVGs declared <code>viewBox="0 0 24 24"</code>, so the drawing was outside the visible 24-unit canvas. I replaced the path in both <code>components/SocialShareIcons.tsx</code> and <code>components/ShareButtons.tsx</code> with the official 24×24 Bluesky glyph from Simple Icons, keeping the existing 15px/14px sizing, <code>currentColor</code> fill, hover colour, and accessible labels unchanged.</p>
+  </div>
+</div>
+
+<h4>Edit: aitrends.ng/components/SocialShareIcons.tsx</h4>
+<pre><code>Replaced Bluesky path:
+old: M320 272.5c-28.3-51-80.3-134.8-128.8-175.9-46.5-39.3-116.7-14.1-116.7 46.5 ...
+new: M5.202 2.857C7.954 4.922 10.913 9.11 12 11.358c1.087-2.247 4.046-6.436 6.798-8.501C20.783 1.366 24 .213 24 3.883c0 .732-.42 6.156-.667 7.037-.856 3.061-3.978 3.842-6.755 3.37 4.854.826 6.089 3.562 3.422 6.299-5.065 5.196-7.28-1.304-7.847-2.97-.104-.305-.152-.448-.153-.327 0-.121-.05.022-.153.327-.568 1.666-2.782 8.166-7.847 2.97-2.667-2.737-1.432-5.473 3.422-6.3-2.777.473-5.899-.308-6.755-3.369C.42 10.04 0 4.615 0 3.883c0-3.67 3.217-2.517 5.202-1.026</code></pre>
+
+<h4>Edit: aitrends.ng/components/ShareButtons.tsx</h4>
+<pre><code>Replaced the same old 640-space path with the identical official 24×24 Bluesky glyph path.</code></pre>
+
+<h4>Bash: local verification</h4>
+<pre><code>npx tsc --noEmit → no output, exit 0
+npm run lint → 0 errors, 2 pre-existing no-img-element warnings
+npm run build → compiled successfully, static pages 16/16
+
+Local rendered HTML:
+/tmp/aitrends-home2.html {'official_bluesky_path': 1, 'old_640_path': 0, 'viewBox_24': 6}
+/tmp/aitrends-post2.html {'official_bluesky_path': 2, 'old_640_path': 0, 'viewBox_24': 12}</code></pre>
+
+<h4>Bash: commit and push Bluesky icon fix</h4>
+<pre><code>git add components/SocialShareIcons.tsx components/ShareButtons.tsx && git commit -m "fix(social): render Bluesky butterfly icon" && git -c credential.helper='!f() { echo username=x-access-token; echo password="$(gh auth token)"; }; f' -c remote.origin.url=https://github.com/FAIT-Blog/aitrends-ng.git push origin main
+[main b7232bb] fix(social): render Bluesky butterfly icon
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+To https://github.com/FAIT-Blog/aitrends-ng.git
+   2c3c336..b7232bb  main -&gt; main
+Everything up-to-date</code></pre>
+
+<h4>Bash: live verification after push</h4>
+<pre><code>home {'official_bluesky_path': 1, 'old_640_path': 0}
+post {'official_bluesky_path': 2, 'old_640_path': 0}</code></pre>
+
+<div class="callout success">
+  <div class="callout-icon">✓</div>
+  <div class="callout-body">
+    <strong>Outcome:</strong> Bluesky butterfly now renders in both the homepage social card and the post share rows. Live HTML contains the official 24×24 glyph and no longer contains the off-canvas 640-space path. Pushed as <code>b7232bb</code>.
+  </div>
+</div>
+
 </body>
 </html>
