@@ -473,6 +473,9 @@ li { margin-bottom: 6px; }
     <li><a href="#chapter-75">Test the Path Production Uses, Not the Easy One</a></li>
     <li><a href="#chapter-76">Two Ways an Unshipped Change Can Hurt You</a></li>
     <li><a href="#chapter-77">When the Gate Is a Dashboard Setting — Verifying Access Before Changing Code</a></li>
+    <li><a href="#chapter-78">Queued Cleanup: Proving Each Fix Independently</a></li>
+    <li><a href="#chapter-79">Adding a Social Channel Without Risking the Publish State</a></li>
+    <li><a href="#chapter-80">Activating a Social Channel: Identity, Secrets, Links, and Evidence</a></li>
   </ol>
 </div>
 
@@ -11478,6 +11481,310 @@ export const SOCIAL_SAME_AS = [SOCIAL_PROFILES.telegram]</code></pre>
     <div class="callout-body">
       <strong>Outcome:</strong> the queued production work is complete and verified. Commits are local only.
       No push is authorized, and the dated WTM re-measurement remains the next explicit follow-up.
+    </div>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-79">
+  <div class="chapter-num">Chapter 79</div>
+  <h2>Adding a Social Channel Without Risking the Publish State</h2>
+
+  <p>Session #64 added the Bluesky announce path to the scout-agent Phase 2 worker. The central rule was
+  unchanged from Chapter 74: an announcement is a publish side effect. It can fail, log a reason, and return
+  a failure object, but it must never throw back into <code>complete.js</code>.</p>
+
+  <h3>What was changed</h3>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <p><code>social.js</code> gained <code>announceBluesky(post, published)</code>. It logs in with an app
+        password through <code>com.atproto.server.createSession</code>, builds UTF-8 byte-offset facets for the
+        canonical URL, caps the text at 300 graphemes, and writes a deterministic 13-character <code>rkey</code>
+        so a Phase 2 re-run updates the same record instead of duplicating it.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <p>The Bluesky record contains a link-card embed through <code>app.bsky.embed.external</code>. When a
+        cover image is available and fetchable, it is uploaded with <code>com.atproto.repo.uploadBlob</code>
+        and attached as the embed thumbnail; otherwise the post is link-only.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <p><code>announcePost()</code> now aggregates Telegram and Bluesky results.
+        <code>complete.js</code> STEP 5b remains best-effort. The workflow maps
+        <code>BLUESKY_HANDLE</code>, <code>BLUESKY_APP_PASSWORD</code>, and optional
+        <code>BLUESKY_SERVICE_URL</code>.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <p>The focused social suite grew from seven to fourteen tests. The first run caught two test defects:
+        the blob CID is at <code>thumb.ref.$link</code>, not <code>thumb.$link</code>; and rkey stability must
+        be tested with a durable post id, not by changing the title and URL alone.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Verification</h3>
+
+  <p>The final focused suite passed 14/14 and the full mocked scout-agent suite passed 64/64.
+  <code>node --check</code> was clean on <code>social.js</code>, <code>complete.js</code>,
+  <code>scout.js</code>, and <code>gemini.js</code>. <code>git diff --check</code> was clean.
+  The three modified files were <code>.github/workflows/complete.yml</code>, <code>social.js</code>, and
+  <code>test-social.mjs</code>.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Not live:</strong> no handle, account, app password, local secrets, GitHub secrets, DNS TXT
+      record, or frontend profile link exists yet. Until the two required secrets are configured, both
+      <code>announceBluesky()</code> and the workflow path are deliberate no-ops.
+    </div>
+  </div>
+
+  <h3>Document mirroring</h3>
+
+  <p>The <code>CLAUDE.md</code> header, commit-state notice, Phase 2 diagram, scout-agent file structure,
+  Bluesky env var and GitHub secret lists, §7A social-status entry, §8 social safety rule, and Section 10
+  history row were all updated. Those same changes are recorded in the Session #64 entry in
+  <code>SESSION_LOG.html</code> and in this chapter.</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Outcome:</strong> the code is ready for account setup and live verification, but it remains
+      uncommitted and unpushed. The dated WTM re-measurement still remains due on or after 2026-11-20.
+    </div>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-80">
+  <div class="chapter-num">Chapter 80</div>
+  <h2>Activating a Social Channel: Identity, Secrets, Links, and Evidence</h2>
+
+  <p>Session #65 closed the Bluesky work that had been implemented but not configured in Session #64. The
+  lesson is that code correctness, account identity, deployment secrets, public profile links, and live evidence
+  are separate layers. A channel is not live just because its code is tested.</p>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Scope:</strong> finish the Bluesky activation, push the authorized production changes, measure the
+      "Why This Matters" (WTM) prospective result, and mirror every <code>CLAUDE.md</code> change into
+      <code>SESSION_LOG.html</code> and this manual.
+    </div>
+  </div>
+
+  <h3>Step 1 — Prove the handle belongs to the account</h3>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <p>The final handle was <code>@aitrends.ng</code>. Both the DNS TXT record and the AT Protocol resolver
+        agreed on the account:</p>
+      </div>
+    </div>
+  </div>
+
+<pre><code>dig +short TXT _atproto.aitrends.ng
+"did=did:plc:dq35c4u65ct2mysokhi42u3b"
+
+curl -s "https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=aitrends.ng"
+{"did":"did:plc:dq35c4u65ct2mysokhi42u3b","handle":"aitrends.ng"}</code></pre>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-content">
+      <p>A local, login-only app-password session returned HTTP 200 for the same handle and DID. No token was
+      printed or stored in documentation. The required GitHub Secrets were confirmed present:
+      <code>BLUESKY_HANDLE</code> and <code>BLUESKY_APP_PASSWORD</code>.
+      <code>BLUESKY_SERVICE_URL</code> was intentionally unset so the code uses the default
+      <code>https://bsky.social</code>.</p>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Secret rule:</strong> use an app password, never the main account password. Keep all secret values
+      as <code>[REDACTED]</code> in this teaching material.
+    </div>
+  </div>
+
+  <h3>Step 2 — Push the two production repos</h3>
+
+  <p>The scout-agent repo received the announce implementation, workflow mapping, and focused tests:</p>
+
+<pre><code>git add .github/workflows/complete.yml social.js test-social.mjs &amp;&amp; git commit -m "feat(social): announce published posts on Bluesky" &amp;&amp; git -c credential.helper='!f() { echo username=x-access-token; echo password="$(gh auth token)"; }; f' push origin main
+
+[main 7371cc6] feat(social): announce published posts on Bluesky
+ 3 files changed, 366 insertions(+), 41 deletions(-)
+To https://github.com/FAIT-Blog/scout-agent.git
+   c2a02e8..7371cc6  main -&gt; main</code></pre>
+
+  <p>The frontend repo received the shared social constants and visible Bluesky footer link:</p>
+
+<pre><code>git add components/Footer.tsx lib/social.ts &amp;&amp; git commit -m "feat(social): link Bluesky profile across site" &amp;&amp; git -c credential.helper='!f() { echo username=x-access-token; echo password="$(gh auth token)"; }; f' -c remote.origin.url=https://github.com/FAIT-Blog/aitrends-ng.git push origin main
+
+[main 8b1e322] feat(social): link Bluesky profile across site
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+To https://github.com/FAIT-Blog/aitrends-ng.git
+   53cfd57..8b1e322  main -&gt; main</code></pre>
+
+  <p><code>sitemap.ts</code> and <code>layout.tsx</code> already consumed the shared profile metadata, so no
+  additional frontend file needed editing.</p>
+
+  <h3>Step 3 — Verify before declaring success</h3>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <p><code>node --check</code> was clean on <code>social.js</code>, <code>complete.js</code>,
+        <code>scout.js</code>, and <code>gemini.js</code>.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <p>The focused social suite passed 14/14. The full mocked scout-agent suite passed 64/64.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <p>The frontend passed <code>npx tsc --noEmit</code>, lint, and build. Lint had 0 errors and 2
+        pre-existing <code>@next/next/no-img-element</code> warnings. The Next.js 16.2.6 Turbopack build
+        compiled successfully.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <p><code>git diff --check</code> was clean before the production commits.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Step 4 — Measure the WTM fix prospectively</h3>
+
+  <p>The dated follow-up from Session #60 was due on or after 2026-11-20. The ledger query covered
+  <code>purpose = 'gate-check'</code> rows from <code>2026-11-06T00:00Z</code>. There were 18 post-deploy rows:</p>
+
+  <table>
+    <thead>
+      <tr><th>Bucket</th><th>Post-deploy</th><th>Pre-fix baseline</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Pure WTM</td><td>2</td><td>17</td></tr>
+      <tr><td>Short + WTM</td><td>6</td><td>18</td></tr>
+      <tr><td>Short only</td><td>3</td><td>3</td></tr>
+      <tr><td>No digest produced</td><td>7</td><td>8</td></tr>
+      <tr><td>Banned word</td><td>0</td><td>3</td></tr>
+      <tr><td><strong>WTM-related total</strong></td><td><strong>8/18 (44.4%)</strong></td><td><strong>35/49 (71%)</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Verdict: PASS.</strong> Both success conditions were met: the WTM share fell materially and the
+      absolute WTM count fell from 35 to 8. The post-deploy window is shorter than the 30-day baseline, so
+      the share is the primary evidence. "No digest produced" is now the largest bucket at 7/18; if WTM loss
+      returns, the next lever is the expansion retry and generator, not another prompt-only rewrite.
+    </div>
+  </div>
+
+  <h3>Step 5 — Mirror every CLAUDE.md change</h3>
+
+  <p>The master-spec changes were not merely summarized. They were listed before and after in the Session #65
+  log and are repeated here as the governing mirror.</p>
+
+  <h4>1. Header</h4>
+  <p>Updated from the Session #64 header to the Session #65 header, recording the final handle, resolved DID,
+  HTTP 200 app-password login, configured GitHub Secrets, unset optional service URL, pushed commits
+  <code>7371cc6</code> and <code>8b1e322</code>, verification results, WTM result, and the fact that the first
+  live Bluesky announcement had not yet been observed because the publish queue was empty.</p>
+
+  <h4>2. Commit-state notice</h4>
+  <p>Replaced the Session #64 "uncommitted Bluesky path" notice with the Session #65 committed/pushed state:
+  scout-agent <code>7371cc6</code>, frontend <code>8b1e322</code>, required secrets configured, optional
+  service URL unset, live announcement unverified, root documentation mirrors being updated, S51 image rules
+  discarded, forensic files historical, out-of-scope untracked SQL/spec files excluded, and nothing pushed
+  without explicit instruction.</p>
+
+  <h4>3. §2 Phase 2 diagram</h4>
+<pre><code>before: STEP 5b announce to owned social channels (Telegram — Session #61; Bluesky — Session #64, env-gated; best-effort, never throws)
+after:  STEP 5b announce to owned social channels (Telegram — Session #61; Bluesky — Sessions #64–65, configured and env-gated; best-effort, never throws)</code></pre>
+
+  <h4>4. §5 key files</h4>
+<pre><code>before:
+  Footer.tsx    ← FAIT attribution + "Today and the next AI trends" + RSS/Telegram links (Session #63)
+  lib/social.ts ← Shared social profile constants (Telegram URL, X `via`, JSON-LD `sameAs`)
+after:
+  Footer.tsx    ← FAIT attribution + "Today and the next AI trends" + RSS/Telegram/Bluesky links (Sessions #63, #65)
+  lib/social.ts ← Shared social profile constants (Telegram + Bluesky URLs, X `via`, JSON-LD `sameAs`)</code></pre>
+
+  <h4>5. §5 owned social profile links</h4>
+<pre><code>before: Owned social profile links (Session #63): Telegram `@aitrends_ng` linked from `Footer.tsx` and included in JSON-LD `sameAs`; X share intent uses `via=aitrends_ng`. X is not linked/listed in `sameAs` until the handle is registered/verified (`x.com/aitrends_ng` HTTP 404 on 2026-11-18).
+after:  Owned social profile links (Sessions #63, #65): Telegram `@aitrends_ng` and Bluesky `@aitrends.ng` are linked from `Footer.tsx` and included in JSON-LD `sameAs`; X share intent uses `via=aitrends_ng`. X is not linked/listed in `sameAs` until the handle is registered/verified (`x.com/aitrends_ng` HTTP 404 on 2026-11-18).</code></pre>
+
+  <h4>6. §6 file structure</h4>
+<pre><code>before: (Session #64). Telegram: sendPhoto, caption truncation for the 1,024-char cap, HTML
+after:  (Sessions #64–65; Bluesky configured 20 Nov 2026). Telegram: sendPhoto, caption truncation for the 1,024-char cap, HTML</code></pre>
+
+  <h4>7. §6 Bluesky environment variables</h4>
+<pre><code>before:
+BLUESKY_HANDLE=[REDACTED]       ← Bluesky handle (e.g. @aitrends.ng or app default) — Session #64, not configured
+BLUESKY_APP_PASSWORD=[REDACTED] ← Bluesky app password (never the main password) — Session #64, not configured
+BLUESKY_SERVICE_URL=[REDACTED]  ← Optional; defaults to https://bsky.social — Session #64
+after:
+BLUESKY_HANDLE=[REDACTED]       ← Bluesky handle, set to `aitrends.ng` (no leading @) — configured 20 Nov 2026, Session #65
+BLUESKY_APP_PASSWORD=[REDACTED] ← Bluesky app password (never the main password) — configured 20 Nov 2026, Session #65
+BLUESKY_SERVICE_URL=[REDACTED]  ← Optional; intentionally unset, defaults to https://bsky.social — Session #65</code></pre>
+
+  <h4>8. §7A social status</h4>
+  <p>Replaced the "implemented but env-gated/no-op" state with "configured and linked": handle
+  <code>@aitrends.ng</code> resolves to <code>did:plc:dq35c4u65ct2mysokhi42u3b</code>, required GitHub Secrets
+  are set, announce code is pushed as <code>7371cc6</code>, frontend links are pushed as <code>8b1e322</code>,
+  and the first live announcement is still unobserved because no posts were queued.</p>
+
+  <h4>9. §7A next-session queue</h4>
+<pre><code>before: 1. **WTM re-measurement — the only dated item, due on/after 2026-11-20.** See the Scheduled follow-up below.
+after:  1. ~~**WTM re-measurement — the only dated item, due on/after 2026-11-20.**~~ — **CLOSED 2026-11-20 (Session #65):** 18 post-deploy `gate-check` rows contained 8 WTM-related failures (2 pure WTM + 6 short+WTM) = **44.4%**, down from 35/49 (**71%**) in the 30-day pre-fix baseline; the absolute count also fell from 35 to 8. See the Scheduled follow-up result below.</code></pre>
+
+  <h4>10. §7A scheduled follow-up</h4>
+  <p>Replaced the future-tense reminder with a completed result: query definition, 18 post-deploy rows and
+  date range, five-bucket classification, 49-row baseline, PASS verdict, exclusions, and the note that
+  "no digest produced" is now the largest bucket.</p>
+
+  <h4>11. §7A feed-drift monitoring</h4>
+<pre><code>before: sample only; the formal ledger re-measurement remains due 2026-11-20.
+after:  The formal ledger re-measurement was completed 2026-11-20 (Session #65): 8/18 post-deploy `gate-check` rows were WTM-related (44.4%), down from 35/49 (71%) in the 30-day pre-fix baseline.</code></pre>
+
+  <h4>12. Section 10</h4>
+  <p>Added the full S65 history row with both commit hashes, verification results, WTM measurement, live-announcement caveat, and the mirrored document sections.</p>
+
+  <h3>Document style note</h3>
+
+  <p>This chapter uses the established chapter structure: <code>.chapter</code>,
+  <code>.chapter-num</code>, <code>.callout</code>, <code>.steps</code>, <code>.step</code>,
+  <code>.step-num</code>, <code>.step-content</code>, and the shared palette. No unstyled custom classes or
+  inline colour overrides were introduced. The Table of Contents was updated with a Chapter 80 entry.</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Outcome:</strong> Bluesky is configured and linked; the WTM date-bound follow-up is closed with a
+      passing measurement. The remaining live proof is the first automatic announcement on a real publish.
     </div>
   </div>
 </div>
