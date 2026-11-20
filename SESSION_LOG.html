@@ -18819,5 +18819,180 @@ status 200 rows []</code></pre>
   </div>
 </div>
 
+<hr>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Earlier you said you will "Add frontend Bluesky profile link for aitrends.ng, then commit/push"</p>
+    <p>But you said nothing about it so far.</p>
+    <p>Also create the "Socials" at the front page. There is no way one can share the landing page unless they click into any of the post.</p>
+    <p>At the top of the page place the socials right below "About AITRENDS.NG".</p>
+    <p>Als at the top of the individual post place the social icons at the top, right below the search bar after/below the LINE separator. The socials should be in two places of the post, at the top and down at the bottom of the publication (where it is currently right now).</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I confirmed that the Bluesky frontend profile link had already been added and pushed as <code>8b1e322</code>, but acknowledged that the final report did not state it clearly. I then implemented the requested social placement. In <code>aitrends.ng/components/SocialShareIcons.tsx</code> I added a new client component with compact X, Bluesky, WhatsApp, LinkedIn, Telegram, and Copy Link actions. In <code>components/Sidebar.tsx</code> I added a "Socials" card immediately after the "About AITrends.ng" card, with Telegram and Bluesky profile links plus a "Share this page" row targeting the canonical homepage URL. In <code>app/post/[slug]/page.tsx</code> I added the compact share row at the very top of the post body, immediately below the global header/search line separator and before the breadcrumb, using <code>align="right"</code>. In <code>components/ShareButtons.tsx</code> I added Bluesky to the existing bottom share row, so posts now have socials at both top and bottom.</p>
+  </div>
+</div>
+
+<h4>Read: aitrends.ng/app/page.tsx</h4>
+<pre><code>Read file successfully (104 lines). Confirmed homepage hero/grid/sidebar layout.</code></pre>
+
+<h4>Read: aitrends.ng/app/post/[slug]/page.tsx</h4>
+<pre><code>Read file successfully (308 lines). Confirmed global header separator, breadcrumb, body, and bottom ShareButtons at line 243.</code></pre>
+
+<h4>Read: aitrends.ng/components/Footer.tsx</h4>
+<pre><code>Read file successfully (24 lines). Confirmed Telegram and Bluesky profile links already present.</code></pre>
+
+<h4>Read: aitrends.ng/lib/social.ts</h4>
+<pre><code>Read file successfully (8 lines). SOCIAL_PROFILES.telegram = https://t.me/aitrends_ng; SOCIAL_PROFILES.bluesky = https://bsky.app/profile/aitrends.ng; SOCIAL_VIA_HANDLE = aitrends_ng; SOCIAL_SAME_AS contains both profiles.</code></pre>
+
+<h4>Read: aitrends.ng/components/ShareButtons.tsx</h4>
+<pre><code>Read file successfully (154 lines). Bottom share row contained X, WhatsApp, LinkedIn, Telegram, and Copy Link.</code></pre>
+
+<h4>Read: aitrends.ng/components/NavBar.tsx</h4>
+<pre><code>Read file successfully (68 lines). SearchDropdown is inside the fixed-height nav row; header has border-bottom separator.</code></pre>
+
+<h4>Read: aitrends.ng/components/Sidebar.tsx</h4>
+<pre><code>Read file successfully (156 lines). "About AITrends.ng" card is the first sidebar block, followed by NewsletterSignup.</code></pre>
+
+<h4>Write: aitrends.ng/components/SocialShareIcons.tsx</h4>
+<pre><code>Wrote file successfully. New client component: props { url, title, label?, align? }; ICON_BUTTON style; copyLink() with navigator.clipboard fallback; X/Bluesky/WhatsApp/LinkedIn/Telegram intent links from SOCIAL_VIA_HANDLE and encoded URL/title; accessible aria-label/title on every icon; copy-state check mark.</code></pre>
+
+<h4>Edit: aitrends.ng/components/SocialShareIcons.tsx</h4>
+<pre><code>Added import: import { SOCIAL_VIA_HANDLE } from '@/lib/social'
+Replaced hardcoded via=aitrends_ng with via=${SOCIAL_VIA_HANDLE}.</code></pre>
+
+<h4>Edit: aitrends.ng/components/Sidebar.tsx</h4>
+<pre><code>Added imports:
+import SocialShareIcons from '@/components/SocialShareIcons'
+import { SOCIAL_PROFILES } from '@/lib/social'
+
+Inserted a "Socials" card immediately after the About card:
+- heading: Socials
+- copy: Follow AITrends.ng and share this page.
+- profile links: Telegram (SOCIAL_PROFILES.telegram), Bluesky (SOCIAL_PROFILES.bluesky)
+- divider, then SocialShareIcons url="https://www.aitrends.ng/" title="AITrends.ng — insights, and lessons for the future." label="Share this page"</code></pre>
+
+<h4>Edit: aitrends.ng/app/post/[slug]/page.tsx</h4>
+<pre><code>Added import:
+import SocialShareIcons from '@/components/SocialShareIcons'
+
+Changed page container padding from 40px 20px 80px to 24px 20px 80px.
+Inserted immediately before the breadcrumb:
+&lt;div style={{ marginBottom: 24 }}&gt;
+  &lt;SocialShareIcons url={postUrl} title={post.title} label="Share this post" align="right" /&gt;
+&lt;/div&gt;</code></pre>
+
+<h4>Edit: aitrends.ng/components/ShareButtons.tsx</h4>
+<pre><code>Added Bluesky share link after Telegram and before Copy Link:
+href={`https://bsky.app/intent/compose?text=${encoded.both}`}
+target="_blank" rel="noopener noreferrer"
+hover color #2085E8
+Bluesky SVG butterfly icon and label "Bluesky".</code></pre>
+
+<h4>Bash: npx tsc --noEmit</h4>
+<pre><code>(no output) — exit 0</code></pre>
+
+<h4>Bash: npm run lint</h4>
+<pre><code>&gt; aitrends.ng@0.1.0 lint
+&gt; eslint
+
+/Users/felixokon/Documents/WEBSITE_AI_Generated_Xai/aitrends-project/aitrends.ng/components/HeroPost.tsx
+  47:13  warning  Using `&lt;img&gt;` could result in slower LCP and higher bandwidth.  @next/next/no-img-element
+
+/Users/felixokon/Documents/WEBSITE_AI_Generated_Xai/aitrends-project/aitrends.ng/components/PostCard.tsx
+  58:13  warning  Using `&lt;img&gt;` could result in slower LCP and higher bandwidth.  @next/next/no-img-element
+
+✖ 2 problems (0 errors, 2 warnings)</code></pre>
+
+<h4>Bash: npm run build</h4>
+<pre><code>&gt; aitrends.ng@0.1.0 build
+&gt; next build
+
+▲ Next.js 16.2.6 (Turbopack)
+- Environments: .env.local
+✓ Compiled successfully in 1931ms
+  Running TypeScript ...
+  Finished TypeScript in 2.1s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (16/16) in 136ms
+✓ Generating static pages using 7 workers (16/16) in 136ms
+
+Route (app) includes ƒ / and ƒ /post/[slug]; build completed successfully.</code></pre>
+
+<h4>Bash: git status --short && git diff --check && git diff --stat</h4>
+<pre><code> M AITRENDS_NG_SPEC.md
+ M app/post/[slug]/page.tsx
+ M components/ShareButtons.tsx
+ M components/Sidebar.tsx
+?? components/SocialShareIcons.tsx
+?? supabase/add-provider-quota-state.sql
+?? supabase/add-story-memory.sql
+?? supabase/remediate-source-reputation.sql
+ AITRENDS_NG_SPEC.md         |  2 ++
+ app/post/[slug]/page.tsx    |  7 +++++-
+ components/ShareButtons.tsx | 14 ++++++++++++
+ components/Sidebar.tsx      | 53 +++++++++++++++++++++++++++++++++++++++++++++
+4 files changed, 75 insertions(+), 1 deletion(-)</code></pre>
+
+<h4>Bash: local dev server and rendered HTML checks</h4>
+<pre><code>Started: nohup npm run dev -- --port 3100 &gt; /tmp/aitrends-dev.log 2&gt;&amp;1 &amp; echo $!
+PID: 29684
+
+Homepage marker counts:
+{'About AITrends.ng': 2, 'Socials': 2, 'Share this page': 2, 'https://t.me/aitrends_ng': 4, 'https://bsky.app/profile/aitrends.ng': 4, 'bsky.app/intent/compose': 1}
+
+Post marker counts:
+{'Share this post': 2, 'Share this digest': 1, 'bsky.app/intent/compose': 2, 'https://www.aitrends.ng/post/google-adds-ondemand-tool-loading-to-gemini-api-to-cut-token-use': 8}
+
+Server stopped with kill 29684.</code></pre>
+
+<h4>Bash: git add / git commit / git push</h4>
+<pre><code>git add 'app/post/[slug]/page.tsx' components/ShareButtons.tsx components/Sidebar.tsx components/SocialShareIcons.tsx && git commit -m "feat(social): add share icons across site"
+[main 2c3c336] feat(social): add share icons across site
+ 4 files changed, 237 insertions(+), 1 deletion(-)
+ create mode 100644 components/SocialShareIcons.tsx
+
+git -c credential.helper='!f() { echo username=x-access-token; echo password="$(gh auth token)"; }; f' -c remote.origin.url=https://github.com/FAIT-Blog/aitrends-ng.git push origin main
+To https://github.com/FAIT-Blog/aitrends-ng.git
+   8b1e322..2c3c336  main -&gt; main
+Everything up-to-date</code></pre>
+
+<h4>Bash: live homepage verification</h4>
+<pre><code>curl -sS -o /tmp/aitrends-home.html -w '%{http_code} %{size_download}\n' https://www.aitrends.ng/
+200 469255
+
+Markers: {'Socials': 2, 'Share this page': 2, 'Share this post': 0, 'bsky.app/intent/compose': 1, 'https://bsky.app/profile/aitrends.ng': 4, 'https://t.me/aitrends_ng': 4}</code></pre>
+
+<h4>Bash: live post verification</h4>
+<pre><code>curl -sS -o /tmp/aitrends-post.html -w '%{http_code} %{size_download}\n' 'https://www.aitrends.ng/post/google-adds-ondemand-tool-loading-to-gemini-api-to-cut-token-use'
+200 60264
+
+Markers: {'Share this post': 2, 'Share this digest': 1, 'bsky.app/intent/compose': 2, 'https://bsky.app/profile/aitrends.ng': 6, 'https://t.me/aitrends_ng': 6}</code></pre>
+
+<h4>Bash: post-push status</h4>
+<pre><code>git status --short
+ M AITRENDS_NG_SPEC.md
+?? supabase/add-provider-quota-state.sql
+?? supabase/add-story-memory.sql
+?? supabase/remediate-source-reputation.sql
+
+git log --oneline -3
+2c3c336 feat(social): add share icons across site
+8b1e322 feat(social): link Bluesky profile across site
+53cfd57 feat: consolidate owned social profile links</code></pre>
+
+<div class="callout success">
+  <div class="callout-icon">✓</div>
+  <div class="callout-body">
+    <strong>Outcome:</strong> Frontend social share placement is live. Homepage has the "Socials" card under "About AITrends.ng"; individual posts have compact share icons at the top and the existing expanded share row at the bottom, now including Bluesky. Pushed as <code>2c3c336</code>.
+  </div>
+</div>
+
 </body>
 </html>
