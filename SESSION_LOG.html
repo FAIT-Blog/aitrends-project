@@ -18701,10 +18701,64 @@ after:
 
 git diff --check: clean</code></pre>
 
+<hr>
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I completed the final read-only verification. The live homepage returned HTTP 200 and contained two
+    Bluesky profile links and two Telegram profile links. The latest five Phase 2 workflow runs were all
+    successful but predated the Bluesky code push. The live pending queue was empty. All three repositories
+    were clean except the four deliberately excluded frontend files.</p>
+  </div>
+</div>
+
+<hr>
+
+<h4>Bash: live homepage check</h4>
+<pre><code>node -e "fetch('https://www.aitrends.ng').then(async r=&gt;{const t=await r.text();console.log('status',r.status);console.log('bluesky_profile_links',(t.match(/bsky\.app\/profile\/aitrends\.ng/g)||[]).length);console.log('telegram_profile_links',(t.match(/t\.me\/aitrends_ng/g)||[]).length)}).catch(e=&gt;{console.error(e);process.exit(1)})"
+
+status 200
+bluesky_profile_links 2
+telegram_profile_links 2</code></pre>
+
+<h4>Bash: gh run list --repo FAIT-Blog/scout-agent --workflow complete.yml --limit 5 --json databaseId,status,conclusion,createdAt,headSha</h4>
+<pre><code>[{"conclusion":"success","createdAt":"2026-11-20T02:47:08Z","databaseId":44663230669,"headSha":"c2a02e8d27883557cdec91a988f5e3743fb2de48","status":"completed"},{"conclusion":"success","createdAt":"2026-11-19T21:07:11Z","databaseId":44615523955,"headSha":"c2a02e8d27883557cdec91a988f5e3743fb2de48","status":"completed"},{"conclusion":"success","createdAt":"2026-11-19T12:25:54Z","databaseId":44523809330,"headSha":"c2a02e8d27883557cdec91a988f5e3743fb2de48","status":"completed"},{"conclusion":"success","createdAt":"2026-11-19T03:55:44Z","databaseId":44454789924,"headSha":"c2a02e8d27883557cdec91a988f5e3743fb2de48","status":"completed"},{"conclusion":"success","createdAt":"2026-11-18T22:27:14Z","databaseId":44411713735,"headSha":"c2a02e8d27883557cdec91a988f5e3743fb2de48","status":"completed"}]</code></pre>
+
+<h4>Bash: repository state checks</h4>
+<pre><code>root:
+5c9e659 docs: add session 65 log and training chapter 80
+cdfe8ed docs: record Bluesky activation and WTM measurement
+469b5c4 docs: record session 63 cleanup and verification
+
+scout-agent:
+7371cc6 feat(social): announce published posts on Bluesky
+c2a02e8 fix: add podcast eligibility gate and registry deny-list
+
+aitrends.ng:
+ M AITRENDS_NG_SPEC.md
+?? supabase/add-provider-quota-state.sql
+?? supabase/add-story-memory.sql
+?? supabase/remediate-source-reputation.sql
+8b1e322 feat(social): link Bluesky profile across site
+53cfd57 feat: consolidate owned social profile links</code></pre>
+
+<h4>Bash: live pending queue check</h4>
+<pre><code>node --env-file=.env -e "const u=process.env.SUPABASE_URL,k=process.env.SUPABASE_SECRET_KEY;fetch(u+'/rest/v1/pending_posts?select=id,status&amp;status=in.(pending_image,generating)',{headers:{apikey:k,Authorization:'Bearer '+k}}).then(async r=&gt;console.log('status',r.status,'rows',JSON.stringify(await r.json()))).catch(e=&gt;{console.error(e);process.exit(1)})"
+
+status 200 rows []</code></pre>
+
 <div class="callout warn">
   <div class="callout-icon">!</div>
   <div class="callout-body">
-    <strong>Live status:</strong> Bluesky identity, app-password login, GitHub secrets, code, and frontend profile links are complete. The first live automatic announcement has not been observed because no posts were queued during Session #65.
+    <strong>Live status:</strong> Bluesky identity, app-password login, GitHub secrets, code, and frontend profile links are complete. The first live automatic announcement has not been observed because the live pending queue is empty.
   </div>
 </div>
 
