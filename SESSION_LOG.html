@@ -20097,6 +20097,29 @@ Commit-state notice:
     <p>The next steps were the three-document mirror and the authorized push. I added this release
     addendum to the session log and added Chapter 85 to the training manual, then committed the root
     documentation and pushed both repositories to <code>origin/main</code>.</p>
+
+    <h4>Bash: root documentation commit and push</h4>
+<pre><code>git add CLAUDE.md SESSION_LOG.html TRAINING_MANUAL.html &amp;&amp; git diff --cached --check &amp;&amp; git commit -m "docs: mirror Session #67 release commit" &amp;&amp; git push origin main &amp;&amp; git status --short --branch &amp;&amp; git log --oneline -3
+
+[main 7a45796] docs: mirror Session #67 release commit
+ 3 files changed, 1765 insertions(+), 10 deletions(-)
+To https://github.com/FAIT-Blog/aitrends-project.git
+   cdfe8ed..7a45796  main -&gt; main
+## main...origin/main
+7a45796 docs: mirror Session #67 release commit
+a9a8171 docs: log Bluesky icon fix
+784b413 docs: log frontend social share rollout</code></pre>
+
+    <h4>Bash: scout-agent push and verification</h4>
+<pre><code>git status --short --branch &amp;&amp; git push origin main &amp;&amp; git status --short --branch &amp;&amp; git log --oneline -3
+
+## main...origin/main [ahead 1]
+To https://github.com/FAIT-Blog/scout-agent.git
+   f6b0342..9d0e9fa  main -&gt; main
+## main...origin/main
+9d0e9fa fix(scout): repair Phase 1 source and WTM false negatives
+f6b0342 feat(social): announce published posts on Substack via Buffer
+a183b1b ci: remove temporary Buffer Substack workflows</code></pre>
   </div>
 </div>
 
