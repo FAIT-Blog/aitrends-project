@@ -476,6 +476,11 @@ li { margin-bottom: 6px; }
     <li><a href="#chapter-78">Queued Cleanup: Proving Each Fix Independently</a></li>
     <li><a href="#chapter-79">Adding a Social Channel Without Risking the Publish State</a></li>
     <li><a href="#chapter-80">Activating a Social Channel: Identity, Secrets, Links, and Evidence</a></li>
+    <li><a href="#chapter-81">Publishing a Note Through an Official API Without Risking the Publish State</a></li>
+    <li><a href="#chapter-82">Verify, Harden, Then Remove the Scaffolding</a></li>
+    <li><a href="#chapter-83">Deploy the Verified Substack Announce Path</a></li>
+    <li><a href="#chapter-84">Local Phase 1 Gate and Prompt Repair</a></li>
+    <li><a href="#chapter-85">Session #67 Release Addendum: From Local Fix to Pushed Commit</a></li>
   </ol>
 </div>
 
@@ -11785,6 +11790,654 @@ after:  The formal ledger re-measurement was completed 2026-11-20 (Session #65):
     <div class="callout-body">
       <strong>Outcome:</strong> Bluesky is configured and linked; the WTM date-bound follow-up is closed with a
       passing measurement. The remaining live proof is the first automatic announcement on a real publish.
+    </div>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-81">
+  <div class="chapter-num">Chapter 81</div>
+  <h2>Publishing a Note Through an Official API Without Risking the Publish State</h2>
+
+  <p>Session #66 added a Buffer GraphQL route that publishes one top-level Substack Note for each newly
+  published AITrends post. The lesson is that a social channel is safe to add only when the official API is
+  used, the message is idempotent, failures are isolated from publishing, and "implemented" is kept distinct
+  from "live."</p>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Scope:</strong> add an env-gated, no-throw Substack Notes announcement after Phase 2 publish,
+      mirror every <code>CLAUDE.md</code> change into <code>SESSION_LOG.html</code> and this manual, and keep the
+      path offline until the four Buffer/Substack secrets and authenticated verification exist.
+    </div>
+  </div>
+
+  <h3>Step 1 — Read the official API contract before designing</h3>
+
+  <p>The Buffer GraphQL endpoint was confirmed as <code>https://api.buffer.com</code> with bearer-token auth.
+  The documented <code>createPost</code> mutation requires <code>text</code>, <code>channelId</code>, and
+  <code>schedulingType: automatic</code>, and its result is represented by <code>PostActionSuccess</code> and
+  <code>MutationError</code>. The documentation example uses <code>mode: addToQueue</code>.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Important uncertainty:</strong> the official API-supported-channel excerpt did not list Substack.
+      A connected Substack channel therefore needs authenticated verification before the mutation shape can be
+      trusted in production. The implementation uses <code>mode: customScheduled</code> with
+      <code>dueAt = now + 5s</code> to publish immediately without silently queueing, but that behavior remains
+      unverified.
+    </div>
+  </div>
+
+  <h3>Step 2 — Design the announcement as a side effect</h3>
+
+  <p>The new <code>scout-agent/substack.js</code> writes one top-level Note only. It never creates long-form
+  posts, comments, replies, or restacks, and it never tries to edit a Note after publication. The text is a
+  unique teaser plus the canonical AITrends URL, with no assets:</p>
+
+<pre><code>New on AITrends.ng:
+
+&lt;title&gt;
+
+&lt;excerpt&gt;
+
+Read the full story:
+&lt;url&gt;</code></pre>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <p>Env gate: no-op unless <code>SUBSTACK_ENABLED === 'true'</code> and all of
+        <code>BUFFER_API_KEY</code>, <code>BUFFER_ORGANIZATION_ID</code>, and
+        <code>BUFFER_SUBSTACK_CHANNEL_ID</code> are present.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <p>Idempotency: query recent sent posts for the configured organization/channel and skip when the
+        canonical URL is already present. Phase 2 can re-run rows, and published Notes cannot be edited.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <p>Limits: 20-second request timeout and a 10,000-character text cap.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <p>Failure isolation: every GraphQL, HTTP, and malformed-response error is caught and returned as
+        <code>{ ok: false }</code>. <code>announceSubstack()</code> never throws.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Step 3 — Wire Phase 2 without touching publish state</h3>
+
+  <p><code>complete.js</code> imports <code>announceSubstack</code> and calls it at STEP 5c after
+  <code>announcePost()</code>. The call has its own <code>try/catch</code>, so even an unexpected exception
+  cannot reset a live post to <code>pending_image</code> or mark it <code>failed</code>.</p>
+
+<pre><code>try {
+  const substackResult = await announceSubstack(post, {
+    ...publishResult,
+    coverImageUrl: publicUrl,
+  });
+  if (substackResult?.ok) console.log('🔔 substack: announced (note)');
+} catch (err) {
+  console.warn('⚠️ substack: announce failed', err?.message || err);
+}</code></pre>
+
+  <p><code>.github/workflows/complete.yml</code> maps the four new secrets into the Phase 2 environment. No
+  secret values were written to code or documentation; all docs use <code>[REDACTED]</code>.</p>
+
+  <h3>Step 4 — Test the path with mocks</h3>
+
+  <p>The new <code>test-substack.mjs</code> suite has eight tests:</p>
+
+  <table>
+    <thead>
+      <tr><th>Test</th><th>What it proves</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Disabled flag</td><td>no-op when <code>SUBSTACK_ENABLED</code> is not <code>true</code></td></tr>
+      <tr><td>Missing credentials</td><td>no-op when a Buffer variable is absent</td></tr>
+      <tr><td>One Note</td><td>one mutation, canonical URL present, no assets</td></tr>
+      <tr><td>Duplicate guard</td><td>recent sent Note with same URL is skipped</td></tr>
+      <tr><td>Query failure</td><td>returns <code>ok:false</code> and does not throw</td></tr>
+      <tr><td>MutationError</td><td>GraphQL user error is handled</td></tr>
+      <tr><td>Network failure</td><td>fetch rejection is isolated</td></tr>
+      <tr><td>Character cap</td><td>text is limited to 10,000 characters</td></tr>
+    </tbody>
+  </table>
+
+  <p>The first run exposed a mock bug: <code>options.body</code> was a JSON string but the fake fetch returned
+  it unparsed. Fixing <code>fakeFetch</code> to parse string JSON bodies made the assertions test the real
+  payload shape.</p>
+
+<pre><code>node --check substack.js &amp;&amp; node --check complete.js &amp;&amp; node --check test-substack.mjs
+no output — exit 0
+
+node --experimental-test-module-mocks --test test-substack.mjs
+8 tests passed, 0 failed
+
+node --experimental-test-module-mocks --test test-*.mjs
+Full mocked scout-agent suite passed.
+
+git diff --check
+clean</code></pre>
+
+  <h3>Step 5 — Mirror the master spec fully</h3>
+
+  <p>The <code>CLAUDE.md</code> header was changed to Session #66 and the Session #65 text was preserved as
+  prior state. The commit-state notice now says the Substack path is implemented locally but not committed,
+  not pushed, and not live. The four secrets are absent and no authenticated Buffer/Substack API call has
+  been made.</p>
+
+  <h4>CLAUDE.md sections changed</h4>
+
+<pre><code>§2: added STEP 5c announce one Substack Note via Buffer GraphQL API.
+§6 complete.js note: STEP 5c after announcePost(), own try/catch, no publish-state impact.
+§6 file structure: added substack.js and test-substack.mjs.
+§6 env vars: added SUBSTACK_ENABLED, BUFFER_API_KEY, BUFFER_ORGANIZATION_ID, BUFFER_SUBSTACK_CHANNEL_ID.
+§6 GitHub Secrets: added the same four vars, marked absent as of 2026-11-21.
+§7A social item: Substack Notes path implemented locally but not live.
+§8: added the Substack/Buffer no-throw, env-gate, idempotency, no-silent-queue rule.
+§10: added the S66 history row after S65.</code></pre>
+
+  <p>Every one of those changes is listed before and after in the Session #66 entry of
+  <code>SESSION_LOG.html</code>. This chapter is the second mirror required by the atomic three-document
+  rule.</p>
+
+  <h3>Step 6 — Keep "implemented" separate from "live"</h3>
+
+  <div class="callout danger">
+    <div class="callout-icon">×</div>
+    <div class="callout-body">
+      <strong>Live checklist:</strong> set the four GitHub Secrets; verify the authenticated Buffer API can
+      create a Note on the connected Substack channel; delete or ignore superseded manual Buffer/Substack
+      drafts; proofread the teaser because Notes cannot be edited after publish; then run one controlled live
+      publish and confirm one top-level Note appears with the canonical AITrends URL.
+    </div>
+  </div>
+
+  <p>Manual Buffer UI drafts from the rejected route are superseded. They must not be mistaken for the
+  automated path or allowed to create duplicate Notes during the first live test.</p>
+
+  <h3>Document style note</h3>
+
+  <p>This chapter uses only the established classes: <code>.chapter</code>,
+  <code>.chapter-num</code>, <code>.callout</code>, <code>.steps</code>, <code>.step</code>,
+  <code>.step-num</code>, and <code>.step-content</code>. No unstyled custom classes or inline colour
+  overrides were introduced. The Table of Contents received a Chapter 81 entry.</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Outcome:</strong> the Buffer/Substack route is implemented, mocked, and documented, but it is
+      local only. Production remains env-gated/no-op until Felix supplies the secrets and authorizes an
+      authenticated live verification.
+    </div>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-82">
+  <div class="chapter-num">Chapter 82</div>
+  <h2>Verify, Harden, Then Remove the Scaffolding</h2>
+
+  <p>This chapter continues Session #66 with the authenticated live verification, the idempotency defect it
+  exposed, and the cleanup of temporary workflows. The original Chapter 81 is left unchanged as historical
+  evidence.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>The live test proved the immediate-publish payload</h3>
+        <p>The approved one-Note test created Buffer post
+        <code>6b01d6f9846b0ee907273235</code> with
+        <code>schedulingType: automatic</code>, <code>mode: customScheduled</code>, and
+        <code>dueAt = 2026-11-21T17:38:06.024Z</code>. It was first observed as
+        <code>scheduled</code> and a later read-only GraphQL check confirmed it as
+        <code>sent</code>. This closed the open question created by the Buffer documentation example,
+        which uses <code>addToQueue</code>.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>The live test also exposed an idempotency gap</h3>
+        <p>The production module checked only recent posts with <code>status: [sent]</code>. Because a new
+        Buffer post is briefly <code>scheduled</code>, an immediate Phase 2 re-run could miss the Note and
+        create a duplicate. The query was broadened to all recent posts in the configured channel:</p>
+<pre><code>before:
+filter: { status: [sent], channelIds: [channelId] }
+
+after:
+filter: { channelIds: [channelId] }</code></pre>
+        <p>The helper was renamed from <code>recentSentPostsQuery()</code> to
+        <code>recentChannelPostsQuery()</code>, and one mocked assertion was added to ensure the query no
+        longer contains a <code>status:</code> filter.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>Verification stayed local and deterministic</h3>
+<pre><code>node --check substack.js
+node --check complete.js
+node --check test-substack.mjs
+node --experimental-test-module-mocks --test test-substack.mjs
+8 tests passed, 0 failed
+
+node --experimental-test-module-mocks --test test-*.mjs
+72 tests passed, 0 failed
+
+git diff --check
+clean</code></pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <h3>Temporary verification workflows were removed</h3>
+        <p>Three temporary workflows were pushed for read-only verification, the live Note test, and status
+        confirmation. After the evidence was captured, they were removed in pushed commit
+        <code>a183b1b</code>:</p>
+<pre><code>.github/workflows/buffer-verify.yml
+.github/workflows/substack-live-test.yml
+.github/workflows/substack-note-status.yml
+
+[main a183b1b] ci: remove temporary Buffer Substack workflows
+ 3 files changed, 243 deletions(-)</code></pre>
+        <p>The production announce files remain local and uncommitted:</p>
+<pre><code>.github/workflows/complete.yml
+complete.js
+substack.js
+test-substack.mjs</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <h3>Which master-spec sections changed</h3>
+
+<pre><code>Header: live-test evidence, broadened idempotency, temporary workflow cleanup, remaining local-only production state.
+Commit-state notice: four GitHub Secrets configured; temporary live test succeeded; production Phase 2 has not used the code.
+§2 STEP 5c: immediate-publish payload verified by one approved Buffer live test, not yet by production Phase 2.
+§6 file structure: recent-channel-post idempotency guard (all statuses, not only `sent`).
+§6 env vars and GitHub Secrets: the four Substack variables are configured.
+§7A social item: one Buffer Note verified scheduled then sent; idempotency broadened; manual drafts still superseded.
+§8: recent-channel-post idempotency requirement and verified immediate-publish payload.
+§10 S66 row: live verification, 8/8 focused tests, 72/72 full suite, temporary workflow cleanup, remaining commit status.</code></pre>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Lesson:</strong> a live verification is not only a pass/fail check. It can reveal the exact
+      production assumption that tests missed. Here, the <code>scheduled</code> status observed immediately
+      after creation proved that a sent-only idempotency query was unsafe.
+    </div>
+  </div>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Outcome:</strong> the official Buffer/Substack route and its immediate-publish payload are
+      verified. The production announce path still needs an authorized commit, push, and first automatic
+      Phase 2 observation.
+    </div>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-83">
+  <div class="chapter-num">Chapter 83</div>
+  <h2>Deploy the Verified Substack Announce Path</h2>
+
+  <p>This chapter records the deploy authorization, the final verification, the commit and push, and the
+  last three-document mirror. Chapter 82 is left unchanged as the record of the state immediately before
+  deployment.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>Authorization was explicit</h3>
+        <p>Felix said:</p>
+<pre><code>You can deploy them now</code></pre>
+        <p>That authorized committing and pushing only the four production files in
+        <code>scout-agent</code>:</p>
+<pre><code>.github/workflows/complete.yml
+complete.js
+substack.js
+test-substack.mjs</code></pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>Final verification ran before the commit</h3>
+<pre><code>node --check substack.js
+node --check complete.js
+node --check test-substack.mjs
+node --experimental-test-module-mocks --test test-*.mjs
+git diff --check
+
+# tests 72
+# pass 72
+# fail 0
+git diff --check clean</code></pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>The production commit was pushed</h3>
+<pre><code>git add .github/workflows/complete.yml complete.js substack.js test-substack.mjs
+git diff --cached --check
+git commit -m "feat(social): announce published posts on Substack via Buffer"
+git push origin main
+
+[main f6b0342] feat(social): announce published posts on Substack via Buffer
+ 4 files changed, 304 insertions(+)
+ create mode 100644 substack.js
+ create mode 100644 test-substack.mjs
+To https://github.com/FAIT-Blog/scout-agent.git
+    a183b1b..f6b0342  main -&gt; main</code></pre>
+        <p>The deploy commit is <code>f6b0342</code>. The first automatic Phase 2 Note has not yet been
+        observed.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <h3>The three documents were mirrored again</h3>
+        <p><code>CLAUDE.md</code> was changed from "implemented locally" to "implemented and deployed".
+        The stale "uncommitted/unpushed" statements were replaced with the <code>f6b0342</code> commit and
+        its final verification. The pipeline, secrets, §7A social item, §8 must-not rule, and §10 S66 row
+        were updated. <code>SESSION_LOG.html</code> received the deploy continuation verbatim, and this
+        chapter records the same change in the training manual.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Master-spec changes mirrored by this chapter</h3>
+
+<pre><code>Header: Session #66 now says implemented and deployed.
+Commit-state notice: production files committed and pushed as f6b0342 after 72/72 tests.
+§2 STEP 5c: deployed as f6b0342.
+§6 GitHub Secrets: production announce code committed and pushed as f6b0342.
+§7A social item: Substack path deployed as f6b0342 but not yet observed from Phase 2.
+§8 must-not rule: production Phase 2 path has not yet emitted a live Note, but the code is deployed.
+§10 S66 row: f6b0342, 72/72 full suite, and Chapter 83 deploy mirror.</code></pre>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Lesson:</strong> deployment is a separate event from implementation and from a successful live
+      test. A project may have verified code, configured secrets, and a confirmed manual test while the
+      scheduled production path is still local. The three-document mirror must record the final state after
+      the push, not merely the state before it.
+    </div>
+  </div>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Outcome:</strong> the Substack announce path is deployed on <code>origin/main</code> as
+      <code>f6b0342</code>. The remaining verification is observational: confirm one automatic Phase 2 Note
+      on the next qualifying publish.
+    </div>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-84">
+  <div class="chapter-num">Chapter 84</div>
+  <h2>Local Phase 1 Gate and Prompt Repair</h2>
+
+  <p>This chapter records the Session #67 local repair. The deployed code remained
+  <code>f6b0342</code>. Nothing in this chapter was committed, pushed, deployed, or published. The work
+  exists to explain how two green Phase 1 runs can still be the evidence for a generation-side defect.</p>
+
+  <h3>The observed problem</h3>
+
+  <p>After the Substack announce deploy, no posts were published for more than a day. The queue was empty,
+  all workflows were green, and scheduled Phase 2 runs were completing with
+  <code>No pending posts. Nothing to do.</code> That removed image generation, the publish API, and the
+  announcement path as causes. The loss was earlier: Phase 1 was running but not queueing posts.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Evidence</th>
+        <th>Value</th>
+        <th>Meaning</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Last publish</td>
+        <td><code>2026-11-21T07:55:05.164Z</code></td>
+        <td>The no-publish window began after the last successful Phase 2 output.</td>
+      </tr>
+      <tr>
+        <td>Queue</td>
+        <td><code>pending_image */0</code>, <code>generating */0</code></td>
+        <td>Phase 2 had nothing to process.</td>
+      </tr>
+      <tr>
+        <td>Deployed SHA</td>
+        <td><code>f6b0342d9630dc7542beca1d277f04c513fe3c03</code></td>
+        <td>All sampled green workflows used the deployed production commit.</td>
+      </tr>
+      <tr>
+        <td>Run <code>44983352485</code></td>
+        <td><code>SWS 24/100</code>, <code>Richness 0/100 primary 166 chars</code></td>
+        <td>A thin first source was assessed before richer cluster/full-text signals were available.</td>
+      </tr>
+      <tr>
+        <td>Run <code>44957489096</code></td>
+        <td><code>missing "Why this matters" closing</code></td>
+        <td>The gate rejected a generated digest even though the published post record ended with a valid final WTM section.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>The three local fixes</h3>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>Source-aware AI signal filtering.</strong>
+        <p><code>hasAISignal()</code> was moved into <code>quality-gate.js</code> as a pure shared helper.
+        It checks title, summary, full text, and source/feed source. Explicit AI publication names count as
+        a signal; broad terms such as <code>automation</code> require a title hit or three body hits. This
+        lets a short but highly relevant first-party AI source pass without letting a general technology
+        source pass merely because of its name.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>Best-passing SWS candidate selection.</strong>
+        <p><code>selectStoryCandidate()</code> was added to <code>story-worthiness.js</code> and wired into
+        <code>scout.js</code> before the official SWS gate. Each capped candidate is assessed with its
+        cluster/source signals. Passing candidates outrank non-passing ones; within each group the highest
+        SWS score wins; stable input order breaks ties. Assessor errors are isolated so one bad candidate
+        cannot abort the category.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>WTM repair and an eight-label prompt/parser contract.</strong>
+        <p><code>repairWhyThisMatters()</code> deterministically fills a short final WTM heading or appends a
+        final WTM section using the model-supplied body. It refuses to invent facts and refuses to repair from
+        fewer than twelve words. All three digest paths now request an explicit
+        <code>WHY_THIS_MATTERS:</code> label and return it as a dedicated field; Phase 1 applies the repair
+        before both the first gate check and the expansion retry gate check.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Code before and after</h3>
+
+<pre><code>quality-gate.js
+  before: no shared hasAISignal, no escapeHtml, no cleanWhyText, no repairWhyThisMatters
+  after:  pure shared AI-signal helper + deterministic WTM repair helpers
+
+story-worthiness.js
+  before: SWS assessed the first capped article directly in scout.js
+  after:  selectStoryCandidate(candidates, buildInput, assessor = assessStoryWorthiness)
+
+scout.js
+  before: const topArticle = capped[0]
+  after:  const candidateSelection = selectStoryCandidate(capped, ...)
+          const topArticle = candidateSelection.article || capped[0]
+          applyWhyRepair(digest) before first-pass and retry gate checks
+
+gemini.js
+  before: seven-label prompt contract, no reliable separate WTM field
+  after:  eight-label contract including WHY_THIS_MATTERS
+          parsers capture whyThisMatters in digest, blend synthesis, and editorial paths
+
+test-quality-gate.mjs
+  before: 21 tests
+  after:  AI-signal, WTM repair, and SWS-selection tests added
+
+test-gemini-parts.mjs
+  before: multi-part extraction tests only
+  after:  WHY_THIS_MATTERS assertions for digest, editorial, and blend synthesis</code></pre>
+
+  <h3>Verification</h3>
+
+<pre><code>node --check gemini.js &amp;&amp; node --check quality-gate.js &amp;&amp; node --check scout.js &amp;&amp; node --check story-worthiness.js &amp;&amp; node --check test-quality-gate.mjs &amp;&amp; node --check test-gemini-parts.mjs &amp;&amp; git diff --check
+
+(no output)
+
+node --experimental-test-module-mocks --test test-*.mjs
+# tests 82
+# pass 82
+# fail 0</code></pre>
+
+  <p>The final cleanup removed an unused <code>repairWhyThisMatters</code> import from
+  <code>gemini.js</code>; <code>gemini.js</code> now imports only <code>normaliseCategory</code> from
+  <code>quality-gate.js</code>. Syntax and the full suite were re-run after that cleanup.</p>
+
+  <h3>Why this correction is small but important</h3>
+
+  <p>The official SWS gate remained in place. It still uses the actual <code>bucketList</code>, and a failed
+  SWS result still marks the capped articles seen and skips the category. The repair changed which article
+  the official gate evaluates. Likewise, the quality gate was not weakened: the repair exists only to turn a
+  model-supplied final WTM body into the structure the gate already requires.</p>
+
+  <p>This is the smallest justified correction for the two observed false negatives. It does not relax the
+  threshold, change the editorial eligibility gate, alter provider logic, add a new workflow, or touch the
+  frontend. No live publish was used as a test because no deploy or publish was authorized.</p>
+
+  <h3>Master-spec changes mirrored by this chapter</h3>
+
+<pre><code>Header: Session #67 now records the local uncommitted repair.
+Commit-state notice: added LOCAL WORKTREE notice for six modified scout-agent files.
+§7A: added "Local Phase 1 gate-fix work — 2026-11-22 (Session #67, uncommitted)".
+§10: added the S67 row with diagnosis, fixes, verification, and no-push status.
+SESSION_LOG.html: added Session #67 with the user turns, code before/after, commands, and outputs.</code></pre>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Release boundary:</strong> this is a local fix, not a proven production fix. It becomes a
+      production fix only after Felix authorizes release, the code is deployed, and a live publish is observed
+      through the repaired path.
+    </div>
+  </div>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Outcome:</strong> diagnosis, smallest local changes, focused tests, full mocked verification,
+      and the three-document mirror are complete. The working tree remains uncommitted and undeployed.
+    </div>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-85">
+  <div class="chapter-num">Chapter 85</div>
+  <h2>Session #67 Release Addendum: From Local Fix to Pushed Commit</h2>
+
+  <p>This chapter records the authorization and release step that followed Chapter 84. The
+  diagnosis and smallest-fix reasoning did not change. What changed was the release state: Felix
+  explicitly authorized commit and push after the safety checks. The code commit is
+  <code>9d0e9fa</code> (<code>fix(scout): repair Phase 1 source and WTM false negatives</code>).</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>Re-check before release.</strong>
+        <p>Both worktrees were checked with <code>git status --short --branch</code>,
+        <code>git diff --stat</code>, and <code>git log --oneline -10</code>. The scout-agent branch was
+        <code>main...origin/main</code> with six modified files. The root branch was
+        <code>main...origin/main [ahead 6]</code> with the three mirrored documentation files modified.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>Confirm no secrets were being committed.</strong>
+        <p>The scout-agent diff had no secret-pattern matches. The root grep matched only documented
+        placeholders such as <code>Bearer YOUR_TOKEN</code> and <code>[REDACTED]</code> references,
+        not credential values.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <strong>Commit only the verified code files.</strong>
+        <p>The six scout-agent files were staged with an explicit path list; the staged diff was checked;
+        the commit produced <code>9d0e9fa</code> with 328 insertions and 68 deletions.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <strong>Correct the documentation release state before pushing.</strong>
+        <p><code>CLAUDE.md</code> was updated from a local/uncommitted notice to a release notice naming
+        <code>9d0e9fa</code>. The header, §7A, §10, and this chapter mirror that correction.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>What remains deliberately out of scope</h3>
+
+  <p>No manual deploy, live publish, or new temporary workflow was authorized. The scheduled pipeline
+  may pick up the pushed commit, but a live publish through the repaired path is still required before
+  the fix is called proven. Substack Notes production behavior is still pending first automatic
+  observation; Bluesky remains paused pending Felix's appeal decision. No social cleanup, draft
+  deletion, or account action was performed here.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Lesson:</strong> a verified local fix is not a release until the release narrative
+      matches the repository state. Updating the header, status section, session log, and training
+      chapter before push prevents a future session from reading stale "uncommitted" language as
+      current fact.
     </div>
   </div>
 </div>

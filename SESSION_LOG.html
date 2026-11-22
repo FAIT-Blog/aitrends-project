@@ -19047,5 +19047,1060 @@ post {'official_bluesky_path': 2, 'old_640_path': 0}</code></pre>
   </div>
 </div>
 
+<h2>Session #66 — 21 November 2026 — Buffer/Substack Notes announce path implemented locally; docs mirrored</h2>
+<p>Master spec update: scout-agent gained an env-gated, idempotent, no-throw Substack Notes announce path through the Buffer GraphQL API. Local code and tests passed, but the path is uncommitted, unpushed, and not live because the four required GitHub Secrets are absent.</p>
+
+<!-- TURN 1 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Research and implement an automatic Buffer API route that publishes a Substack Note after every successful AITrends publish, using unique teaser copy that links back to the website. Use the official API, publish immediately, and do not create long-form posts, comments/replies, restacks, or edits after publish.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I researched the current Buffer/Typefully Substack Notes documentation before writing code. The relevant facts were: the Buffer GraphQL API endpoint is <code>https://api.buffer.com</code> and it uses <code>Authorization: Bearer YOUR_TOKEN</code>; Buffer supports Substack Notes publishing on current plans including Free; publishing and insights are supported but engagement is not; automatic publishing has no mobile notification step; the documented <code>createPost</code> mutation requires <code>text</code>, <code>channelId</code>, and <code>schedulingType: automatic</code>, and uses the <code>PostActionSuccess</code> and <code>MutationError</code> fragments; the documentation example uses <code>mode: addToQueue</code>.</p>
+    <p>The official API-supported-channel excerpt did not list Substack, so I treated authenticated verification as mandatory. I selected a top-level Note only, a short teaser plus canonical URL, no assets, env gating, a recent-sent-post idempotency guard, and no-throw error isolation. Manual Buffer UI/Substack scheduling drafts from the rejected path were treated as superseded and must be deleted or ignored.</p>
+  </div>
+</div>
+
+<h4>Web research URLs consulted</h4>
+<pre><code>https://api.buffer.com
+https://developers.buffer.com/guides/posts-and-scheduling.html
+https://developers.buffer.com/guides/getting-started (404)
+https://support.buffer.com/en-us/articles/using-substack-with-buffer-lDbUYyIq4R
+https://support.buffer.com/articles/using-substack-with-buffer-lDbUYyIq4R
+https://buffer.com/resources/schedule-substack-notes/
+https://buffer.com/resources/substack-notes-buffer-integration/</code></pre>
+
+<hr>
+
+<!-- TURN 2 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Do it.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I created <code>scout-agent/substack.js</code> with no code comments. It defines <code>BUFFER_API_URL = 'https://api.buffer.com'</code>, <code>BUFFER_TEXT_LIMIT = 10000</code>, <code>REQUEST_TIMEOUT_MS = 20000</code>, and <code>SCHEDULE_LEAD_MS = 5000</code>. It exports <code>buildSubstackText</code>, <code>findRecentSubstackPost</code>, <code>createSubstackPost</code>, and <code>announceSubstack</code>.</p>
+    <p><code>announceSubstack()</code> no-ops unless <code>SUBSTACK_ENABLED === 'true'</code> and all three Buffer variables are set. It builds a unique top-level Note: <code>New on AITrends.ng:\n\n&lt;title&gt;\n\n&lt;excerpt&gt;\n\nRead the full story:\n&lt;url&gt;</code>, with no assets. <code>postUrl()</code> uses <code>publishResult.url</code> or falls back to <code>https://www.aitrends.ng/post/${slug}</code>.</p>
+    <p>The idempotency query checks recent sent posts in the configured Buffer organization/channel and skips when the canonical URL is already present. The mutation uses the immediate-publish payload <code>schedulingType: automatic</code> + <code>mode: customScheduled</code> + <code>dueAt = Date.now() + 5000</code>. This differs from the documented <code>addToQueue</code> example and still needs authenticated verification. All Buffer/network errors are caught; <code>announceSubstack()</code> does not throw.</p>
+  </div>
+</div>
+
+<h4>Write: scout-agent/substack.js</h4>
+<pre><code>const BUFFER_API_URL = 'https://api.buffer.com';
+const BUFFER_TEXT_LIMIT = 10000;
+const REQUEST_TIMEOUT_MS = 20000;
+const SCHEDULE_LEAD_MS = 5000;
+
+export function buildSubstackText({ title, excerpt, url }) { ... }
+export async function findRecentSubstackPost({ organizationId, channelId, url, fetchImpl = fetch }) { ... }
+export async function createSubstackPost({ channelId, text, fetchImpl = fetch }) { ... }
+export async function announceSubstack(post, publishResult = {}, deps = {}) { ... }</code></pre>
+
+<h4>Edit: scout-agent/complete.js</h4>
+<pre><code>Imported announceSubstack and added STEP 5c after announcePost():
+
+try {
+  const substackResult = await announceSubstack(post, {
+    ...publishResult,
+    coverImageUrl: publicUrl,
+  });
+  if (substackResult?.ok) {
+    console.log('🔔 substack: announced (note)');
+  } else if (substackResult && !substackResult.skipped) {
+    console.warn('⚠️ substack: announce failed', substackResult.error || substackResult);
+  }
+} catch (err) {
+  console.warn('⚠️ substack: announce failed', err?.message || err);
+}</code></pre>
+
+<h4>Edit: scout-agent/.github/workflows/complete.yml</h4>
+<pre><code>SUBSTACK_ENABLED: ${{ secrets.SUBSTACK_ENABLED }}
+BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+BUFFER_ORGANIZATION_ID: ${{ secrets.BUFFER_ORGANIZATION_ID }}
+BUFFER_SUBSTACK_CHANNEL_ID: ${{ secrets.BUFFER_SUBSTACK_CHANNEL_ID }}</code></pre>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I created <code>scout-agent/test-substack.mjs</code> with eight mocked tests covering credential no-ops, one-note payload shape with canonical URL and no assets, duplicate skip, query failure, <code>MutationError</code> handling, network-failure isolation, missing URL, and the 10,000-character cap. The first run failed because the mock did not parse a string <code>options.body</code>; I fixed <code>fakeFetch</code> to parse string JSON bodies before the assertions.</p>
+  </div>
+</div>
+
+<h4>Write: scout-agent/test-substack.mjs</h4>
+<pre><code>Test cases:
+1. no-op when SUBSTACK_ENABLED is not true
+2. no-op when Buffer credentials are missing
+3. creates exactly one Note with canonical URL and no assets
+4. skips when a recent sent Note already contains the canonical URL
+5. returns ok:false when the recent-post query fails
+6. returns ok:false on GraphQL MutationError
+7. no-throw on network failure
+8. caps text at 10,000 characters</code></pre>
+
+<h4>Bash: node --check substack.js &amp;&amp; node --check complete.js &amp;&amp; node --check test-substack.mjs</h4>
+<pre><code>no output — exit 0</code></pre>
+
+<h4>Bash: node --experimental-test-module-mocks --test test-substack.mjs</h4>
+<pre><code>8 tests passed
+0 tests failed</code></pre>
+
+<h4>Bash: node --experimental-test-module-mocks --test test-*.mjs</h4>
+<pre><code>Full mocked scout-agent suite passed.</code></pre>
+
+<h4>Bash: git diff --check</h4>
+<pre><code>clean</code></pre>
+
+<hr>
+
+<!-- TURN 3 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">
+    <p>Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</p>
+  </div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I continued with the mandatory documentation mirroring. I read the current CLAUDE.md header, commit-state notice, Phase 2 pipeline diagram, scout-agent file structure, scout environment variables, GitHub Actions Secrets list, social critical rule, §7A social status, and the end of §10 before editing. The reads confirmed that CLAUDE.md still described Session #65 and that the Substack variables and rules were absent.</p>
+  </div>
+</div>
+
+<h4>Read: CLAUDE.md (line 2)</h4>
+<pre><code>**Last Updated:** 2026-11-20 (**Session #65** — ...</code></pre>
+
+<h4>Read: CLAUDE.md (lines 802–835)</h4>
+<pre><code>Environment Variables — Scout ended at BLUESKY_SERVICE_URL.
+GitHub Actions Secrets required ended at optional BLUESKY_SERVICE_URL.
+No SUBSTACK_ENABLED or BUFFER_* variables were present.</code></pre>
+
+<h4>Read: CLAUDE.md (lines 689–708)</h4>
+<pre><code>scout-agent file structure contained social.js and test-social.mjs but no substack.js or test-substack.mjs.</code></pre>
+
+<h4>Read: CLAUDE.md (lines 1278–1312)</h4>
+<pre><code>§7A social item described Telegram and Bluesky only.</code></pre>
+
+<h4>Grep: Never let a social announcement affect publish state</h4>
+<pre><code>Found 1 match: CLAUDE.md line 1733.</code></pre>
+
+<div class="callout info">
+  <div class="callout-icon">i</div>
+  <div class="callout-body">
+    I then applied the Session #66 updates to CLAUDE.md. Every edit below is mirrored in this session log and in the new training-manual chapter.
+  </div>
+</div>
+
+<h4>Edit: CLAUDE.md — header</h4>
+<pre><code>before: **Last Updated:** 2026-11-20 (**Session #65** —
+after:  **Last Updated:** 2026-11-21 (**Session #66** — **Substack Notes announce path implemented locally.** ... ) **Prior state — 2026-11-20 (**Session #65** —</code></pre>
+
+<h4>Edit: CLAUDE.md — commit-state notice</h4>
+<pre><code>before:
+&gt; ⚠️ **COMMIT STATE (updated 2026-11-20, Session #65).** The Bluesky announce path was committed and pushed
+&gt; to the scout-agent repo as `7371cc6` ...
+
+after:
+&gt; ⚠️ **COMMIT STATE (updated 2026-11-21, Session #66).** The Session #66 Substack announce path is
+&gt; implemented locally but **not committed and not pushed**: `scout-agent/substack.js`,
+&gt; `scout-agent/test-substack.mjs`, `scout-agent/complete.js`, and `scout-agent/.github/workflows/complete.yml`.
+&gt; The four required GitHub Secrets (`SUBSTACK_ENABLED`, `BUFFER_API_KEY`, `BUFFER_ORGANIZATION_ID`,
+&gt; `BUFFER_SUBSTACK_CHANNEL_ID`) are absent, so production remains env-gated/no-op and no authenticated
+&gt; Buffer/Substack API call has been made. The Bluesky announce path was committed and pushed
+&gt; to the scout-agent repo as `7371cc6` ...</code></pre>
+
+<h4>Edit: CLAUDE.md — Phase 2 pipeline</h4>
+<pre><code>added after STEP 5b:
+     STEP 5c  announce one Substack Note via Buffer GraphQL API (Session #66, implemented locally; env-gated, idempotent, best-effort, never throws)</code></pre>
+
+<h4>Edit: CLAUDE.md — complete.js file note</h4>
+<pre><code>added:
+Since Session #66 it calls announceSubstack() at STEP 5c after announcePost(), with
+its own try/catch so a Buffer/Substack failure cannot affect publish state.</code></pre>
+
+<h4>Edit: CLAUDE.md — new scout-agent files</h4>
+<pre><code>added:
+substack.js    ← Outbound Substack Notes via Buffer GraphQL API (Session #66). Writes one top-level
+                 Note per published post: unique teaser + canonical AITrends URL, no assets; env-gated
+                 on SUBSTACK_ENABLED/BUFFER_API_KEY/BUFFER_ORGANIZATION_ID/BUFFER_SUBSTACK_CHANNEL_ID;
+                 recent-sent-post idempotency guard; never throws.
+test-substack.mjs ← Focused 8-test suite (Session #66) — credential no-ops, one-note payload/URL/no assets,
+                 duplicate skip, query failure, MutationError handling, network-failure isolation,
+                 missing URL, and 10,000-character cap. Node module mocks, no real Buffer/Substack API.</code></pre>
+
+<h4>Edit: CLAUDE.md — environment variables and secrets</h4>
+<pre><code>added:
+SUBSTACK_ENABLED=[REDACTED]       ← Set to `true` to enable the Buffer/Substack Note announce path — Session #66 (absent)
+BUFFER_API_KEY=[REDACTED]         ← Buffer GraphQL API bearer token — Session #66 (absent)
+BUFFER_ORGANIZATION_ID=[REDACTED] ← Buffer organization that owns the connected Substack channel — Session #66 (absent)
+BUFFER_SUBSTACK_CHANNEL_ID=[REDACTED] ← Buffer channel ID for the connected Substack account — Session #66 (absent)
+
+Secrets line extended with:
+and Session #66's `SUBSTACK_ENABLED`, `BUFFER_API_KEY`, `BUFFER_ORGANIZATION_ID`, `BUFFER_SUBSTACK_CHANNEL_ID`
+(the four Substack secrets are absent as of 2026-11-21, so production remains env-gated/no-op)</code></pre>
+
+<h4>Edit: CLAUDE.md — §8 Must Not Do</h4>
+<pre><code>added:
+- **Never let a Substack/Buffer announcement affect publish state.** `announceSubstack()` in `substack.js`
+  must stay env-gated and no-throw; `complete.js` STEP 5c wraps it in its own `try/catch` after
+  `announcePost()`. It no-ops when `SUBSTACK_ENABLED !== 'true'` or any of `BUFFER_API_KEY` /
+  `BUFFER_ORGANIZATION_ID` / `BUFFER_SUBSTACK_CHANNEL_ID` is unset. The recent-sent-post idempotency
+  check must stay because Phase 2 re-runs rows; published Substack Notes cannot be edited after publish.
+  Do not silently queue the Note — the immediate-publish payload (`schedulingType: automatic` +
+  `mode: customScheduled` + `dueAt = now + 5s`) still needs authenticated Buffer verification before it
+  can be treated as live.</code></pre>
+
+<h4>Edit: CLAUDE.md — §7A social status</h4>
+<pre><code>added:
+**Substack Notes path implemented locally but not live (Session #66):** `substack.js`
+writes one top-level Note per published post via the Buffer GraphQL API (unique teaser + canonical URL,
+no assets); env-gated, idempotent, best-effort, no-throw; wired at `complete.js` STEP 5c; 8/8 mocked tests
+pass. The four required GitHub Secrets are absent, no authenticated Buffer/Substack API call has been
+made, and the code is uncommitted/unpushed. Manual Buffer/Substack drafts are superseded and must be
+deleted/ignored. Immediate-publish payload still needs authenticated verification.</code></pre>
+
+<h4>Edit: CLAUDE.md — §10 Session #66 row</h4>
+<pre><code>| S66 | 21 Nov 2026 | scout-agent + docs | **Substack Notes announce path implemented locally.** New `scout-agent/substack.js` publishes one top-level Substack Note per newly published AITrends post through the Buffer GraphQL API: unique teaser + canonical AITrends URL, no assets, `SUBSTACK_ENABLED` / `BUFFER_API_KEY` / `BUFFER_ORGANIZATION_ID` / `BUFFER_SUBSTACK_CHANNEL_ID` env gate, recent-sent-post idempotency check, 20s timeout, 10,000-character cap, and no-throw error isolation. `complete.js` calls `announceSubstack()` at STEP 5c after `announcePost()` with its own `try/catch`; `complete.yml` maps the four new secrets. New `test-substack.mjs` passes 8/8: credential no-ops, one-note payload/URL/no assets, duplicate skip, query failure, `MutationError` handling, network-failure isolation, missing URL, and character cap. An initial mock failure (unparsed JSON `options.body`) was fixed in `fakeFetch`. Verification: `node --check` on `substack.js`, `complete.js`, `test-substack.mjs`; `test-substack.mjs` 8/8; full mocked suite pass; `git diff --check` clean. Not committed, not pushed, and not live: the four GitHub Secrets are absent and no authenticated Buffer/Substack API call has been made. The chosen immediate-publish payload is `schedulingType: automatic` + `mode: customScheduled` + `dueAt = now + 5s`; it still needs authenticated Buffer verification because the docs example uses `mode: addToQueue`. Manual Buffer/Substack drafts are superseded and must be deleted/ignored. Docs mirrored per atomic rule: CLAUDE.md header, commit-state notice, §2 pipeline, §6 file/env notes, §7A social item, §8 must-not rule, and this row; SESSION_LOG Session #66 and TRAINING_MANUAL Chapter 81. |</code></pre>
+
+<div class="callout warn">
+  <div class="callout-icon">!</div>
+  <div class="callout-body">
+    <strong>Status:</strong> The code is local only. Do not treat the Substack path as live until the four GitHub Secrets exist, the connected Substack channel ID is verified with an authenticated Buffer API call, and one controlled live Note has been observed.
+  </div>
+</div>
+
+<hr>
+
+<h2>Session #66 continuation — 21 November 2026 — live Buffer verification, idempotency hardening, and temporary workflow cleanup</h2>
+
+<p class="meta">This addendum records the continuation of Session #66. It is append-only: the original Session #66 entry above is left unchanged as historical evidence.</p>
+
+<!-- TURN 1 -->
+
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<!-- TURN 2 -->
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>The clear next steps were to harden the production idempotency guard, remove the temporary verification workflows, and mirror the changed facts into all three governing documents.</p>
+
+    <h4>Bash: grep for the narrow idempotency filter</h4>
+<pre><code>grep -n "status: \[sent\]|recentSentPostsQuery|posts\(first" scout-agent/substack.js
+
+scout-agent/substack.js:48:function recentSentPostsQuery(organizationId, channelId) {
+scout-agent/substack.js:49:  return `query { posts(first: 50, input: { organizationId: ${JSON.stringify(organizationId)}, filter: { status: [sent], channelIds: [${JSON.stringify(channelId)}] } }) { edges { node { id text } } } }`
+scout-agent/substack.js:67:  const data = await bufferRequest(apiKey, recentSentPostsQuery(organizationId, channelId))</code></pre>
+
+    <h4>Read: scout-agent/substack.js — idempotency query block</h4>
+<pre><code>48: function recentSentPostsQuery(organizationId, channelId) {
+49:   return `query { posts(first: 50, input: { organizationId: ${JSON.stringify(organizationId)}, filter: { status: [sent], channelIds: [${JSON.stringify(channelId)}] } }) { edges { node { id text } } } }`
+50: }
+...
+66: export async function findRecentSubstackPost(apiKey, organizationId, channelId, url) {
+67:   const data = await bufferRequest(apiKey, recentSentPostsQuery(organizationId, channelId))
+68:   const edges = data?.posts?.edges || []
+69:   return edges.find(edge =&gt; String(edge?.node?.text || '').includes(url))?.node || null
+70: }</code></pre>
+
+    <h4>Edit: scout-agent/substack.js — broaden query to all recent posts in the configured channel</h4>
+<pre><code>before:
+function recentSentPostsQuery(organizationId, channelId) {
+  return `query { posts(first: 50, input: { organizationId: ${JSON.stringify(organizationId)}, filter: { status: [sent], channelIds: [${JSON.stringify(channelId)}] } }) { edges { node { id text } } } }`
+}
+
+after:
+function recentChannelPostsQuery(organizationId, channelId) {
+  return `query { posts(first: 50, input: { organizationId: ${JSON.stringify(organizationId)}, filter: { channelIds: [${JSON.stringify(channelId)}] } }) { edges { node { id text } } } }`
+}
+
+before:
+const data = await bufferRequest(apiKey, recentSentPostsQuery(organizationId, channelId))
+
+after:
+const data = await bufferRequest(apiKey, recentChannelPostsQuery(organizationId, channelId))</code></pre>
+
+    <h4>Edit: scout-agent/test-substack.mjs — assert the query no longer filters by status</h4>
+<pre><code>before:
+  assert.equal(calls.length, 1)
+  assert.equal(mutationCall(), undefined)
+})
+
+test('does not create a Note when the idempotency query fails', async () =&gt; {
+
+after:
+  assert.equal(calls.length, 1)
+  assert.equal(mutationCall(), undefined)
+  assert.doesNotMatch(calls[0].options.body.query, /status:/)
+})
+
+test('does not create a Note when the idempotency query fails', async () =&gt; {</code></pre>
+
+    <h4>Bash: syntax checks and focused Substack suite</h4>
+<pre><code>node --check substack.js &amp;&amp; node --check complete.js &amp;&amp; node --check test-substack.mjs &amp;&amp; node --experimental-test-module-mocks --test test-substack.mjs
+
+TAP version 13
+# (node:68830) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+ok 1 - no-ops when Substack is not enabled or Buffer credentials are missing
+ok 2 - creates one Substack Note with canonical URL and no asset
+ok 3 - skips duplicate Note when a recent sent post already contains the URL
+ok 4 - does not create a Note when the idempotency query fails
+ok 5 - returns a failure when Buffer reports a MutationError
+ok 6 - never throws on Buffer network failure
+ok 7 - returns a failure when no published URL is available
+ok 8 - buildSubstackText keeps long Notes within 10000 characters and preserves URL
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 162.102125</code></pre>
+
+    <h4>Bash: full mocked suite and diff check</h4>
+<pre><code>node --experimental-test-module-mocks --test test-*.mjs &amp;&amp; git diff --check
+
+1..72
+# tests 72
+# suites 0
+# pass 72
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 218.563334</code></pre>
+
+    <p>The idempotency fix was necessary because the approved live test showed a newly created Buffer post first in <code>scheduled</code> state. A <code>status: [sent]</code> filter would miss that row during an immediate Phase 2 re-run and could create a duplicate Note.</p>
+
+    <h4>Bash: remove temporary verification workflows, commit, push, and re-check status</h4>
+<pre><code>git status --short &amp;&amp; git rm ".github/workflows/buffer-verify.yml" ".github/workflows/substack-live-test.yml" ".github/workflows/substack-note-status.yml" &amp;&amp; git diff --cached --check &amp;&amp; git commit -m "ci: remove temporary Buffer Substack workflows" &amp;&amp; git push origin main &amp;&amp; git status --short
+
+ M .github/workflows/complete.yml
+ M complete.js
+?? substack.js
+?? test-substack.mjs
+rm '.github/workflows/buffer-verify.yml'
+rm '.github/workflows/substack-live-test.yml'
+rm '.github/workflows/substack-note-status.yml'
+[main a183b1b] ci: remove temporary Buffer Substack workflows
+ 3 files changed, 243 deletions(-)
+ delete mode 100644 .github/workflows/buffer-verify.yml
+ delete mode 100644 .github/workflows/substack-live-test.yml
+ delete mode 100644 .github/workflows/substack-note-status.yml
+To https://github.com/FAIT-Blog/scout-agent.git
+   2362531..a183b1b  main -&gt; main
+ M .github/workflows/complete.yml
+ M complete.js
+?? substack.js
+?? test-substack.mjs</code></pre>
+
+    <h4>CLAUDE.md changes made in this continuation</h4>
+<pre><code>Header: replaced "four GitHub Secrets are absent / no authenticated Buffer/Substack API test" with the successful live-test evidence, idempotency broadening, temporary workflow commits/removal, and the remaining uncommitted production state.
+Commit-state notice: replaced "four required GitHub Secrets are absent" with "configured as of 2026-11-21" and recorded the temporary authenticated one-Note live test plus cleanup commit a183b1b.
+§2 STEP 5c: added "immediate-publish payload verified by one approved Buffer live test, not yet by production Phase 2".
+§6 file structure: changed "recent-sent-post idempotency guard" to "recent-channel-post idempotency guard (all statuses, not only `sent`)".
+§6 env vars: changed the four Substack variables from "(absent)" to "(configured)".
+§6 GitHub Secrets: changed "four Substack secrets are absent" to all four configured, production code still uncommitted/unpushed.
+§7A social item: replaced "implemented locally but not live" with "implemented locally but not yet used by production Phase 2", and recorded Buffer post 6b01d6f9846b0ee907273235 status scheduled then sent, the broadened idempotency query, cleanup commit a183b1b, and manual drafts still superseded.
+§8 Substack/Buffer rule: changed the narrow sent-only idempotency requirement to recent-channel-post idempotency and recorded the live verified immediate-publish payload.
+§10 S66 row: replaced the old absent-secrets/not-verified paragraph with the live-test evidence, 8/8 focused and 72/72 full suite result, temporary workflow cleanup, and remaining production commit/push status.</code></pre>
+
+    <div class="callout success">
+      <div class="callout-icon">✓</div>
+      <div class="callout-body">
+        <strong>Status:</strong> Buffer/Substack immediate publishing is now verified with one approved live Note. The production announce module remains uncommitted/unpushed, and the first automatic Phase 2 Note has not yet been observed.
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN: Session #66 continuation — deploy authorization -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">You can deploy them now</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I treated that as explicit authorization to commit and push the four production files from <code>scout-agent</code>. Before writing anything, I re-ran syntax checks, the complete mocked suite, and diff checks.</p>
+
+    <h4>Bash: deployment preflight</h4>
+<pre><code>git status --short &amp;&amp; git diff --check &amp;&amp; git diff -- .github/workflows/complete.yml complete.js &amp;&amp; git log --oneline -5
+
+ M .github/workflows/complete.yml
+ M complete.js
+?? substack.js
+?? test-substack.mjs
+a183b1b ci: remove temporary Buffer Substack workflows
+2362531 ci: add Buffer Substack note status check
+e4b06ac ci: make Substack live test self-contained
+07392e1 ci: add temporary Substack live test workflow
+8d5d908 docs: mirror session 66 substack implementation across the three documents</code></pre>
+
+    <p>The status showed exactly the four intended production files: the workflow, <code>complete.js</code>, <code>substack.js</code>, and <code>test-substack.mjs</code>. The diff check was clean.</p>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN: Session #66 continuation — deployment -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I committed and pushed only the four production files, in one commit.</p>
+
+    <h4>Bash: final verification, commit, and push</h4>
+<pre><code>node --check substack.js &amp;&amp; node --check complete.js &amp;&amp; node --check test-substack.mjs &amp;&amp; node --experimental-test-module-mocks --test test-*.mjs &amp;&amp; git diff --check &amp;&amp; git add .github/workflows/complete.yml complete.js substack.js test-substack.mjs &amp;&amp; git diff --cached --check &amp;&amp; git commit -m "feat(social): announce published posts on Substack via Buffer" &amp;&amp; git push origin main &amp;&amp; git status --short &amp;&amp; git log --oneline -4
+
+1..72
+# tests 72
+# suites 0
+# pass 72
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 210.996667
+[main f6b0342] feat(social): announce published posts on Substack via Buffer
+ 4 files changed, 304 insertions(+)
+ create mode 100644 substack.js
+ create mode 100644 test-substack.mjs
+To https://github.com/FAIT-Blog/scout-agent.git
+    a183b1b..f6b0342  main -&gt; main
+f6b0342 feat(social): announce published posts on Substack via Buffer
+a183b1b ci: remove temporary Buffer Substack workflows
+2362531 ci: add Buffer Substack note status check
+e4b06ac ci: make Substack live test self-contained</code></pre>
+
+    <p>The production Substack announce path is now deployed on <code>origin/main</code>. The first automatic Phase 2 Note has not yet been observed.</p>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN: final three-document mirror -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>The remaining required step was the three-document atomic mirror. I updated <code>CLAUDE.md</code> from the stale local-only state to the deployed state, appended this deploy continuation to <code>SESSION_LOG.html</code>, and added Chapter 83 to <code>TRAINING_MANUAL.html</code>. No docs push was authorized.</p>
+
+    <h4>Read: CLAUDE.md (lines 1–22)</h4>
+<pre><code>The file still contained:
+- "Substack Notes announce path implemented locally."
+- "The production announce path remains uncommitted/unpushed and has not yet emitted a live Note from Phase 2."
+- "implemented locally but **not committed and not pushed**"</code></pre>
+
+    <h4>Edit: CLAUDE.md — header and commit-state notice</h4>
+<pre><code>before:
+Substack Notes announce path implemented locally.
+The production announce path remains uncommitted/unpushed and has not yet emitted a live Note from Phase 2.
+implemented locally but **not committed and not pushed**
+
+after:
+Substack Notes announce path implemented and deployed.
+The production announce path was committed and pushed as `f6b0342` (`feat(social): announce published
+posts on Substack via Buffer`) after final verification: `node --check` clean, 72/72 mocked tests, and
+`git diff --check` clean; it has not yet emitted a live Note from Phase 2.
+committed and pushed as `f6b0342` (`feat(social): announce published posts on Substack via Buffer`)</code></pre>
+
+    <h4>Edit: CLAUDE.md — pipeline, secrets, §7A, §8, and §10</h4>
+<pre><code>before:
+STEP 5c ... (Session #66, implemented locally; env-gated, idempotent, best-effort, never throws ...
+production announce code still uncommitted/unpushed
+Substack Notes path implemented locally but not yet used by production Phase 2 (Session #66):
+The code remains uncommitted/unpushed; temporary verification workflows were removed in pushed commit `a183b1b`.
+recent-sent-post idempotency check
+Docs mirrored ... SESSION_LOG Session #66 and TRAINING_MANUAL Chapter 81.
+
+after:
+STEP 5c ... (Session #66, deployed as `f6b0342`; env-gated, idempotent, best-effort, never throws ...
+production announce code committed and pushed as `f6b0342`
+Substack Notes path deployed as `f6b0342` but not yet used by production Phase 2 (Session #66):
+The production path was committed and pushed as `f6b0342` after final verification; temporary verification workflows were removed in pushed commit `a183b1b`.
+recent-channel-post idempotency check (all statuses, not only `sent`)
+Docs mirrored ... SESSION_LOG Session #66 (including the deploy continuation) and TRAINING_MANUAL Chapters 81–82 plus the Chapter 83 deploy mirror.</code></pre>
+
+    <h4>Bash: verify no stale CLAUDE.md phrases remain</h4>
+<pre><code>grep -n "uncommitted/unpushed\|recent-sent-post\|implemented locally\|production announce code still\|Chapter 81" "CLAUDE.md" || true
+
+(no output)</code></pre>
+
+    <h4>Bash: verify deployed scout-agent commit</h4>
+<pre><code>git status --short &amp;&amp; git log --oneline -5
+
+f6b0342 feat(social): announce published posts on Substack via Buffer
+a183b1b ci: remove temporary Buffer Substack workflows
+2362531 ci: add Buffer Substack note status check
+e4b06ac ci: make Substack live test self-contained
+07392e1 ci: add temporary Substack live test workflow</code></pre>
+
+    <div class="callout success">
+      <div class="callout-icon">✓</div>
+      <div class="callout-body">
+        <strong>Status:</strong> the production code is deployed as <code>f6b0342</code>. The documents now state the deployed state; the first automatic Phase 2 Note still needs to be observed.
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN: final verification corrections -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I re-checked the deployed commit and found one inaccurate number in the newly written docs: the
+    deploy commit changed 304 lines, not 460. I also changed the root commit-state notice from "are being
+    updated" to "were updated locally" now that the mirror is complete.</p>
+
+    <h4>Bash: verify deployed scout-agent commit and full suite</h4>
+<pre><code>git show --stat --oneline --summary f6b0342 &amp;&amp; git status --short &amp;&amp; git log --oneline -5
+
+f6b0342 feat(social): announce published posts on Substack via Buffer
+ .github/workflows/complete.yml |   4 +
+ complete.js                    |  12 +++
+ substack.js                    | 111 ++++++++++++++++++++++++++
+ test-substack.mjs              | 177 +++++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 304 insertions(+)
+ create mode 100644 substack.js
+ create mode 100644 test-substack.mjs
+f6b0342 feat(social): announce published posts on Substack via Buffer
+a183b1b ci: remove temporary Buffer Substack workflows
+2362531 ci: add Buffer Substack note status check
+e4b06ac ci: make Substack live test self-contained
+07392e1 ci: add temporary Substack live test workflow</code></pre>
+
+    <h4>Bash: verify root docs</h4>
+<pre><code>git diff --check &amp;&amp; grep -n "uncommitted/unpushed\|recent-sent-post\|implemented locally\|production announce code still\|Chapter 81" "CLAUDE.md" || true &amp;&amp; grep -n "chapter-83" "TRAINING_MANUAL.html" &amp;&amp; git status --short
+
+481:    &lt;li&gt;&lt;a href="#chapter-83"&gt;Deploy the Verified Substack Announce Path&lt;/a&gt;&lt;/li&gt;
+12097:&lt;div class="chapter" id="chapter-83"&gt;
+ M CLAUDE.md
+ M SESSION_LOG.html
+ M TRAINING_MANUAL.html</code></pre>
+
+    <h4>Edit: CLAUDE.md commit-state wording</h4>
+<pre><code>before:
+&gt; verification workflows were removed after the test in pushed commit `a183b1b`. Root documentation mirrors
+&gt; are being updated in this session after the production deploy. The Bluesky announce path was committed and pushed
+
+after:
+&gt; verification workflows were removed after the test in pushed commit `a183b1b`. Root documentation mirrors
+&gt; were updated locally in this session after the production deploy. The Bluesky announce path was committed and pushed</code></pre>
+
+    <h4>Edit: TRAINING_MANUAL.html deploy-stat correction</h4>
+<pre><code>before:
+ 4 files changed, 304 insertions(+)
+
+after:
+ 4 files changed, 304 insertions(+)</code></pre>
+
+    <p>The root documents remain locally modified and were not pushed. No production code was changed in
+    this turn.</p>
+  </div>
+</div>
+
+<hr>
+
+<!-- Session #67 — 2026-11-22 — local Phase 1 gate/prompt/test repair -->
+<h2>Session #67 — 2026-11-22 — Local Phase 1 gate/prompt/test repair</h2>
+<p>Local-only session. No commit, push, deploy, live publish, or new temporary workflow was authorized.
+The deployed production code remained <code>f6b0342</code>.</p>
+
+<!-- TURN 1 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I continued the local Phase 1 diagnosis. The no-publish window after <code>f6b0342</code> was not a
+    queue, image, API, or secret failure: the queue was empty, all workflows were green on the deployed SHA,
+    and scheduled Phase 2 runs were logging <code>No pending posts. Nothing to do.</code> Two successful
+    Phase 1 runs nevertheless exposed generation-side false negatives.</p>
+
+    <h4>Bash: production-state diagnosis evidence</h4>
+<pre><code>last publish: 2026-11-21T07:55:05.164Z
+public health: 200
+pending_posts: pending_image */0, generating */0, published 0-0/689, failed 0-0/11
+deployed head_sha: f6b0342d9630dc7542beca1d277f04c513fe3c03
+Phase 2 log: No pending posts. Nothing to do. at 2026-11-22T09:12:09.4117427Z
+
+Run 44983352485:
+Processing category: industry (5 articles)
+RuntimeWire AI: 166 chars
+RuntimeWire AI: 221 chars
+iAfrica AI News: 719 chars
+Africa AI News: 4019 chars
+[SWS enforce] SWS 24/100 (pass threshold 55, confidence HIGH)
+Richness 0/100 primary 166 chars (full text)
+
+Run 44957489096:
+⚠️ Quality gate: missing "Why this matters" closing — rejecting "Anthropic’s IPO raises doubts about its ability to prioritize safety"
+❌ Content still failing quality gate after one retry</code></pre>
+
+    <p>Post id <code>730</code> was inspected through the published payload and ended with a valid final
+    WTM section. I concluded that two smallest local fixes were needed: choose the best candidate before the
+    official SWS gate, and repair/guard the WTM contract instead of relying on prompt-only compliance.</p>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 2 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I applied the local fixes in <code>scout-agent</code>. No production repo was committed or pushed.</p>
+
+    <h4>Edit: scout-agent/quality-gate.js — before / after</h4>
+<pre><code>before:
+(no AI_SOURCE_SIGNALS / AI_SIGNAL_STRONG / AI_SIGNAL_WEAK / hasAISignal)
+(no escapeHtml / cleanWhyText / repairWhyThisMatters)
+
+after (behavior):
+AI_SOURCE_SIGNALS = explicit AI publication/source names
+AI_SIGNAL_STRONG = original strong terms + source signals + hyphenated ai-* forms
+AI_SIGNAL_WEAK = broad terms that require a title hit or 3+ body hits
+hasAISignal(article) checks title, summary, fullText, source || feedSource || feed
+escapeHtml(value) escapes &amp; &lt; &gt; " '
+cleanWhyText(value) strips labels, headings, HTML tags, markdown, and collapses whitespace
+repairWhyThisMatters(content, whyText) returns content unchanged if the gate already passes,
+returns null if cleaned whyText has &lt; MIN_WTM_WORDS (12), fills a short final WTM heading,
+or appends a final &lt;h3&gt;Why This Matters&lt;/h3&gt; with a source-grounded paragraph</code></pre>
+
+    <h4>Edit: scout-agent/story-worthiness.js — before / after</h4>
+<pre><code>before:
+(exported assessStoryWorthiness, storyWorthinessReport, confidenceLevel, duplicate helpers)
+
+after:
+export function selectStoryCandidate(candidates, buildInput, assessor = assessStoryWorthiness) {
+  // behavior, no inline comments in source:
+  // empty pool returns { article: null, verdict: null, verdicts: [] }
+  // each assessor error is isolated and recorded as a non-passing verdict with reason 'candidate assessment failed'
+  // passing verdicts are preferred over non-passing verdicts
+  // highest score wins; stable original order wins ties
+}</code></pre>
+
+    <h4>Edit: scout-agent/scout.js — before / after</h4>
+<pre><code>before:
+imported passesQualityGate from './quality-gate.js'
+local AI_SIGNAL constants and hasAISignal() in scout.js
+const topArticle = capped[0]
+official SWS gate used SWS verdict for capped[0]
+
+after:
+imported hasAISignal from './quality-gate.js'
+imported selectStoryCandidate from './story-worthiness.js'
+imported repairWhyThisMatters from './quality-gate.js'
+const candidateSelection = selectStoryCandidate(capped, (article, index) =&gt; ({ ... }))
+const topArticle = candidateSelection.article || capped[0]
+log: Selected higher-value source: "..." [source] (SWS score/100, confidence ...)
+applyWhyRepair(digest) inserted before Phase 1 gate checks on editorial first / retry
+and normal first / retry paths
+expansion instruction: (4) include the WHY_THIS_MATTERS label with that body
+banned adjectives instruction renumbered to (5)</code></pre>
+
+    <h4>Edit: scout-agent/gemini.js — before / after</h4>
+<pre><code>before:
+seven-label prompt contract
+no reliable separate WHY_THIS_MATTERS field on digest return values
+return objects did not include whyThisMatters
+
+after:
+"Respond using EXACTLY these eight labels in EXACTLY this order"
+WHY_THIS_MATTERS: [one source-grounded final section body of at least 12 words —
+  the single concrete consequence of this development; no invented facts;
+  no heading or HTML tags]
+applied to generateDigest(), synthesizeBlendDigest(), generateEditorialDigest()
+parsers capture whyThisMatters and append continuation lines while currentField === 'why'
+all three return objects include whyThisMatters
+later cleanup: removed unused import { normaliseCategory, repairWhyThisMatters }
+kept: import { normaliseCategory } from './quality-gate.js'</code></pre>
+
+    <h4>Edit: scout-agent/test-quality-gate.mjs — before / after</h4>
+<pre><code>before:
+21 tests; no AI-signal, WTM-repair, or SWS-selection tests
+
+after:
+imports repairWhyThisMatters, hasAISignal, selectStoryCandidate
+AI signal:
+  explicit AI source name is sufficient
+  general tech source with no AI vocabulary is rejected
+WTM repair:
+  appends a final section when missing
+  fills a short final heading without inventing facts
+  leaves an already-passing digest unchanged
+  rejects a too-short replacement
+SWS selection:
+  passing candidate outranks thin first article
+  no passing candidates falls back to highest score
+  assessor errors are isolated without throwing</code></pre>
+
+    <h4>Edit: scout-agent/test-gemini-parts.mjs — before / after</h4>
+<pre><code>before:
+generateDigest fixture had no WHY_THIS_MATTERS assertion
+editorial fixture had no WHY_THIS_MATTERS assertion
+no synthesizeBlendDigest parser assertion
+
+after:
+generateDigest fixture includes:
+  WHY_THIS_MATTERS: This shift changes how teams evaluate practical model risk.
+  assert.ok(digest.content.includes('Editorial fact.'))
+  assert.equal(digest.whyThisMatters, 'This shift changes how teams evaluate practical model risk.')
+
+editorial fixture includes:
+  WHY_THIS_MATTERS: This decision changes what builders can ship safely.
+  assert.equal(digest.whyThisMatters, 'This decision changes what builders can ship safely.')
+
+added test:
+  synthesizeBlendDigest — parses WHY_THIS_MATTERS from the answer part
+  asserts title, whyThisMatters, and content &lt;h3&gt;Body One&lt;/h3&gt;</code></pre>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 3 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I verified the edited files and then reviewed the SWS integration points.</p>
+
+    <h4>Bash: syntax and whitespace verification</h4>
+<pre><code>node --check gemini.js &amp;&amp; node --check quality-gate.js &amp;&amp; node --check scout.js &amp;&amp; node --check story-worthiness.js &amp;&amp; node --check test-quality-gate.mjs &amp;&amp; node --check test-gemini-parts.mjs &amp;&amp; git diff --check
+
+(no output)</code></pre>
+
+    <h4>Bash: full mocked test suite</h4>
+<pre><code>node --experimental-test-module-mocks --test test-*.mjs
+
+TAP version 13
+ok 1 - Strong development story is eligible (launch + pricing consequence)
+ok 2 - Weak \#22 announced-multi-year-partnership pattern is ineligible
+ok 3 - Weak \#39 FactSet-show-that pattern is ineligible
+ok 4 - re-coverage pair is rejected as not fresh via distinctive entities branch
+ok 5 - same re-coverage story is eligible when its sibling is NOT in the window
+ok 6 - fail-open: recent null (DB error) is treated as fresh, not rejected
+ok 7 - getRecentPublishedPosts returns published rows on success
+ok 8 - getRecentPublishedPosts returns null on Supabase error (fail-open)
+ok 9 - extractGeminiText — single-part response returns its text
+ok 10 - extractGeminiText — empty candidates yields empty string
+ok 11 - extractGeminiText — answer in a LATER part (thinking-mode shape)
+ok 12 - extractGeminiText — reasoning part skipped, all answer parts joined
+ok 13 - generateDigest — parses title/content when the answer is in a later part
+ok 14 - digestBlendSources — parses digest when the answer is in a later part
+ok 15 - synthesizeBlendDigest — parses WHY_THIS_MATTERS from the answer part
+ok 16 - generateEditorialDigest — parses fields when the answer is in a later part
+ok 17 - callGeminiWithFallback — empty 200 recorded as failure, not success
+ok 18 - callGeminiWithFallback — single-part 200 resolves with the text
+ok 19 - callGeminiWithFallback — Groq TPD break falls through to Gemini
+ok 20 - accepts a substantive transcript with a dated, attributed, concrete claim
+ok 21 - rejects an empty transcript
+ok 22 - rejects a short transcript even when claim markers are present
+ok 23 - rejects a long transcript with no dated or current marker
+ok 24 - rejects a long transcript with no attributed claim
+ok 25 - rejects a long transcript with no concrete claim marker
+ok 26 - VALID_CATEGORIES matches the blog API taxonomy
+ok 27 - normaliseCategory accepts a valid category
+ok 28 - normaliseCategory is case- and whitespace-insensitive
+ok 29 - normaliseCategory rejects an invalid value and uses the fallback
+ok 30 - normaliseCategory defaults the fallback to industry
+ok 31 - normaliseHeadline leaves a short headline untouched
+ok 32 - normaliseHeadline collapses whitespace
+ok 33 - normaliseHeadline cuts a metric dump at a natural clause boundary
+ok 34 - normaliseHeadline falls back to a word boundary when no delimiter fits
+ok 35 - normaliseHeadline returns an empty string for empty input
+ok 36 - MAX_HEADLINE_CHARS is a tolerance above the prompt target
+ok 37 - WTM: a missing closing is rejected
+ok 38 - WTM: a bare heading with no body is rejected
+ok 39 - WTM: a heading with a short sentence is rejected
+ok 40 - WTM: a final heading with a substantive body passes
+ok 41 - WTM: a substantive prose closing near the end passes
+ok 42 - WTM: an early mention with no substantive closing is rejected
+ok 43 - WTM: a heading that is not the final section is rejected
+ok 44 - WTM: the full gate rejects an empty closing on an otherwise valid post
+ok 45 - WTM: the full gate accepts a valid post with a substantive closing
+ok 46 - MIN_WTM_WORDS is a short sentence, not a paragraph floor
+ok 47 - AI signal: an explicit AI source name is sufficient
+ok 48 - AI signal: a general tech source with no AI vocabulary is rejected
+ok 49 - WTM repair: appends a final section when the closing is missing
+ok 50 - WTM repair: fills a short final heading without inventing facts
+ok 51 - WTM repair: leaves an already-passing digest unchanged
+ok 52 - WTM repair: rejects a too-short replacement
+ok 53 - SWS selection: a passing candidate outranks a thin first article
+ok 54 - SWS selection: no passing candidates falls back to the highest score
+ok 55 - SWS selection: assessor errors are isolated without throwing
+ok 56 - no-ops when Telegram credentials are missing
+ok 57 - posts a photo with escaped HTML caption and canonical URL
+ok 58 - falls back to sendMessage when sendPhoto is rejected
+ok 59 - never throws on Telegram network failure
+ok 60 - returns a Telegram failure (not a throw) when no URL is available
+ok 61 - buildCaption truncates long excerpts to the Telegram caption limit
+ok 62 - no-ops when Bluesky credentials are missing
+ok 63 - posts a stable Bluesky record with link facet and cover thumbnail
+ok 64 - uses a deterministic rkey so Phase 2 re-runs update instead of duplicate
+ok 65 - posts a link-only Bluesky record when no cover image is available
+ok 66 - never throws on Bluesky network failure
+ok 67 - returns a Bluesky failure (not a throw) when no URL is available
+ok 68 - buildBlueskyText keeps long posts within 300 graphemes and preserves URL
+ok 69 - announcePost aggregates both platforms without throwing
+ok 70 - merges curated-first, dedups feed_url, gap-fills uncovered feeds.js entries
+ok 71 - falls back to feeds.js untouched when registry read errors
+ok 72 - falls back to feeds.js untouched when registry has no feed-bearing rows
+ok 73 - denies feeds.js gap-fill rows whose domain is disabled in the registry
+ok 74 - denies feeds.js gap-fill rows whose feed_url is disabled in the registry
+ok 75 - no-ops when Substack is not enabled or Buffer credentials are missing
+ok 76 - creates one Substack Note with canonical URL and no asset
+ok 77 - skips duplicate Note when a recent sent post already contains the URL
+ok 78 - does not create a Note when the idempotency query fails
+ok 79 - returns a failure when Buffer reports a MutationError
+ok 80 - never throws on Buffer network failure
+ok 81 - returns a failure when no published URL is available
+ok 82 - buildSubstackText keeps long Notes within 10000 characters and preserves URL
+1..82
+# tests 82
+# suites 0
+# pass 82
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 236.348875</code></pre>
+
+    <p>The final import cleanup did not introduce any new failure: the syntax/whitespace command and the
+    full 82-test suite were re-run after it.</p>
+
+    <h4>Bash: SWS integration review</h4>
+<pre><code>scout.js candidate selection:
+  467: const topArticle = candidateSelection.article || capped[0];
+  480: const SWS_INPUT = ... source: topArticle.source
+
+scout.js official SWS gate (550-568):
+  builds swsInput using actual bucketList
+  calls assessStoryWorthiness(swsInput)
+  logs [SWS enforce] scoreLine
+  if enforce &amp;&amp; !pass: logs skipped and marks category articles seen
+
+scout.js generation-failure catch (790-795):
+  marks capped articles seen only when generationStarted &amp;&amp;
+  err.message !== 'GEMINI_QUOTA_EXHAUSTED'</code></pre>
+
+    <p>The selected article drives duplicate checks, Tavily/search input, the final SWS input, generation,
+    and queueing. The first candidate no longer silently wins merely because it appeared first in the feed.</p>
+
+    <div class="callout success">
+      <div class="callout-icon">✓</div>
+      <div class="callout-body">
+        <strong>Status:</strong> local fixes are complete and verified. They remain uncommitted; no deploy or
+        live publish was authorized. The next action is observational or a separately authorized release.
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 4 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>The remaining required step was the three-document mirror. I updated <code>CLAUDE.md</code> locally with
+    the Session #67 header summary, local-worktree notice, §7A local gate-fix block, and §10 S67 row. This
+    <code>SESSION_LOG.html</code> entry and the new <code>TRAINING_MANUAL.html</code> chapter mirror those
+    changes in full. No root documentation was pushed.</p>
+
+    <h4>Edit: CLAUDE.md — master-spec changes mirrored here</h4>
+<pre><code>Header:
+  Last Updated changed to 2026-11-22 Session #67 and summarised the local uncommitted repair.
+
+Commit-state notice:
+  Added LOCAL WORKTREE notice for the six modified scout-agent files and 82/82 verification.
+
+§7A:
+  Added "Local Phase 1 gate-fix work — 2026-11-22 (Session #67, uncommitted)" with
+  diagnosis, local fixes, verification, and no-deploy status.
+
+§10:
+  Added S67 row with the same diagnosis, fixes, verification, and no-push status.</code></pre>
+
+    <div class="callout info">
+      <div class="callout-icon">i</div>
+      <div class="callout-body">
+        <strong>Lesson:</strong> a green workflow can still hide a generation-side false negative. The
+        published outcome is the authority, so two successful runs that queued nothing were still worth
+        reading at the article/candidate level. Source signals and candidate choice belong before the
+        official SWS gate; WTM repair belongs before the quality gate, not as a replacement for it.
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 5 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">If you are sure it is safe then commit and push.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>Before committing, I rechecked both worktrees, reviewed branch state, and ran a secret-pattern
+    check. No secret values were present in the scout-agent diff. The master-spec grep matched only
+    documented placeholders such as <code>Bearer YOUR_TOKEN</code> and <code>[REDACTED]</code> references,
+    not credentials.</p>
+
+    <h4>Bash: git status --short --branch &amp;&amp; git diff --stat &amp;&amp; git log --oneline -10 (scout-agent)</h4>
+<pre><code>## main...origin/main
+ M gemini.js
+ M quality-gate.js
+ M scout.js
+ M story-worthiness.js
+ M test-gemini-parts.mjs
+ M test-quality-gate.mjs
+ gemini.js              |  86 +++++++++++++++++++++++++++++---------
+ quality-gate.js        | 125 ++++++++++++++++++++++++++++++++++++++++++
+ scout.js               |  47 ++++++++++++++++++-----
+ story-worthiness.js    |  64 ++++++++++++++++++++++++++++++
+ test-gemini-parts.mjs  |  26 ++++++++++++++++
+ test-quality-gate.mjs  |  50 ++++++++++++++++++++++++
+ 6 files changed, 328 insertions(+), 68 deletions(-)
+f6b0342 feat(social): announce published posts on Substack via Buffer
+a183b1b ci: remove temporary Buffer Substack workflows
+2362531 ci: verify Buffer Substack channel and direct Note
+e4b06ac ci: add optional Buffer live Note test
+07392e1 ci: verify Buffer Substack connection
+9d0e9fa fix(scout): repair Phase 1 source and WTM false negatives
+f6b0342 feat(social): announce published posts on Substack via Buffer
+a183b1b ci: remove temporary Buffer Substack workflows
+2362531 ci: verify Buffer Substack channel and direct Note
+e4b06ac ci: add optional Buffer live Note test
+07392e1 ci: verify Buffer Substack connection</code></pre>
+
+    <h4>Bash: git status --short --branch &amp;&amp; git diff --stat &amp;&amp; git log --oneline -10 (root)</h4>
+<pre><code>## main...origin/main [ahead 6]
+ M CLAUDE.md
+ M SESSION_LOG.html
+ M TRAINING_MANUAL.html
+ CLAUDE.md          |  26 +++++++-------
+ SESSION_LOG.html  | 359 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ TRAINING_MANUAL.html | 175 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 1582 insertions(+), 10 deletions(-)
+a9a8171 docs: log Bluesky icon fix
+784b413 docs: log frontend social share rollout
+d7a756e docs: log WTM next-action decision
+bdb9e90 docs: log WTM result correction
+c133cd2 docs: log final session 65 verification
+5c9e659 docs: add session 65 log and training chapter 80
+524dac7 docs: complete documentation refresh sweep
+8edd973 docs: restore master spec authority
+f6dc329 feat: add cover image alt text support
+de77f17 docs: log session 58 import fix</code></pre>
+
+    <h4>Bash: commit scout-agent</h4>
+<pre><code>git add gemini.js quality-gate.js scout.js story-worthiness.js test-gemini-parts.mjs test-quality-gate.mjs &amp;&amp; git diff --cached --check &amp;&amp; git commit -m "fix(scout): repair Phase 1 source and WTM false negatives" &amp;&amp; git log --oneline -3
+
+[main 9d0e9fa] fix(scout): repair Phase 1 source and WTM false negatives
+ 6 files changed, 328 insertions(+), 68 deletions(-)
+9d0e9fa fix(scout): repair Phase 1 source and WTM false negatives
+f6b0342 feat(social): announce published posts on Substack via Buffer
+a183b1b ci: remove temporary Buffer Substack workflows</code></pre>
+
+    <p>I then updated the master specification before pushing so the release state would no longer say
+    "uncommitted" or "no push authorized".</p>
+
+    <h4>Edit: CLAUDE.md — release-state correction</h4>
+<pre><code>Last Updated:
+  before: Session #67 — Local Phase 1 gate/prompt/test repair completed and verified, uncommitted.
+  after:  Session #67 — Phase 1 gate/prompt/test repair committed and pushed; live proof pending.
+
+Commit-state notice:
+  before: LOCAL WORKTREE ... local and uncommitted ... No commit, push, deploy, live publish,
+          or new temporary workflow is authorized.
+  after:  SESSION #67 RELEASE ... committed and pushed to origin/main as 9d0e9fa ...
+          no manual deploy/live publish ... live proof remains pending.
+
+§7A:
+  before: Local Phase 1 gate-fix work — 2026-11-22 (Session #67, uncommitted)
+  after:  Phase 1 gate-fix work — 2026-11-22 (Session #67, pushed, awaiting live proof)
+
+§10 S67 row:
+  before: completed and verified, uncommitted ... no commit/push authorized.
+  after:  committed and pushed as 9d0e9fa ... no manual deploy/live publish ...</code></pre>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 6 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>The next steps were the three-document mirror and the authorized push. I added this release
+    addendum to the session log and added Chapter 85 to the training manual, then committed the root
+    documentation and pushed both repositories to <code>origin/main</code>.</p>
+  </div>
+</div>
+
+<hr>
+
 </body>
 </html>
