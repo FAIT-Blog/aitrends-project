@@ -481,6 +481,7 @@ li { margin-bottom: 6px; }
     <li><a href="#chapter-83">Deploy the Verified Substack Announce Path</a></li>
     <li><a href="#chapter-84">Local Phase 1 Gate and Prompt Repair</a></li>
     <li><a href="#chapter-85">Session #67 Release Addendum: From Local Fix to Pushed Commit</a></li>
+    <li><a href="#chapter-86">Session #68 Release: Preserving Frontend Quarantine Warning and Design Artifacts</a></li>
   </ol>
 </div>
 
@@ -12438,6 +12439,96 @@ SESSION_LOG.html: added Session #67 with the user turns, code before/after, comm
       matches the repository state. Updating the header, status section, session log, and training
       chapter before push prevents a future session from reading stale "uncommitted" language as
       current fact.
+    </div>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-86">
+  <div class="chapter-num">Chapter 86</div>
+  <h2>Session #68 Release: Preserving Frontend Quarantine Warning and Design Artifacts</h2>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Scope:</strong> this chapter records a documentation-only frontend release. No production
+      code, migration, deploy, live publish, or account action was performed.
+    </div>
+  </div>
+
+  <h3>The four pending source-control items</h3>
+
+  <p>Felix noticed four pending changes in the source-control side menu for the frontend repository.
+  The root project and <code>scout-agent</code> repositories were clean; all four items were inside
+  <code>aitrends.ng</code>:</p>
+
+  <table>
+    <tr><th>File</th><th>State</th><th>Purpose</th></tr>
+    <tr><td><code>AITRENDS_NG_SPEC.md</code></td><td>Modified</td><td>Adds the two-line §0.3 quarantine warning telling readers the spec is not current and that <code>CLAUDE.md</code> governs.</td></tr>
+    <tr><td><code>supabase/add-provider-quota-state.sql</code></td><td>Untracked</td><td>Design-only draft for persisted Groq/Gemini quota state. Marked <code>NOT APPLIED</code>; no production code writes it.</td></tr>
+    <tr><td><code>supabase/add-story-memory.sql</code></td><td>Untracked</td><td>Design-only draft for cross-run story memory and duplicate control. Marked <code>NOT APPLIED</code>.</td></tr>
+    <tr><td><code>supabase/remediate-source-reputation.sql</code></td><td>Untracked</td><td>Review-only remediation sketch; substantive statements are commented out. Marked <code>NOT APPLIED</code>.</td></tr>
+  </table>
+
+  <h3>Safety check and decision</h3>
+
+  <p>The files were checked for size, secrets, runtime references, and explicit status markers. The
+  existing spec is 21,243 bytes; the three SQL files total 8,993 bytes, so the complete set is 30,236
+  bytes. They contain no secrets, are not referenced by production code, and are explicitly labelled
+  as design artifacts. After Felix's conditional authorization, they were preserved in the cloud repo
+  as design evidence and repo-clone documentation safety.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">Staged exactly the four listed paths.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">Ran <code>git diff --cached --check</code>, which was clean.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">Committed as <code>fec1bca</code>: <code>docs: preserve quarantined spec warning and design artifacts</code>.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">Pushed to <code>origin/main</code> after a stale-credential failure was handled with a one-off GitHub CLI credential helper against the canonical HTTPS URL.</div>
+    </div>
+  </div>
+
+  <h3>Push authentication note</h3>
+
+  <p>The first push failed with <code>Invalid username or token. Password authentication is not supported for Git operations.</code>
+  The remote URL was not printed. GitHub CLI authentication was checked safely and showed the active
+  account as <code>FAIT-Blog</code> with repository scope and push permission. The successful retry used:</p>
+
+<pre><code>git -c credential.helper='!gh auth git-credential' push https://github.com/FAIT-Blog/aitrends-ng.git main</code></pre>
+
+  <p>This changed no git config and printed no token. A matching one-off fetch refreshed
+  <code>origin/main</code>, after which the frontend worktree was clean on <code>main...origin/main</code>.</p>
+
+  <h3>CLAUDE.md mirror</h3>
+
+  <p><code>CLAUDE.md</code> was updated in four places: the Last Updated header, a new Session #68 release
+  notice, the commit-state notice that previously called the files untracked/out-of-scope, and a new
+  Section 10 row. The mirror records that the files remain design-only / <code>NOT APPLIED</code> and are
+  not working infrastructure.</p>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Lesson:</strong> small design artifacts can be worth preserving for cloud continuity when
+      they are explicitly non-runtime, secret-free, and clearly marked as not applied. The important
+      distinction is preserving the reasoning without accidentally presenting it as infrastructure.
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Still out of scope:</strong> no SQL migration was applied; no provider-quota, story-memory,
+      or source-reputation behavior was activated; no deploy, live publish, social cleanup, or account
+      action was performed.
     </div>
   </div>
 </div>

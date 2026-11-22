@@ -20125,5 +20125,351 @@ a183b1b ci: remove temporary Buffer Substack workflows</code></pre>
 
 <hr>
 
+<hr>
+
+<!-- TURN 7 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">On the side menue, the source control I see 4 pending changes. Why so? Please check.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I checked all candidate worktrees in parallel. The root and scout-agent repositories were clean;
+    the four changes were in the frontend <code>aitrends.ng</code> repository.</p>
+
+    <h4>Bash: git status --short --branch (four worktrees, parallel)</h4>
+<pre><code># /aitrends-project
+## main...origin/main
+
+# /aitrends-project/scout-agent
+## main...origin/main
+
+# /aitrends-project/aitrends.ng
+## main...origin/main
+ M AITRENDS_NG_SPEC.md
+?? supabase/add-provider-quota-state.sql
+?? supabase/add-story-memory.sql
+?? supabase/remediate-source-reputation.sql
+
+# /WEBSITE_AI_Generated_Xai
+fatal: not a git repository (or any of the parent directories): .git</code></pre>
+
+    <h4>Bash: git diff --stat &amp;&amp; git diff -- AITRENDS_NG_SPEC.md</h4>
+<pre><code> AITRENDS_NG_SPEC.md | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/AITRENDS_NG_SPEC.md b/AITRENDS_NG_SPEC.md
+index 1fecb5d..9949298 100644
+--- a/AITRENDS_NG_SPEC.md
++++ b/AITRENDS_NG_SPEC.md
+@@ -1,3 +1,5 @@
++&gt; ⚠️ **QUARANTINED 2026-10-02 (CLAUDE.md §0.3)** — This document is NOT current. It contradicts `CLAUDE.md`, which is the sole governing specification for this project. See §0 in `CLAUDE.md` for authority/precedence. Do not cite this file as current behaviour; verify against live code via `CLAUDE.md`.
++
+ &gt; **NOTE:** This file is the aitrends.ng-specific reference spec.
+ &gt; The master spec for the whole AITrends project (both aitrends.ng + scout-agent) lives at:
+ &gt; `aitrends-project/CLAUDE.md`</code></pre>
+
+    <h4>Bash: git log --oneline -5 -- AITRENDS_NG_SPEC.md supabase</h4>
+<pre><code>f6dc329 feat: real cover-image alt text and subject-based category support
+0f33301 sql: add curated_source_registry DDL (Stage 0 closed registry, S44)
+c1a2b67 chore: make add-llm-request-ledger.sql idempotent (S41)
+e70debe sql: add llm_request_ledger table (Session #40)
+f1e1059 feat: site search (dropdown-as-you-type) + Gemini quota-cooldown SQL migration</code></pre>
+
+    <p>Read of <code>supabase/add-provider-quota-state.sql</code> showed a 61-line draft migration
+    headed <code>-- STATUS: DESIGN ARTIFACT — NOT APPLIED</code>. It creates
+    <code>provider_quota_state</code> with rows for Groq and Gemini, but no production code writes it.</p>
+
+    <p>Read of <code>supabase/add-story-memory.sql</code> showed a 70-line draft migration, also marked
+    <code>NOT APPLIED</code>, for cross-run story cooldowns and duplicate control.</p>
+
+    <p>Read of <code>supabase/remediate-source-reputation.sql</code> showed a 36-line review-only file;
+    the substantive SQL statements were commented out and the header said
+    <code>DESIGN ARTIFACT — NOT APPLIED</code>.</p>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 8 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">So we should ignore them then?</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I answered: yes, ignore them for now. The three SQL files are unapplied design artifacts and should
+    stay untracked until a migration is explicitly approved. The only borderline one is
+    <code>AITRENDS_NG_SPEC.md</code>: it is just the 2-line quarantine warning, so committing it
+    separately would protect repo clones from the stale spec. No files were touched.</p>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 9 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">What's their function, how do they support the system, do we need them and will they needed if we loose this device and we have to depend and continue with the cloud repo?</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I explained that the running system does not need any of them; they are local design/doc artifacts,
+    not production code:</p>
+
+    <table>
+      <tr><th>Item</th><th>Function</th><th>Needed now?</th><th>If this device is lost</th></tr>
+      <tr><td><code>AITRENDS_NG_SPEC.md</code></td><td>Old frontend spec; local change adds a quarantine warning.</td><td>Not at runtime, but useful documentation safety.</td><td>Cloud keeps stale spec but loses warning unless committed.</td></tr>
+      <tr><td><code>add-provider-quota-state.sql</code></td><td>Draft persisted provider quota state to skip calls when Groq/Gemini are exhausted.</td><td>No; future optimization only.</td><td>No system impact; design note lost unless committed.</td></tr>
+      <tr><td><code>add-story-memory.sql</code></td><td>Draft cross-run story cooldowns/duplicate control.</td><td>No; future design only.</td><td>No system impact.</td></tr>
+      <tr><td><code>remediate-source-reputation.sql</code></td><td>Review-only removal of source-reputation promotion authority.</td><td>No; curated registry governs sources.</td><td>No system impact.</td></tr>
+    </table>
+
+    <p>Recommendation given: commit only the quarantine warning if cloud continuity matters; leave or
+    delete the three SQL drafts only after explicit decision; do not apply any SQL without approval.</p>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 10 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">If they are useful in any way and it will not harm our project or if it is not too heavy, maybe it was left out on the account that they are large. Then we can commit and push to repo.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I treated this as conditional authorization: if the files were small, harmless and at least
+    useful as design records, commit and push them. I created a todo list and then re-checked status,
+    diff check, sizes, and the latest frontend log.</p>
+
+    <h4>Bash: final frontend size/safety check</h4>
+<pre><code>git status --short --branch &amp;&amp; git diff --check &amp;&amp; git diff --stat &amp;&amp; wc -c AITRENDS_NG_SPEC.md supabase/add-provider-quota-state.sql supabase/add-story-memory.sql supabase/remediate-source-reputation.sql &amp;&amp; git log --oneline -5
+
+## main...origin/main
+ M AITRENDS_NG_SPEC.md
+?? supabase/add-provider-quota-state.sql
+?? supabase/add-story-memory.sql
+?? supabase/remediate-source-reputation.sql
+ AITRENDS_NG_SPEC.md | 2 ++
+ 1 file changed, 2 insertions(+)
+   21243 AITRENDS_NG_SPEC.md
+    3211 supabase/add-provider-quota-state.sql
+    3777 supabase/add-story-memory.sql
+    2005 supabase/remediate-source-reputation.sql
+   30236 total
+b7232bb fix(social): render Bluesky butterfly icon
+2c3c336 feat(social): add share icons across site
+8b1e322 feat(social): link Bluesky profile across site
+53cfd57 feat: consolidate owned social profile links
+0d8ebcb fix(admin): mirror the substantive Why This Matters gate</code></pre>
+
+    <p>Assessment: ~30 KB total, including the existing 21 KB spec; only ~9 KB of new SQL. No secrets,
+    no runtime references, explicit <code>NOT APPLIED</code> markers. Safe and useful as cloud-preserved
+    design evidence.</p>
+
+    <h4>Bash: git add four files, staged diff check, commit, push</h4>
+<pre><code>git add AITRENDS_NG_SPEC.md supabase/add-provider-quota-state.sql supabase/add-story-memory.sql supabase/remediate-source-reputation.sql &amp;&amp; git diff --cached --check &amp;&amp; git commit -m "docs: preserve quarantined spec warning and design artifacts" &amp;&amp; git push origin main &amp;&amp; git status --short --branch &amp;&amp; git log --oneline -3
+
+[main fec1bca] docs: preserve quarantined spec warning and design artifacts
+ 4 files changed, 169 insertions(+)
+ create mode 100644 supabase/add-provider-quota-state.sql
+ create mode 100644 supabase/add-story-memory.sql
+ create mode 100644 supabase/remediate-source-reputation.sql
+remote: Invalid username or token. Password authentication is not supported for Git operations.
+fatal: Authentication failed for 'https://github.com/FAIT-Blog/aitrends-ng.git/'</code></pre>
+
+    <p>The local commit succeeded but push failed because the frontend remote has stale embedded
+    credentials. I did not print or inspect the remote URL. I checked GitHub CLI authentication safely:</p>
+
+    <h4>Bash: gh auth status and permission check</h4>
+<pre><code>gh auth status --hostname github.com &amp;&amp; gh api user --jq .login &amp;&amp; gh api repos/FAIT-Blog/aitrends-ng --jq .permissions.push
+
+github.com
+  ✓ Logged in to github.com account FAIT-Blog (keyring)
+  - Active account: true
+  - Git operations protocol: https
+  - Token: gho_************************************
+  - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
+
+  ✓ Logged in to github.com account FAIT-Pro (keyring)
+  - Active account: false
+  - Git operations protocol: https
+  - Token: gho_************************************
+  - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
+
+  ✓ Logged in to github.com account felicota (keyring)
+  - Active account: false
+  - Git operations protocol: https
+  - Token: gho_************************************
+  - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
+FAIT-Blog
+true</code></pre>
+
+    <h4>Bash: one-off push via canonical HTTPS URL and GitHub CLI credential helper</h4>
+<pre><code>git -c credential.helper='!gh auth git-credential' push https://github.com/FAIT-Blog/aitrends-ng.git main &amp;&amp; git status --short --branch &amp;&amp; git log --oneline -3
+
+To https://github.com/FAIT-Blog/aitrends-ng.git
+   b7232bb..fec1bca  main -&gt; main
+## main...origin/main [ahead 1]
+fec1bca docs: preserve quarantined spec warning and design artifacts
+b7232bb fix(social): render Bluesky butterfly icon
+2c3c336 feat(social): add share icons across site</code></pre>
+
+    <p>The push succeeded; <code>[ahead 1]</code> remained only because the local remote-tracking ref was
+    stale. I refreshed it without changing git config or printing credentials:</p>
+
+    <h4>Bash: refresh origin/main remote-tracking ref</h4>
+<pre><code>git -c credential.helper='!gh auth git-credential' fetch https://github.com/FAIT-Blog/aitrends-ng.git main:refs/remotes/origin/main &amp;&amp; git status --short --branch
+
+From https://github.com/FAIT-Blog/aitrends-ng
+   b7232bb..fec1bca  main       -&gt; origin/main
+## main...origin/main</code></pre>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 11 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I continued with the mandatory three-document mirror. I read the relevant CLAUDE.md header and
+    commit-state block, the end of SESSION_LOG.html, and the end of TRAINING_MANUAL.html. The reads
+    confirmed:</p>
+
+    <h4>Read: CLAUDE.md lines 1-40 (key extracted state)</h4>
+<pre><code>Line 2:  **Last Updated:** 2026-11-22 (**Session #67** — **Phase 1 gate/prompt/test repair committed and pushed; live proof pending.** ...)
+Line 11: > ✅ **SESSION #67 RELEASE (updated 2026-11-22).** ... 9d0e9fa ...
+Line 30: > evidence, not pending work; untracked `aitrends.ng/supabase/*.sql` files and `aitrends.ng/AITRENDS_NG_SPEC.md`
+Line 31: > are not part of this session's authorized commit scope. Nothing should be pushed without an explicit
+Line 32: > instruction from Felix.</code></pre>
+
+    <h4>Grep: Session #67 row in CLAUDE.md</h4>
+<pre><code>Line 1956: | S67 | 22 Nov 2026 | scout-agent + docs | **Phase 1 gate/prompt/test repair committed and pushed; live proof pending.** ... TRAINING_MANUAL Chapter 85 release addendum. |</code></pre>
+
+    <h4>Read: SESSION_LOG.html lines 20080-20129</h4>
+<pre><code>20080: §10 S67 row:
+20081:   before: completed and verified, uncommitted ... no commit/push authorized.
+20082:   after:  committed and pushed as 9d0e9fa ... no manual deploy/live publish ...
+...
+20126: &lt;hr&gt;
+20127:
+20128: &lt;/body&gt;
+20129: &lt;/html&gt;</code></pre>
+
+    <h4>Read: TRAINING_MANUAL.html lines 12420-12446</h4>
+<pre><code>12420:         &lt;p&gt;&lt;code&gt;CLAUDE.md&lt;/code&gt; was updated from a local/uncommitted notice to a release notice naming
+12421:         &lt;code&gt;9d0e9fa&lt;/code&gt;. The header, §7A, §10, and this chapter mirror that correction.&lt;/p&gt;
+...
+12443: &lt;/div&gt;
+12444:
+12445: &lt;/body&gt;
+12446: &lt;/html&gt;</code></pre>
+
+    <h4>Edit: CLAUDE.md — three exact replacements</h4>
+<pre><code>1) Header: inserted Session #68 notice before the existing Session #67 "Prior state" text.
+   before: **Last Updated:** 2026-11-22 (**Session #67** — **Phase 1 gate/prompt/test repair committed and pushed; live proof pending.**
+   after:  **Last Updated:** 2026-11-22 (**Session #68** — **Frontend quarantine warning and design SQL artifacts committed and pushed.** ... fec1bca ... ) **Prior state — 2026-11-22 (**Session #67** — **Phase 1 gate/prompt/test repair committed and pushed; live proof pending.**
+
+2) Added a new release notice above the Session #67 release notice:
+   before: &gt; ✅ **SESSION #67 RELEASE ...
+   after:  &gt; ✅ **SESSION #68 RELEASE (updated 2026-11-22).** ... fec1bca ... &gt; ✅ **SESSION #67 RELEASE ...
+
+3) Commit-state notice:
+   before: untracked `aitrends.ng/supabase/*.sql` files and `aitrends.ng/AITRENDS_NG_SPEC.md`
+           are not part of this session's authorized commit scope. Nothing should be pushed...
+   after:  As of Session #68 the `aitrends.ng/AITRENDS_NG_SPEC.md` quarantine warning
+           and the three `aitrends.ng/supabase/*.sql` design artifacts were committed and pushed as `fec1bca`;
+           they remain design-only / `NOT APPLIED` and are not working infrastructure. Nothing should be pushed...
+
+4) Section 10:
+   appended the S68 row after the S67 row, recording the four frontend files, fec1bca,
+   the failed first push, one-off GitHub CLI credential helper success, and no production/deploy action.</code></pre>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 12 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I completed the rest of the three-document mirror. I added the Chapter 86 TOC entry and appended
+    the full chapter before the closing body tag.</p>
+
+    <h4>Edit: SESSION_LOG.html</h4>
+<pre><code>before: &lt;/body&gt;
+        &lt;/html&gt;
+
+after:  appended TURN 7 through TURN 12, including the status checks, source-control explanation,
+        size/safety verification, failed push, safe GitHub CLI auth check, successful one-off push,
+        remote-tracking ref refresh, and CLAUDE.md mirror edits; then the closing body/html tags.</code></pre>
+
+    <h4>Edit: TRAINING_MANUAL.html</h4>
+<pre><code>1) TOC:
+   before: &lt;li&gt;&lt;a href="#chapter-85"&gt;Session #67 Release Addendum: From Local Fix to Pushed Commit&lt;/a&gt;&lt;/li&gt;
+   after:  &lt;li&gt;&lt;a href="#chapter-85"&gt;Session #67 Release Addendum: From Local Fix to Pushed Commit&lt;/a&gt;&lt;/li&gt;
+           &lt;li&gt;&lt;a href="#chapter-86"&gt;Session #68 Release: Preserving Frontend Quarantine Warning and Design Artifacts&lt;/a&gt;&lt;/li&gt;
+
+2) Chapter body:
+   before: &lt;/body&gt;
+           &lt;/html&gt;
+   after:  &lt;div class="chapter" id="chapter-86"&gt;
+             &lt;div class="chapter-num"&gt;Chapter 86&lt;/div&gt;
+             &lt;h2&gt;Session #68 Release: Preserving Frontend Quarantine Warning and Design Artifacts&lt;/h2&gt;
+             ... four-file table, safety check, staged release steps, push authentication note,
+             CLAUDE.md mirror, success lesson, and out-of-scope warning ...
+           &lt;/div&gt;
+           &lt;/body&gt;
+           &lt;/html&gt;</code></pre>
+
+    <p>I committed and pushed the master-spec change first, as required by the document push strategy.
+    The session log and training manual remained modified for the second documentation commit.</p>
+
+    <h4>Bash: CLAUDE.md commit and push</h4>
+<pre><code>git add CLAUDE.md &amp;&amp; git diff --cached --check &amp;&amp; git commit -m "docs: mirror Session #68 frontend release" &amp;&amp; git push origin main &amp;&amp; git status --short --branch &amp;&amp; git log --oneline -3
+
+[main 621e124] docs: mirror Session #68 frontend release
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+To https://github.com/FAIT-Blog/aitrends-project.git
+   d641f70..621e124  main -&gt; main
+## main...origin/main
+ M SESSION_LOG.html
+ M TRAINING_MANUAL.html
+621e124 docs: mirror Session #68 frontend release
+d641f70 docs: record final push verification
+7a45796 docs: mirror Session #67 release commit</code></pre>
+
+    <h4>Bash: documentation diff check</h4>
+<pre><code>git diff --check &amp;&amp; git diff --stat
+
+ SESSION_LOG.html     | 277 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ TRAINING_MANUAL.html |  91 +++++++++++++
+ 2 files changed, 368 insertions(+)</code></pre>
+
+    <p>Next: commit and push the two mirror documents, then verify root, scout-agent, and aitrends.ng
+    are clean on <code>main...origin/main</code>.</p>
+  </div>
+</div>
+
 </body>
 </html>
