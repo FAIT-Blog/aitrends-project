@@ -482,6 +482,7 @@ li { margin-bottom: 6px; }
     <li><a href="#chapter-84">Local Phase 1 Gate and Prompt Repair</a></li>
     <li><a href="#chapter-85">Session #67 Release Addendum: From Local Fix to Pushed Commit</a></li>
     <li><a href="#chapter-86">Session #68 Release: Preserving Frontend Quarantine Warning and Design Artifacts</a></li>
+    <li><a href="#chapter-87">Session #69 Release: Permanent Editorial Gate Decision and Production Audit</a></li>
   </ol>
 </div>
 
@@ -12530,6 +12531,140 @@ SESSION_LOG.html: added Session #67 with the user turns, code before/after, comm
       or source-reputation behavior was activated; no deploy, live publish, social cleanup, or account
       action was performed.
     </div>
+  </div>
+</div>
+
+<div class="chapter" id="chapter-87">
+  <div class="chapter-num">Chapter 87</div>
+  <h2>Session #69 Release: Permanent Editorial Gate Decision and Production Audit</h2>
+
+  <div class="callout info">
+    <div class="callout-icon">i</div>
+    <div class="callout-body">
+      <strong>Scope:</strong> this chapter records a governance decision, a live production proof run,
+      and the documentation mirror for that decision. No production code, database migration, deploy,
+      live publish, manual queue row, social/account action, or gate change was performed.
+    </div>
+  </div>
+
+  <h3>The decision</h3>
+
+  <p>Felix confirmed that the current editorial eligibility gate should remain unchanged permanently:</p>
+
+  <blockquote>Good job. Let's keep the gate that way for good.</blockquote>
+
+  <p>The standing rule is now explicit in <code>CLAUDE.md</code>. Do not loosen consequence detection,
+  widen the 72-hour freshness window, bypass the gate, force a queue row, or add a special exception.
+  If future evidence justifies reconsideration, present the evidence and ask first.</p>
+
+  <h3>What the manual proof run showed</h3>
+
+  <table>
+    <tr><th>Item</th><th>Observed value</th></tr>
+    <tr><td>Run</td><td><code>45042191361</code> — manual Phase 1 dispatch</td></tr>
+    <tr><td>Commit</td><td><code>9d0e9fa</code></td></tr>
+    <tr><td>Result</td><td><code>success</code> in <code>2m14s</code></td></tr>
+    <tr><td>Editorial queue</td><td><code>No pending editorial inputs in queue</code></td></tr>
+    <tr><td>Fresh feed surface</td><td><code>Found 69 fresh articles across all feeds</code></td></tr>
+    <tr><td>Source-selection repair</td><td><code>Selected higher-value source</code>, with SWS <code>78</code>, <code>80</code>, and <code>82</code></td></tr>
+  </table>
+
+  <p>The source-selection half of the Session #67 repair was therefore proven live. The WTM repair was
+  present in the same commit but was not exercised, because no category reached digest generation.</p>
+
+  <h3>Where the pipeline stopped</h3>
+
+  <table>
+    <tr><th>Category</th><th>Eligibility rejection</th></tr>
+    <tr><td>industry</td><td><code>editorial_no_source_consequence</code> + <code>editorial_not_development_or_finding</code></td></tr>
+    <tr><td>ai-models</td><td><code>editorial_no_source_consequence</code></td></tr>
+    <tr><td>anthropic</td><td><code>editorial_no_source_consequence</code> + <code>editorial_not_development_or_finding</code></td></tr>
+    <tr><td>tools</td><td><code>editorial_not_fresh</code> — duplicate of the Claude/Riemann topic in the recent published window</td></tr>
+  </table>
+
+  <p>Consequences recorded from the run:</p>
+
+  <ul>
+    <li>no queue row;</li>
+    <li>no post;</li>
+    <li>no WTM proof;</li>
+    <li>no generated-digest <code>gate-check</code> row in <code>llm_request_ledger</code>;</li>
+    <li>only routine article seen-marking occurred.</li>
+  </ul>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <strong>Governance result:</strong> this is accepted editorial starvation, not a pipeline defect to
+      engineer around. The gate is a permanent editorial control.
+    </div>
+  </div>
+
+  <h3>Audit conclusions</h3>
+
+  <p>The audit found green workflows, a healthy Phase 2 worker, no active <code>pending_image</code> or
+  <code>generating</code> rows, and only 11 old <code>failed</code> rows from Aug/Sep. The last publish
+  before the run was <code>2026-11-21T07:55:04Z</code> / <code>2026-11-21T07:55:05Z</code>. There was no
+  evidence of eligibility-code tampering, and recent commits did not touch
+  <code>editorial-eligibility.js</code>. GitHub Actions uses fixes only when a run checks out the pushed
+  commit; pushing alone does not hotpatch earlier runs.</p>
+
+  <h3>CLAUDE.md mirror</h3>
+
+  <p><code>CLAUDE.md</code> was committed and pushed first as <code>3d00fc3</code>
+  (<code>docs: record Session #69 gate decision and audit</code>), with 21 insertions and 2 deletions.
+  The change added or updated:</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">The Last Updated header, changed from Session #68 to Session #69 and expanded with the run, SWS, rejection, and no-change scope facts.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">The release-notice block, with a new Session #69 notice above Session #68.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">Section 6 Critical Rules, adding the permanent editorial eligibility gate rule.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">Section 7A, adding a dedicated Session #69 decision section and updating the Session #67 item to “partial live proof in Session #69”.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">Section 8 “What Claude Code Must Not Do”, adding the never-alter-gate rule.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-content">Section 10 Session History, adding the S69 row.</div>
+    </div>
+  </div>
+
+  <h3>Deliberately not done</h3>
+
+  <ul>
+    <li>no gate loosening, bypass, or manual queue forcing;</li>
+    <li>no code change or Scout-Agent deploy;</li>
+    <li>no database migration or direct write;</li>
+    <li>no live publish or manual queue row to obtain WTM proof;</li>
+    <li>no new temporary workflow or account action.</li>
+  </ul>
+
+  <div class="callout warn">
+    <div class="callout-icon">!</div>
+    <div class="callout-body">
+      <strong>Warning for future sessions:</strong> the WTM repair remains unproven live. Do not loosen
+      the editorial gate merely to manufacture that proof. Present evidence and ask first.
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>Lesson:</strong> a successful automation run is not the same as a successful publish. A gate can
+    be working exactly as designed while producing zero content. The correct response depends on whether
+    the gate itself is the product decision; here, Felix confirmed that editorial starvation under the
+    current rule is acceptable.
   </div>
 </div>
 

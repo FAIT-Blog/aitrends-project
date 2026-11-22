@@ -20471,5 +20471,183 @@ d641f70 docs: record final push verification
   </div>
 </div>
 
+<hr>
+
+<h2>Session #69 — 2026-11-22 — Editorial eligibility gate retained permanently; live production proof and documentation mirror</h2>
+
+<p>Documentation-only governance decision and production audit. No production code, database migration,
+deploy, live publish, manual queue row, social/account action, or gate change was performed.</p>
+
+<!-- TURN 1 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Good job. Let's keep the gate that way for good.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I acknowledged the standing decision and treated it as a permanent governance rule: the current
+    <code>editorial-eligibility.js</code> configuration stays unchanged. No code change, gate loosening,
+    bypass, manual queue forcing, or exception was made.</p>
+
+    <div class="callout info">
+      <div class="callout-icon">i</div>
+      <div class="callout-body">
+        <strong>Standing decision:</strong> keep the editorial eligibility gate exactly as-is for good.
+        If future evidence ever justifies reconsideration, present the evidence and ask first; do not alter the gate.
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 2 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Yes, record this and any other recent activities and audits we did.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I recorded the production proof, the audit conclusion, and the permanent gate decision in
+    <code>CLAUDE.md</code>. The validated live facts were:</p>
+
+    <h4>Production validation evidence</h4>
+<pre><code>Manual Phase 1 run URL: https://github.com/FAIT-Blog/scout-agent/actions/runs/45042191361
+Run result: success
+Commit executed: 9d0e9fa
+Duration: 2m14s
+
+No pending editorial inputs in queue
+Found 69 fresh articles across all feeds
+Selected higher-value source
+SWS values logged: 78, 80, 82
+
+Rejections before generation:
+  industry:   editorial_no_source_consequence + editorial_not_development_or_finding
+  ai-models:  editorial_no_source_consequence
+  anthropic:  editorial_no_source_consequence + editorial_not_development_or_finding
+  tools:      editorial_not_fresh (duplicate of the Claude/Riemann topic)
+
+Outcome:
+  no queue row
+  no post
+  no WTM proof
+  no llm_request_ledger gate-check row from generated digest
+  only routine article seen-marking occurred</code></pre>
+
+    <p>The audit showed workflows green, Phase 2 healthy, no active <code>pending_image</code> or
+    <code>generating</code> rows, and 11 old <code>failed</code> rows from Aug/Sep only. The last publish
+    before the run was <code>2026-11-21T07:55:04Z</code> / <code>2026-11-21T07:55:05Z</code>. There was no
+    evidence of eligibility-code tampering. Recent commits did not touch <code>editorial-eligibility.js</code>;
+    GitHub Actions uses fixes only when a run checks out the pushed commit.</p>
+
+    <h4>Edit: CLAUDE.md — Session #69 governance + audit mirror</h4>
+<pre><code>Commit: 3d00fc3 docs: record Session #69 gate decision and audit
+Diff:   CLAUDE.md | 23 +++++++++++++++++++++--
+        1 file changed, 21 insertions(+), 2 deletions(-)
+
+Changed locations:
+  1) Last Updated header: changed from Session #68 to Session #69 and recorded the
+     manual run 45042191361 outcome, SWS 78/80/82 evidence, all-category eligibility
+     rejection, and the no-code/no-deploy/no-publish scope.
+  2) Release notices: inserted the Session #69 release notice above Session #68.
+  3) Section 6 Critical Rules: added the permanent editorial eligibility gate rule.
+  4) Section 7A: added the "Editorial eligibility gate retained permanently" section and
+     updated the Session #67 item heading/status to "partial live proof in Session #69".
+  5) Section 8 Must Not Do: added the never-alter-gate rule.
+  6) Section 10: appended the S69 history row.</code></pre>
+
+    <p>I committed and pushed <code>CLAUDE.md</code> first, as required:</p>
+
+    <h4>Bash: CLAUDE.md commit and push</h4>
+<pre><code>git add CLAUDE.md &amp;&amp; git commit -m "docs: record Session #69 gate decision and audit" &amp;&amp; git push origin main
+
+[main 3d00fc3] docs: record Session #69 gate decision and audit
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+To https://github.com/FAIT-Blog/aitrends-project.git
+   1ef66b2..3d00fc3  main -&gt; main</code></pre>
+  </div>
+</div>
+
+<hr>
+
+<!-- TURN 3 -->
+<div class="turn user">
+  <div class="label">Felix</div>
+  <div class="bubble">Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.</div>
+</div>
+
+<div class="turn assistant">
+  <div class="label">Claude Code</div>
+  <div class="bubble">
+    <p>I continued the three-document mirror. The remaining steps were to append this Session #69
+    record to <code>SESSION_LOG.html</code>, add Chapter 87 to <code>TRAINING_MANUAL.html</code>, then
+    commit/push the two mirror documents and verify all three repositories.</p>
+
+    <h4>Read: SESSION_LOG.html lines 20370-20475</h4>
+<pre><code>20370: 20127:
+20371: 20128: &lt;/body&gt;
+20372: 20129: &lt;/html&gt;&lt;/code&gt;&lt;/pre&gt;
+...
+20472: &lt;/div&gt;
+20473:
+20474: &lt;/body&gt;
+20475: &lt;/html&gt;</code></pre>
+
+    <h4>Grep: current append anchors</h4>
+<pre><code>SESSION_LOG.html:
+  Line 20474: &lt;/body&gt;
+  Line 20475: &lt;/html&gt;
+
+TRAINING_MANUAL.html:
+  Line 484:     &lt;li&gt;&lt;a href="#chapter-86"&gt;Session #68 Release: Preserving Frontend Quarantine Warning and Design Artifacts&lt;/a&gt;&lt;/li&gt;
+  Line 12446: &lt;div class="chapter" id="chapter-86"&gt;
+  Line 12447:   &lt;div class="chapter-num"&gt;Chapter 86&lt;/div&gt;
+  Line 12448:   &lt;h2&gt;Session #68 Release: Preserving Frontend Quarantine Warning and Design Artifacts&lt;/h2&gt;</code></pre>
+
+    <h4>Bash: verify committed CLAUDE.md state</h4>
+<pre><code>git show --stat --oneline 3d00fc3 &amp;&amp; git show --format=fuller --no-ext-diff 3d00fc3 -- CLAUDE.md
+
+3d00fc3 docs: record Session #69 gate decision and audit
+ CLAUDE.md | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+commit 3d00fc3ace4013724717211badf7cfc26ee21d15
+Author:     Felix Okon &lt;secretfelicotaita@gmail.com&gt;
+AuthorDate: Sun Nov 22 19:55:27 2026 +0100
+Commit:     Felix Okon &lt;secretfelicotaita@gmail.com&gt;
+CommitDate: Sun Nov 22 19:55:27 2026 +0100
+
+    docs: record Session #69 gate decision and audit
+
+[full CLAUDE.md diff omitted here; the resulting text is the authoritative master spec at commit 3d00fc3]</code></pre>
+
+    <h4>Bash: root repository state before mirror edits</h4>
+<pre><code>git status --short --branch &amp;&amp; git log --oneline -5
+
+## main...origin/main
+3d00fc3 docs: record Session #69 gate decision and audit
+1ef66b2 docs: log Session #68 frontend release
+621e124 docs: mirror Session #68 frontend release
+d641f70 docs: record final push verification
+7a45796 docs: mirror Session #67 release commit</code></pre>
+
+    <h4>Edit: SESSION_LOG.html</h4>
+<pre><code>before: &lt;/body&gt;
+        &lt;/html&gt;
+
+after:  appended Session #69 header plus TURN 1 through TURN 3, including
+        Felix's three exact messages, the gate decision, live production proof,
+        audit findings, CLAUDE.md commit/push output, read/grep/bash tool trails,
+        and the continuation note; then restored the closing body/html tags.</code></pre>
+
+    <p>Next, Chapter 87 was added to the training manual and the two mirror documents were prepared
+    for commit.</p>
+  </div>
+</div>
+
 </body>
 </html>
